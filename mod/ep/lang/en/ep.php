@@ -1,0 +1,349 @@
+<?php
+// This file is part of Moodle - http://moodle.org/
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * English strings for mod_ep.
+ *
+ * @package   mod_ep
+ * @copyright 2026 Sébastien Lefebvre
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+defined('MOODLE_INTERNAL') || die();
+
+$string['pluginname'] = 'Personalised learning';
+$string['modulename'] = 'Personalised learning';
+$string['modulenameplural'] = 'Personalised learning activities';
+$string['modulename_help'] = 'Manages the ECTS credits awarded for personalised learning: the catalogue of '
+    . 'internal academic units students enrol in, learning declared outside the catalogue (student engagement, '
+    . 'professional experience, sport, external academic units) and internship credits, awarded automatically '
+    . 'from the complementary internships already validated by the academic office in the "Internship '
+    . "management\" activity of the same course.\n\nEach type has its own cap on retained credits (per year and "
+    . 'over the whole programme), and minimums are required both per study year and over the whole programme. '
+    . 'Catalogue enrolments are validated by the person in charge of the unit, declarations outside the '
+    . "catalogue by the student's referent teacher.";
+$string['modulename_link'] = 'mod/ep/view';
+$string['pluginadministration'] = 'Personalised learning administration';
+$string['epname'] = 'Activity name';
+
+// Capabilities.
+$string['ep:addinstance'] = 'Add a new personalised learning activity';
+$string['ep:view'] = 'View the personalised learning activity';
+$string['ep:submit'] = 'Enrol in a unit and declare own personalised learning';
+$string['ep:evaluateteacher'] = 'Validate the personalised learning one is in charge of';
+$string['ep:validatedeve'] = 'Validate and withdraw personalised learning for all students (academic office)';
+$string['ep:manage'] = 'Manage types, catalogue and credit minimums';
+$string['ep:viewall'] = 'View the personalised learning of all students';
+
+// Navigation and pages.
+$string['administration'] = 'Administration';
+$string['catalog'] = 'Unit catalogue';
+$string['declarecredit'] = 'Declare personalised learning';
+$string['validation'] = 'Validation';
+$string['pilotage'] = 'Overview';
+$string['exportcsv'] = 'CSV export';
+$string['mycredits'] = 'My personalised learning';
+$string['creditdetail'] = 'Personalised learning details';
+$string['managetypes'] = 'Types and caps';
+$string['managecatalog'] = 'Internal unit catalogue';
+$string['manageyearrequirements'] = 'Credit minimums';
+$string['actions'] = 'Actions';
+$string['viewdetails'] = 'Details';
+$string['searchstudent'] = 'Student name';
+$string['resetfilters'] = 'Reset filters';
+$string['student'] = 'Student';
+$string['teacher'] = 'Teacher';
+$string['status'] = 'Status';
+$string['hidden'] = 'hidden';
+$string['enabled'] = 'Enabled';
+
+// Instance settings.
+$string['currentstudyyear'] = 'Current study year';
+$string['currentstudyyear_help'] = 'Study year the cohort is currently in. It is used as the reference: only the '
+    . 'minimums of this year and earlier ones are presented as due, and a student may attach a unit to the '
+    . 'previous year (catch-up) or the next one (early completion).';
+$string['mincursusects'] = 'Minimum over the whole programme';
+$string['mincursusects_help'] = 'Total number of personalised learning credits to be validated over the whole '
+    . 'programme, all types and years together (0 = no requirement). This minimum adds to the yearly ones: '
+    . 'meeting each yearly minimum does not necessarily meet the programme one.';
+$string['stagesource'] = 'Source "Internship management" activity';
+$string['stagesource_help'] = 'Activity whose complementary internships validated by the academic office lead to '
+    . 'an automatic credit award. "All of them in this course" is fine as long as the course only holds one; '
+    . 'naming a specific activity is for courses holding several, so that internships from an archived activity '
+    . 'are not counted again.';
+$string['stagesourceall'] = 'All of them in this course';
+$string['typesnotice'] = 'The six personalised learning types (internal academic, internship, student '
+    . 'engagement, professional experience, sport, external academic) are created together with the activity. '
+    . 'Their credit caps and the internship rate are then set from the activity administration.';
+
+// Types.
+$string['type'] = 'Type';
+$string['type_help'] = 'The type determines the applicable credit cap and who validates the request. Internal '
+    . 'academic units are taken from the catalogue and internship credits are awarded automatically: neither is '
+    . 'declared here.';
+$string['type_academic'] = 'Internal academic';
+$string['type_stage'] = 'Internship';
+$string['type_engagement'] = 'Student engagement';
+$string['type_professional'] = 'Professional experience';
+$string['type_sport'] = 'Sport';
+$string['type_external'] = 'External academic';
+$string['typeattribution'] = 'Award';
+$string['attributionautomatic'] = 'Automatic';
+$string['attributioncatalog'] = 'Catalogue enrolment';
+$string['attributiondeclared'] = 'Student declaration';
+$string['typeinstruction'] = 'Guidance shown to the student';
+$string['typessaved'] = 'Types saved.';
+$string['managetypes_help'] = 'The six types are fixed: they can be configured and disabled, but not added or '
+    . 'removed. A cap of 0 means "no cap". Credits validated beyond a cap remain awarded: they simply stop being '
+    . 'counted, and come back into the count if the cap is raised.';
+$string['managetypes_desc'] = 'Label, guidance, activation, maximum retained credits (per year and over the '
+    . 'programme) and, for the internship type, credits per validated complementary internship day.';
+$string['maxects'] = 'Maximum over the programme';
+$string['maxectsperyear'] = 'Maximum per year';
+$string['maxectsshort'] = 'max. {$a} credits';
+$string['ectsperday'] = 'Credits per internship day';
+$string['syncstagecredits'] = 'Resynchronise internship credits';
+$string['syncstagecredits_help'] = 'Immediately recomputes the credits awarded automatically from the '
+    . 'complementary internships validated by the academic office. This is done nightly and whenever a page of '
+    . 'the activity is opened anyway: this button is there to check the effect right after changing the rate.';
+$string['syncdone'] = 'Synchronisation complete: {$a->created} created, {$a->updated} updated, '
+    . '{$a->deleted} removed.';
+$string['tasksyncstagecredits'] = 'Award personalised learning credits from complementary internships';
+
+// Catalogue.
+$string['catalogactivity'] = 'Unit';
+$string['catalogactivitytype_help'] = 'Type this unit belongs to: it determines the credit cap that applies to '
+    . 'the student. This is normally the internal academic type.';
+$string['catalogactivityects_help'] = 'Number of credits awarded to the student once the person in charge '
+    . 'validates their enrolment. It belongs to the unit: the student does not choose it.';
+$string['catalogactivityvisible_help'] = 'A hidden unit accepts no new enrolment but keeps the ones already '
+    . 'taken. This is how a unit that is no longer offered is closed, without erasing credits already awarded.';
+$string['ects'] = 'Credits';
+$string['capacity'] = 'Places';
+$string['capacity_help'] = '0 means "unlimited places". Enrolments awaiting validation take up a place: opening '
+    . 'more places than the person in charge can validate would promise a place that does not exist.';
+$string['places'] = 'Places';
+$string['placesleft'] = '{$a->left} of {$a->total}';
+$string['unlimitedplaces'] = 'Unlimited';
+$string['registrations'] = 'Enrolled';
+$string['openforregistration'] = 'Open';
+$string['addactivity'] = 'Add a unit to the catalogue';
+$string['activitysaved'] = 'Unit saved. Now name the person or people in charge.';
+$string['activitydeleted'] = 'Unit removed from the catalogue.';
+$string['confirmdeleteactivity'] = 'Permanently delete this unit from the catalogue?';
+$string['nocatalogactivities'] = 'No unit is offered in the catalogue yet.';
+$string['managecatalog_desc'] = 'The internal academic units offered to students: title, credits, study years '
+    . 'concerned, number of places and the people who will validate enrolments.';
+$string['activityteachers'] = 'People in charge';
+$string['activityteachersfor'] = 'People in charge of: {$a}';
+$string['activityteacherscount'] = '{$a} in charge';
+$string['activityteacherssaved'] = 'People in charge saved.';
+$string['activityteachers_help'] = 'Tick the teachers in charge of this unit. They, and only they, validate '
+    . "enrolments in it — the student's referent teacher has no say over it.";
+$string['responsible'] = 'In charge';
+$string['noteacherwarning'] = 'nobody in charge';
+$string['nopotentialteachers'] = 'No teacher in this course is allowed to validate personalised learning: assign '
+    . 'a teacher role in this course first.';
+$string['studyyearrange'] = 'Study years';
+$string['minstudyyear'] = 'Minimum study year';
+$string['maxstudyyear'] = 'Maximum study year';
+$string['sortorder'] = 'Display order';
+
+// Catalogue enrolment.
+$string['register'] = 'Enrol';
+$string['registertoactivity'] = 'Enrolling in: {$a}';
+$string['registerects'] = 'This unit is worth {$a} credits.';
+$string['registerpendingnotice'] = 'Your enrolment will be sent to the person in charge of the unit. The credits '
+    . 'will only count once they have validated it.';
+$string['confirmregistration'] = 'Confirm my enrolment';
+$string['registered'] = 'Enrolment saved, awaiting validation by the person in charge.';
+$string['registerclosed'] = 'Enrolment closed';
+$string['nofreeplace'] = 'Full';
+$string['notopentoyear'] = 'Not open to your study year';
+
+// Declaration outside the catalogue.
+$string['creditname'] = 'Title';
+$string['creditdescription'] = 'Description and justification';
+$string['creditdescription_help'] = 'Describe what you did, when, and in what capacity. Your referent teacher '
+    . 'will decide on the basis of this description and of your supporting documents.';
+$string['claimedects'] = 'Credits requested';
+$string['claimedects_help'] = 'Number of credits you are requesting for this. The validator may retain only part '
+    . 'of them without rejecting your whole request.';
+$string['evidencefiles'] = 'Supporting documents';
+$string['evidencefiles_help'] = 'Certificates, agreements, diplomas — any document allowing what you declare to '
+    . 'be checked.';
+$string['noevidencefiles'] = 'No supporting document submitted.';
+$string['creditsubmitted'] = 'Request saved, awaiting validation.';
+$string['cancelrequest'] = 'Withdraw my request';
+$string['requestcancelled'] = 'Request withdrawn.';
+$string['cancelledbystudent'] = 'Request withdrawn by the student.';
+$string['declarereferent'] = 'Your request will be sent to your referent teacher: {$a}.';
+$string['declarenoreferent'] = 'You have no referent teacher assigned in the "Internship management" activity of '
+    . 'this course: your request will be handled by the academic office.';
+$string['studentreferents'] = 'Referent teacher(s): {$a}';
+
+// Validation.
+$string['awaitingmydecision'] = 'Awaiting your decision';
+$string['allcreditsinscope'] = 'Everything within your scope';
+$string['nopendingcredits'] = 'No request is awaiting your decision.';
+$string['nocredits'] = 'No personalised learning.';
+$string['validatecredit'] = 'Validate';
+$string['validate'] = 'Validate';
+$string['reject'] = 'Reject';
+$string['decision'] = 'Decision';
+$string['validatorcomment'] = 'Comment';
+$string['decidedby'] = 'Decision made by';
+$string['decidedon'] = 'Decision date';
+$string['creditvalidated'] = 'Personalised learning validated.';
+$string['creditrejected'] = 'Personalised learning rejected.';
+$string['creditcancelled'] = 'Personalised learning withdrawn.';
+$string['creditalreadydecided'] = 'This request has already been dealt with.';
+$string['cancelcredit'] = 'Withdraw';
+$string['cancelreason'] = 'Reason for withdrawal';
+$string['confirmcancelcredit'] = "Withdraw this from the student's record?";
+$string['fromcatalogactivity'] = 'Enrolment in unit "{$a->name}" — in charge: {$a->teachers}';
+$string['automatic'] = 'automatic';
+$string['automaticattribution'] = 'Automatic award';
+$string['automaticcreditnotice'] = 'This is awarded automatically from a complementary internship already '
+    . 'validated by the academic office: there is nothing to validate here. To correct or withdraw it, the '
+    . 'source internship must be revisited in the "Internship management" activity.';
+$string['submittedon'] = 'Requested on';
+$string['pendingrequests'] = 'Pending requests';
+$string['origin'] = 'Origin';
+$string['source_student'] = 'Student';
+$string['source_stage'] = 'Complementary internship';
+$string['source_deve'] = 'Academic office';
+
+// Statuses.
+$string['status_cancelled'] = 'Withdrawn';
+$string['status_rejected'] = 'Rejected';
+$string['status_pending'] = 'Pending';
+$string['status_validated'] = 'Validated';
+$string['allstatuses'] = 'All statuses';
+$string['alltypes'] = 'All types';
+$string['allyears'] = 'All years';
+
+// Study years.
+$string['studyyear'] = 'Study year';
+$string['studyyear_help'] = 'Study year this is attached to: it determines which yearly minimum it counts '
+    . 'towards.';
+$string['studyyear_unspecified'] = 'Unspecified';
+$string['studyyear_n'] = 'Y{$a}';
+
+// Progress.
+$string['summary'] = 'Summary';
+$string['summaryitem'] = 'Item';
+$string['summaryvalue'] = 'Value';
+$string['summarytotalretained'] = 'Total credits retained';
+$string['summarycursusminimum'] = 'Programme minimum';
+$string['summaryyearsdone'] = 'Years completed';
+$string['summarypending'] = 'Credits awaiting validation';
+$string['summarycapped'] = 'Validated credits not retained (type cap reached)';
+$string['yeartotals'] = 'Progress by study year';
+$string['typetotals'] = 'Progress by type';
+$string['allmycredits'] = 'Personalised learning details';
+$string['objective'] = 'Objective';
+$string['yearminimum'] = 'Yearly minimum';
+$string['objectivedone'] = 'Met';
+$string['objectivetodo'] = 'To complete';
+$string['requiredects'] = 'Credits required';
+$string['retainedects'] = 'Credits retained';
+$string['remainingects'] = 'Still to validate';
+$string['validatedects'] = 'Credits validated';
+$string['cappedects'] = 'Not retained';
+$string['cappedshort'] = '{$a} not retained';
+$string['pendingects'] = 'Pending';
+$string['ectsvalue'] = '{$a} credits';
+$string['progressofects'] = '{$a->retained} / {$a->required} credits';
+$string['totalretainedshort'] = 'Credits retained';
+$string['cursusminimumshort'] = 'Programme minimum';
+$string['yearsdoneshort'] = 'Years completed';
+$string['noyearminimum'] = 'No yearly minimum';
+$string['nostudents'] = 'No student to display.';
+$string['numcredits'] = '{$a} personalised learning item(s)';
+$string['cursusminimum'] = 'Minimum over the whole programme';
+$string['cursusminimum_help'] = 'Adds to the yearly minimums above: a student may have met every yearly minimum '
+    . 'without having met the programme one yet.';
+$string['manageyearrequirements_help'] = 'Minimum number of personalised learning credits to validate for each '
+    . 'study year, all types together. A year left at 0 requires nothing and does not appear as an objective.';
+$string['manageyearrequirements_desc'] = 'Minimum credits to validate per study year and over the whole '
+    . 'programme.';
+$string['requirementssaved'] = 'Credit minimums saved.';
+
+// Automatic award from internships.
+$string['stagecreditname'] = 'Complementary internship — {$a->theme} ({$a->structure})';
+$string['stagecreditdescription'] = 'Awarded automatically from {$a->days} internship day(s) retained by the '
+    . 'academic office, at {$a->rate} credits per day (activity "{$a->activity}").';
+$string['stagelinkheading'] = 'Where internship credits come from';
+$string['stagelinklist'] = 'Complementary internships validated by the academic office are read from: {$a}.';
+$string['stagelinknone'] = 'No "Internship management" activity is associated with this activity: no internship '
+    . 'credit can be awarded automatically. Add an "Internship management" activity to this course, or name one '
+    . 'in this activity\'s settings.';
+$string['stagelinkrate'] = 'Current rate: {$a} credits per retained internship day.';
+$string['stagelinknorate'] = 'No rate is set for the internship type: nothing is awarded automatically while the '
+    . 'credits per day remain at 0.';
+
+// Administration.
+$string['adminsectionrules'] = 'Award rules';
+$string['adminsectioncatalog'] = 'Catalogue';
+$string['adminsectionfollowup'] = 'Follow-up';
+$string['adminsectionpage'] = 'Page';
+$string['adminsectionpurpose'] = 'What it is for';
+$string['exportcsv_desc'] = 'Progress per student, or every item in detail, as CSV.';
+$string['exportstudents'] = 'Progress per student';
+$string['exportstudents_desc'] = 'One row per student: credits retained per type, progress against the yearly '
+    . 'and programme minimums.';
+$string['exportcredits'] = 'Detailed list';
+$string['exportcredits_desc'] = "One row per item credited to a student, with its status, decision and who made "
+    . 'it.';
+
+// Errors.
+$string['errorpositiveects'] = 'The number of credits must be greater than 0.';
+$string['errornegativeects'] = 'The number of credits cannot be negative.';
+$string['errornegativecapacity'] = 'The number of places cannot be negative.';
+$string['errorstudyyearrange'] = 'The minimum study year cannot be after the maximum one.';
+$string['erroractivityinuse'] = 'This unit cannot be deleted: students are enrolled in it. Close it to '
+    . 'enrolments instead.';
+$string['errornotypes'] = 'No type is defined: configure the types first.';
+$string['errorinvalidtype'] = 'Invalid type.';
+$string['errornodeclarabletype'] = 'No type can be freely declared in this activity: academic units are taken '
+    . 'from the catalogue and internship credits are awarded automatically.';
+$string['errorcreditnoteditable'] = 'An enrolment in a catalogue unit cannot be edited: its title and credits '
+    . 'are those of the unit. You can only withdraw it.';
+$string['errorcreditdecided'] = 'This request has already been dealt with: it can no longer be edited or '
+    . 'withdrawn.';
+$string['erroralreadyregistered'] = 'You are already enrolled in this unit.';
+$string['errorregisterclosed'] = 'This unit accepts no further enrolment.';
+$string['errornoplaceleft'] = 'There is no place left in this unit.';
+$string['errorwrongyear'] = 'This unit is not open to that study year.';
+$string['errorevidencemissing'] = 'This supporting document cannot be found.';
+
+// Privacy.
+$string['privacy:metadata:ep_credit'] = 'The personalised learning credited to a student: catalogue enrolments, '
+    . 'declarations and automatic awards.';
+$string['privacy:metadata:ep_credit:userid'] = 'Student the personalised learning is credited to.';
+$string['privacy:metadata:ep_credit:name'] = 'Title of the personalised learning.';
+$string['privacy:metadata:ep_credit:description'] = 'Description and justification entered by the student.';
+$string['privacy:metadata:ep_credit:claimedects'] = 'Number of credits requested.';
+$string['privacy:metadata:ep_credit:retainedects'] = 'Number of credits retained after validation.';
+$string['privacy:metadata:ep_credit:status'] = 'State of the request (pending, validated, rejected, withdrawn).';
+$string['privacy:metadata:ep_credit:validatedby'] = 'User who validated, rejected or withdrew the request.';
+$string['privacy:metadata:ep_credit:validatorcomment'] = "Validator's comment.";
+$string['privacy:metadata:ep_credit:timecreated'] = 'Date of the request.';
+$string['privacy:metadata:ep_activity_teacher'] = 'Teachers named in charge of a catalogue unit.';
+$string['privacy:metadata:ep_activity_teacher:teacherid'] = 'Teacher in charge.';
+$string['privacy:metadata:core_files'] = 'Supporting documents submitted with a request.';
+$string['privacy:path:credits'] = 'Personalised learning';

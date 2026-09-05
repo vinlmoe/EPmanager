@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Tableau de synthèse : la même toque que mod_ep, mais vue comme un tableau de suivi -->
+  <path fill="#000000" d="M24 5.5 L41 12.5 L24 19.5 L7 12.5 z"/>
+  <rect fill="#000000" x="6" y="22" width="36" height="21" rx="3"/>
+  <g fill="#FFFFFF">
+    <rect x="8.5" y="24.5" width="31" height="4"/>
+    <rect x="8.5" y="30.5" width="9" height="3.5"/>
+    <rect x="19.5" y="30.5" width="9" height="3.5"/>
+    <rect x="30.5" y="30.5" width="9" height="3.5"/>
+    <rect x="8.5" y="36" width="9" height="3.5"/>
+    <rect x="19.5" y="36" width="9" height="3.5"/>
+    <rect x="30.5" y="36" width="9" height="3.5"/>
+  </g>
+</svg>

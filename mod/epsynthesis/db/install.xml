@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="mod/epsynthesis/db" VERSION="20260905" COMMENT="XMLDB file for module mod_epsynthesis"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
+>
+  <TABLES>
+    <TABLE NAME="epsynthesis" COMMENT="Instance de l'activité Suivi de l'enseignement personnalisé (synthèse enseignant)">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="course" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="intro" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="introformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="course" TYPE="foreign" FIELDS="course" REFTABLE="course" REFFIELDS="id"/>
+      </KEYS>
+    </TABLE>
+
+    <TABLE NAME="epsynthesis_link" COMMENT="Instance mod_ep (identifiée par son id de course-module) dont les étudiants doivent remonter dans une instance de Suivi de l'enseignement personnalisé : permet d'exclure une promotion qui n'est plus suivie sans supprimer son activité d'origine">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="synthesisid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="epcmid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"
+            COMMENT="id du course-module de l'activité mod_ep liée"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="synthesisid" TYPE="foreign" FIELDS="synthesisid" REFTABLE="epsynthesis" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="synthesisid_epcmid" UNIQUE="true" FIELDS="synthesisid, epcmid"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>
