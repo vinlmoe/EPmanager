@@ -1,0 +1,20 @@
+/* Barre de navigation de l'activité : les boutons d'une même barre restent alignés et respirent,
+   même quand ils passent à la ligne sur un écran étroit. */
+.path-mod-ep .ep-navlinks {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Formulaires de recherche / filtre : mêmes espacements que les listes de mod_stage, pour que les
+   deux activités se ressemblent quand un même utilisateur passe de l'une à l'autre. */
+.path-mod-ep .ep-filters {
+    flex-wrap: wrap;
+    gap: 0.25rem 0;
+}
+
+/* Rappel d'un crédit : la colonne des intitulés reste lisible sans occuper la moitié du tableau. */
+.path-mod-ep .ep-credit-summary td:first-child {
+    width: 30%;
+    font-weight: 600;
+}
