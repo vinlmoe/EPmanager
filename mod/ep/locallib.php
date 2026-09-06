@@ -2972,18 +2972,23 @@ function ep_get_declarable_type_by_label($epid, $label) {
 
 /**
  * Décode la colonne de statut d'une ligne d'import : les graphies française et anglaise, à
- * l'orthographe et aux accents près, sont admises. Une valeur vide vaut « en attente », l'état de
- * toute demande tant que personne ne s'est prononcé.
+ * l'orthographe et aux accents près, sont admises. Une valeur vide reprend le statut par défaut de
+ * l'import — « en attente » normalement, ou « validé » si la DEVE a coché l'option qui valide
+ * directement les lignes sans statut explicite (voir ep_import_credits()) : cette option ne fait
+ * que déplacer ce défaut, une valeur inscrite dans le fichier reste toujours prioritaire.
  *
  * @param string $raw
+ * @param int $defaultstatus Statut à renvoyer pour une colonne vide.
  * @return int|null Un des EP_STATUS_*, ou null si la valeur n'est pas reconnue.
  */
-function ep_import_resolve_status($raw) {
+function ep_import_resolve_status($raw, $defaultstatus = EP_STATUS_PENDING) {
     $normalized = core_text::strtolower(trim($raw));
+    if ($normalized === '') {
+        return $defaultstatus;
+    }
     $normalized = str_replace(['é', 'è', 'ê'], 'e', $normalized);
 
     $map = [
-        '' => EP_STATUS_PENDING,
         'attente' => EP_STATUS_PENDING,
         'en attente' => EP_STATUS_PENDING,
         'pending' => EP_STATUS_PENDING,
@@ -3158,11 +3163,14 @@ function ep_import_activities(stdClass $ep, array $rows) {
  *                               ep_get_enrolled_students()).
  * @param int $linenum Numéro de ligne, pour les messages d'erreur.
  * @param array $row Voir ep_import_credit_columns().
+ * @param int $defaultstatus Statut à appliquer aux lignes dont la colonne status est vide (voir
+ *                           ep_import_credits()).
  * @return stdClass {ok: bool, error: string|null, plan: stdClass|null}
  *                  'plan' : {studentid, activity, type, name, studyyear, claimedects, weeks,
  *                            retainedects, status, comment, fingerprint}
  */
-function ep_parse_import_credit_row(stdClass $ep, array $studentsbyemail, $linenum, array $row) {
+function ep_parse_import_credit_row(stdClass $ep, array $studentsbyemail, $linenum, array $row,
+        $defaultstatus = EP_STATUS_PENDING) {
     $email = trim($row['email'] ?? '');
     $targetlabel = trim($row['ep'] ?? '');
     if ($email === '' || $targetlabel === '') {
@@ -3184,7 +3192,7 @@ function ep_parse_import_credit_row(stdClass $ep, array $studentsbyemail, $linen
         ])];
     }
 
-    $status = ep_import_resolve_status($row['status'] ?? '');
+    $status = ep_import_resolve_status($row['status'] ?? '', $defaultstatus);
     if ($status === null) {
         return (object) ['ok' => false, 'error' => get_string('importerrorunknownstatus', 'mod_ep', (object) [
             'line' => $linenum, 'status' => $row['status'] ?? '',
@@ -3293,21 +3301,27 @@ function ep_import_apply_status(stdClass $credit, $status, $retainedects, $byuse
  * @param array $rows Voir ep_parse_import_csv() et ep_import_credit_columns().
  * @param int $byuserid Utilisateur DEVE à l'origine de l'import, consigné comme validateur des
  *                      décisions qu'il contient (acceptation, validation, refus).
+ * @param bool $directvalidate Valide directement les lignes dont la colonne status est vide, au
+ *                             lieu de les laisser en attente — l'option proposée sur la page
+ *                             d'import pour dispenser la DEVE de remplir cette colonne quand tout
+ *                             le fichier est déjà décidé. Une valeur explicite dans le fichier
+ *                             reste toujours prioritaire (voir ep_import_resolve_status()).
  * @return stdClass {created: int, errors: string[]}
  */
-function ep_import_credits(stdClass $ep, context $context, array $rows, $byuserid) {
+function ep_import_credits(stdClass $ep, context $context, array $rows, $byuserid, $directvalidate = false) {
     global $DB;
 
     $studentsbyemail = [];
     foreach (ep_get_enrolled_students($context) as $student) {
         $studentsbyemail[core_text::strtolower(trim($student->email))] = $student;
     }
+    $defaultstatus = $directvalidate ? EP_STATUS_VALIDATED : EP_STATUS_PENDING;
 
     $errors = [];
     $plans = [];
     $seen = [];
     foreach ($rows as $linenum => $row) {
-        $result = ep_parse_import_credit_row($ep, $studentsbyemail, $linenum, $row);
+        $result = ep_parse_import_credit_row($ep, $studentsbyemail, $linenum, $row, $defaultstatus);
         if (!$result->ok) {
             $errors[] = $result->error;
             continue;

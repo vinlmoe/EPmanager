@@ -80,7 +80,8 @@ if ($mode !== '' && data_submitted() && confirm_sesskey()) {
         } else if ($mode === 'activities') {
             $results = ep_import_activities($ep, $parsed->rows);
         } else {
-            $results = ep_import_credits($ep, $context, $parsed->rows, $USER->id);
+            $directvalidate = optional_param('directvalidate', 0, PARAM_BOOL);
+            $results = ep_import_credits($ep, $context, $parsed->rows, $USER->id, $directvalidate);
         }
     }
 }
@@ -144,6 +145,18 @@ echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', '
 echo html_writer::empty_tag('input', [
     'type' => 'file', 'name' => 'importfile', 'accept' => '.csv', 'required' => 'required',
 ]);
+
+// Coché, valide directement les lignes dont la colonne status est vide plutôt que de les laisser
+// en attente : la DEVE n'a alors rien à remplir dans cette colonne quand tout le fichier est déjà
+// décidé. Une valeur explicite dans le fichier reste toujours prioritaire sur cette option.
+if ($mode === 'credits') {
+    echo html_writer::div(
+        html_writer::checkbox('directvalidate', 1, false, get_string('importdirectvalidate', 'mod_ep'),
+            ['id' => 'importdirectvalidate']),
+        'mt-2');
+    echo html_writer::div(get_string('importdirectvalidate_help', 'mod_ep'), 'text-muted small mb-2');
+}
+
 echo html_writer::tag('button', get_string('import', 'mod_ep'),
     ['type' => 'submit', 'class' => 'btn btn-primary ml-2']);
 echo html_writer::end_tag('form');

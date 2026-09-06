@@ -408,12 +408,18 @@ $string['importcredits_help'] = 'Import a CSV file (saved from Excel via "Save A
     . '<li><em>weeks</em>: number of weeks declared (weekly types only)</li>'
     . '<li><em>retainedects</em>: credits to retain if the status is "validated" (optional, equal to the '
     . 'credits requested by default)</li>'
-    . '<li><em>status</em>: pending (default), accepted (catalogue enrolments only), validated or rejected</li>'
+    . '<li><em>status</em>: pending (default, or if the "Validate directly" option below is left unticked), '
+    . 'accepted (catalogue enrolments only), validated or rejected</li>'
     . '<li><em>comment</em>: the validator\'s comment, if there is a decision to record</li>'
     . '</ul>'
     . 'Imported credits are recorded as entered by the academic office. A row whose student already has an '
     . 'active enrolment in the same unit, or an identical declaration already on record, is rejected rather '
     . 'than duplicated.';
+$string['importdirectvalidate'] = 'Validate directly the rows with no status';
+$string['importdirectvalidate_help'] = 'Without this option, a row whose status column is blank stays pending, '
+    . 'just like an online enrolment or declaration. Tick it to validate such rows directly instead — handy for '
+    . 'importing a file that is already entirely decided, without writing "validated" on every row. A value '
+    . 'written in the status column still takes precedence over this option, row by row.';
 $string['importresult'] = '{$a} personalised learning item(s) imported successfully.';
 $string['importerrorupload'] = 'The file could not be uploaded. Check its size and try again.';
 $string['importerrorline'] = 'Line {$a->line}: {$a->error}';

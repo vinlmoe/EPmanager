@@ -171,6 +171,12 @@ fichier CSV (enregistré depuis Excel via « Enregistrer sous > CSV ») :
   accepté (inscriptions uniquement), validé ou refusé. Les crédits importés
   sont marqués comme saisis par la DEVE.
 
+  Une case **« Valider directement les lignes sans statut »** évite d'avoir à
+  écrire « validé » sur chaque ligne d'un fichier déjà entièrement décidé :
+  cochée, elle change le statut par défaut d'une ligne sans colonne status,
+  de « en attente » à « validé ». Une valeur inscrite dans le fichier reste
+  toujours prioritaire sur cette case, ligne par ligne.
+
 Chaque ligne est vérifiée indépendamment des autres : une ligne fautive (email
 inconnu, EP ou type introuvable, doublon avec un dossier déjà ouvert...) est
 signalée sans empêcher l'import du reste du fichier — il suffit de corriger et

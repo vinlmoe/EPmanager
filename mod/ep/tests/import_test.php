@@ -203,4 +203,43 @@ final class import_test extends \advanced_testcase {
         $this->assertSame(0, $result->created);
         $this->assertCount(1, $result->errors);
     }
+
+    /**
+     * L'option « valider directement » ne change que le statut par défaut d'une colonne vide :
+     * elle valide une ligne qui n'en précise aucun, mais une valeur explicite reste prioritaire,
+     * qu'elle demande moins (rester en attente) ou autre chose (un refus).
+     */
+    public function test_directvalidate_option_only_changes_the_default_for_blank_status(): void {
+        global $DB;
+
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_ep');
+        $activity = $generator->create_activity($this->ep, ['name' => 'Clinique équine', 'ects' => 4]);
+
+        $other = $this->getDataGenerator()->create_and_enrol(get_course($this->ep->course), 'student');
+        $third = $this->getDataGenerator()->create_and_enrol(get_course($this->ep->course), 'student');
+
+        $csv = "email;ep;name;studyyear;claimedects;weeks;retainedects;status;comment\n"
+            . "{$this->student->email};Clinique équine;;;;;;;\n"
+            . "{$other->email};Clinique équine;;;;;;attente;\n"
+            . "{$third->email};Clinique équine;;;;;;refuse;Absences répétées\n";
+
+        $parsed = ep_parse_import_csv($csv, ep_import_credit_columns());
+        $result = ep_import_credits($this->ep, $this->context, $parsed->rows, $this->deve->id, true);
+
+        $this->assertSame(3, $result->created);
+
+        $default = $DB->get_record('ep_credit',
+            ['epid' => $this->ep->id, 'activityid' => $activity->id, 'userid' => $this->student->id],
+            '*', MUST_EXIST);
+        $this->assertEquals(EP_STATUS_VALIDATED, $default->status);
+        $this->assertEquals(4, $default->retainedects);
+
+        $explicitpending = $DB->get_record('ep_credit',
+            ['epid' => $this->ep->id, 'activityid' => $activity->id, 'userid' => $other->id], '*', MUST_EXIST);
+        $this->assertEquals(EP_STATUS_PENDING, $explicitpending->status);
+
+        $explicitrejected = $DB->get_record('ep_credit',
+            ['epid' => $this->ep->id, 'activityid' => $activity->id, 'userid' => $third->id], '*', MUST_EXIST);
+        $this->assertEquals(EP_STATUS_REJECTED, $explicitrejected->status);
+    }
 }

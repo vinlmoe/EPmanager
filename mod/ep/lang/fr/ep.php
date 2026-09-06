@@ -411,13 +411,19 @@ $string['importcredits_help'] = "Importez un fichier CSV (enregistré depuis Exc
     . "<li><em>weeks</em> : nombre de semaines déclarées (types comptés à la semaine uniquement)</li>"
     . "<li><em>retainedects</em> : ECTS à retenir si le statut est « validé » (facultatif, égal aux ECTS "
     . "demandés par défaut)</li>"
-    . "<li><em>status</em> : attente (par défaut), accepté (inscriptions au catalogue uniquement), validé ou "
-    . "refusé</li>"
+    . "<li><em>status</em> : attente (par défaut, ou si l'option « Valider directement » ci-dessous n'est pas "
+    . "cochée), accepté (inscriptions au catalogue uniquement), validé ou refusé</li>"
     . "<li><em>comment</em> : commentaire du validateur, s'il y a une décision à consigner</li>"
     . "</ul>"
     . "Les crédits importés sont enregistrés comme saisis par la DEVE. Une ligne dont l'étudiant a déjà une "
     . "inscription active sur le même EP, ou une déclaration identique déjà enregistrée, est refusée plutôt que "
     . "dupliquée.";
+$string['importdirectvalidate'] = 'Valider directement les lignes sans statut';
+$string['importdirectvalidate_help'] = "Sans cette option, une ligne dont la colonne status est vide reste en "
+    . "attente, comme une inscription ou une déclaration en ligne. Cochez-la pour la valider directement à la "
+    . "place — pratique pour importer un fichier déjà entièrement décidé, sans avoir à écrire « validé » sur "
+    . "chaque ligne. Une valeur inscrite dans la colonne status reste prioritaire sur cette option, ligne par "
+    . "ligne.";
 $string['importresult'] = '{$a} enseignement(s) personnalisé(s) importé(s) avec succès.';
 $string['importerrorupload'] = "Le fichier n'a pas pu être téléversé. Vérifiez sa taille et réessayez.";
 $string['importerrorline'] = 'Ligne {$a->line} : {$a->error}';
