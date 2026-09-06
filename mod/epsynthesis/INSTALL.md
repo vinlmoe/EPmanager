@@ -89,6 +89,13 @@ dans la synthèse (`mod/epsynthesis/decide.php`), leur responsable n'ayant pas
 forcément accès au cours de l'étudiant ; le formulaire de décision y est le
 même, à l'identique.
 
+Quand un EP compte plusieurs étudiants dont les ECTS restent à valider, un
+bouton **Noter en groupe** apparaît sur sa ligne du suivi et renvoie vers
+`mod/epsynthesis/activity_validate.php` (le pendant, pour un EP partagé, de
+`mod/ep/activity_validate.php`) : une note sur 20 par étudiant, qui décide
+seule de la validation ou du refus, ou une case pour valider directement sans
+note.
+
 ## Le circuit d'un EP académique
 
 1. **Inscription** de l'étudiant, depuis le catalogue de sa promotion. Elle

@@ -42,6 +42,16 @@ define('EP_STATUS_ENROLLED', 2);
 /** Nombre de lignes par page pour les listes paginées (DEVE / enseignants). */
 define('EP_LIST_PERPAGE', 40);
 
+/** Note maximale (sur laquelle une notation groupée s'exprime — voir ep_grade_credit()). */
+define('EP_GRADE_MAX', 20);
+/**
+ * Note minimale à partir de laquelle une notation groupée vaut validation, à la totalité des ECTS
+ * demandés ; en-deçà, elle vaut refus (voir ep_grade_credit()). Ne s'applique qu'à la notation
+ * groupée d'un EP du catalogue : valider ou refuser un crédit au cas par cas (validate.php,
+ * decide.php) reste possible sans aucune note, comme avant.
+ */
+define('EP_GRADE_PASS_MARK', 10);
+
 /**
  * Le nombre d'ECTS demandés est proposé par l'étudiant, au cas par cas : c'est le validateur qui
  * arrête ce qu'il en retient.

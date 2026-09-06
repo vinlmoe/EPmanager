@@ -112,5 +112,21 @@ function xmldb_ep_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026090601, 'ep');
     }
 
+    if ($oldversion < 2026090602) {
+
+        // Notation groupée d'un EP du catalogue : le responsable peut noter (sur 20) plusieurs
+        // étudiants d'affilée plutôt que de fixer les ECTS retenus un par un, la note décidant
+        // elle-même de la validation ou du refus (voir ep_grade_credit()). Vide pour tout crédit
+        // existant, validé ou refusé sans note.
+        $table = new xmldb_table('ep_credit');
+
+        $field = new xmldb_field('grade', XMLDB_TYPE_NUMBER, '10, 2', null, null, null, null, 'retainedects');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026090602, 'ep');
+    }
+
     return true;
 }

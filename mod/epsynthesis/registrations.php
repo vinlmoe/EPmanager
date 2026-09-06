@@ -222,6 +222,13 @@ foreach ($activities as $activityid => $row) {
         ep_render_actions([
             get_string('viewregistrations', 'mod_epsynthesis') =>
                 new moodle_url($baseurl, ['activityid' => $activityid]),
+            // Ne mène nulle part sans étudiant à noter : mieux vaut ne pas la proposer que
+            // mener à un écran vide.
+            get_string('gradebulk', 'mod_ep') => $row->counts->enrolled > 0
+                ? new moodle_url('/mod/epsynthesis/activity_validate.php',
+                    ['id' => $cm->id, 'activityid' => $activityid,
+                        'returnurl' => $baseurl->out_as_local_url(false)])
+                : null,
         ], $row->counts->pending > 0 ? 'btn btn-sm btn-primary mr-1 mb-1' : 'btn btn-sm btn-secondary mr-1 mb-1'),
     ];
 }

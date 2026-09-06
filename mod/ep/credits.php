@@ -81,6 +81,26 @@ foreach ($steps as [$stepstatus, $stepheading, $stepempty]) {
         continue;
     }
 
+    if ($stepstatus === EP_STATUS_ENROLLED) {
+        // Notation groupée : un raccourci par EP présent ci-dessous, pour noter plusieurs
+        // étudiants d'affilée plutôt qu'un par un (voir activity_validate.php). Toutes les
+        // demandes de cette étape portent sur une inscription, donc sur un EP du catalogue.
+        $activitynames = [];
+        foreach ($awaiting as $credit) {
+            if (!empty($credit->activityid) && !isset($activitynames[$credit->activityid])) {
+                $activitynames[$credit->activityid] = $credit->name;
+            }
+        }
+        $gradelinks = [];
+        foreach ($activitynames as $activityid => $activityname) {
+            $gradelinks[get_string('gradeactivity', 'mod_ep', format_string($activityname))] =
+                new moodle_url('/mod/ep/activity_validate.php',
+                    ['id' => $cm->id, 'activityid' => $activityid,
+                        'returnurl' => $baseurl->out_as_local_url(false)]);
+        }
+        echo html_writer::div(ep_render_actions($gradelinks, 'btn btn-sm btn-outline-primary mr-1 mb-2'), 'mb-2');
+    }
+
     $students = ep_get_credit_users($awaiting);
     $awaitingtable = new html_table();
     $awaitingtable->head = [

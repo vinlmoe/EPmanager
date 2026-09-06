@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/ep/db" VERSION="20260906" COMMENT="XMLDB file for module mod_ep"
+<XMLDB PATH="mod/ep/db" VERSION="20260907" COMMENT="XMLDB file for module mod_ep"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
@@ -135,6 +135,8 @@
             COMMENT="Nombre de semaines déclarées par l'étudiant, pour les types dont les ECTS se comptent par semaine (0 pour tous les autres)"/>
         <FIELD NAME="retainedects" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="ECTS retenus après validation, avant application des plafonds par type (voir ep_get_student_progress())"/>
+        <FIELD NAME="grade" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="false" SEQUENCE="false"
+            COMMENT="Note sur 20 attribuée lors d'une notation groupée (voir ep_grade_credit()) ; vide pour un crédit validé ou refusé sans note, au cas par cas"/>
         <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="-2 annulé, -1 refusé, 0 en attente de validation, 1 validé, 2 inscription acceptée par le responsable de l'EP (ECTS pas encore validés)"/>
         <FIELD NAME="source" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="student" SEQUENCE="false"

@@ -110,6 +110,15 @@ Un refus motivé est possible à chacune des deux décisions. Tant que les ECTS 
 sont pas validés, ils apparaissent « en attente » dans les bilans de
 l'étudiant.
 
+À la troisième étape, le responsable peut traiter ses étudiants un par un
+(fiche individuelle, avec commentaire) ou **en groupe**, depuis **Noter en
+groupe** (catalogue des EP, ou écran de validation) : pour chaque étudiant
+inscrit, il saisit soit une **note sur 20** — validée à la totalité des ECTS
+demandés à partir de 10/20, refusée en dessous, la note étant conservée dans
+les deux cas —, soit coche directement **Valider** pour retenir la totalité
+des ECTS sans note. Une ligne laissée vide n'est pas traitée, pour pouvoir y
+revenir plus tard.
+
 Un étudiant ne peut s'inscrire à un EP que si l'**année d'étude courante de sa
 promotion** est dans la plage d'années de cet EP. Cette année est celle que
 renseigne l'activité « Gestion des stages » du cours.

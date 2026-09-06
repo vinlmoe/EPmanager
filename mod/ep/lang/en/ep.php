@@ -255,6 +255,16 @@ $string['decisionectsnotice'] = 'The unit is over: set the number of credits act
 $string['acceptbeyondcapacity'] = 'All places in this unit are already taken. You may still accept this '
     . 'enrolment if you see fit: the number of places is a guide, not a limit.';
 $string['activityoccupancy'] = 'Places: {$a->places} — enrolments pending: {$a->pending}';
+$string['gradebulk'] = 'Grade in bulk';
+$string['gradeactivity'] = 'Grade: {$a}';
+$string['gradingnotice'] = 'For each student, enter a grade out of 20 — it alone decides validation (from 10/20, '
+    . 'the full credits requested are retained) or rejection —, or tick "Validate" to retain the full credits '
+    . 'directly with no grade. A row left blank is not processed: you can come back to it later.';
+$string['grade'] = 'Grade';
+$string['gradevalue'] = '{$a->grade} / {$a->max}';
+$string['validatedirectly'] = 'Validate';
+$string['nogradableregistrations'] = 'No enrolment on this unit is awaiting credit validation for now.';
+$string['gradingdone'] = '{$a} decision(s) recorded.';
 $string['allcreditsinscope'] = 'Everything within your scope';
 $string['nopendingcredits'] = 'No request is awaiting your decision.';
 $string['nocredits'] = 'No personalised learning.';
@@ -476,6 +486,7 @@ $string['privacy:metadata:ep_credit:description'] = 'Description and justificati
 $string['privacy:metadata:ep_credit:weeks'] = 'Number of weeks declared, for types counted by the week.';
 $string['privacy:metadata:ep_credit:claimedects'] = 'Number of credits requested.';
 $string['privacy:metadata:ep_credit:retainedects'] = 'Number of credits retained after validation.';
+$string['privacy:metadata:ep_credit:grade'] = 'Grade out of 20 awarded during a bulk grading.';
 $string['privacy:metadata:ep_credit:status'] = 'State of the request (pending, validated, rejected, withdrawn).';
 $string['privacy:metadata:ep_credit:validatedby'] = 'User who validated, rejected or withdrew the request.';
 $string['privacy:metadata:ep_credit:validatorcomment'] = "Validator's comment.";

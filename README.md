@@ -26,8 +26,9 @@ six **types**, qui déterminent comment ses ECTS arrivent et qui les valide :
 Un **EP académique** se prend en trois temps : l'étudiant s'inscrit (sans
 limite de places), son responsable accepte ou non l'inscription — le nombre de
 places est un repère, qu'il peut dépasser —, puis valide les ECTS à la fin de
-l'EP. L'année d'étude à laquelle un étudiant peut s'inscrire est celle de sa
-promotion, telle que la renseigne `mod_stage`.
+l'EP, étudiant par étudiant ou **en groupe** (une note sur 20, validée à partir
+de 10, ou une case à cocher). L'année d'étude à laquelle un étudiant peut
+s'inscrire est celle de sa promotion, telle que la renseigne `mod_stage`.
 
 Un EP académique auquel des étudiants de **plusieurs promotions** s'inscrivent
 est défini une seule fois dans `mod_epsynthesis`, qui sert aussi à suivre, EP

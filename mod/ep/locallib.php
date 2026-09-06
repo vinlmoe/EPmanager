@@ -1210,6 +1210,32 @@ function ep_reject_credit(stdClass $credit, $byuserid, $comment) {
 }
 
 /**
+ * Note un crédit et en déduit la décision : validé à la totalité des ECTS demandés si la note
+ * atteint EP_GRADE_PASS_MARK (sur EP_GRADE_MAX), refusé sinon. La note est conservée dans les deux
+ * cas — un refus noté 6/20 en dit plus qu'un refus muet.
+ *
+ * Sert à la notation groupée d'un EP du catalogue (voir ep_process_activity_grading()), où noter
+ * plusieurs étudiants d'affilée va plus vite que fixer les ECTS retenus un par un ; la validation
+ * ou le refus au cas par cas (validate.php, decide.php) restent possibles sans aucune note.
+ *
+ * @param stdClass $credit
+ * @param int $byuserid
+ * @param float $grade Note sur EP_GRADE_MAX.
+ * @param string $comment
+ * @return void
+ */
+function ep_grade_credit(stdClass $credit, $byuserid, $grade, $comment = '') {
+    $grade = max(0, min(EP_GRADE_MAX, round((float) $grade, 2)));
+    $credit->grade = $grade;
+
+    if ($grade >= EP_GRADE_PASS_MARK) {
+        ep_validate_credit($credit, $byuserid, $credit->claimedects, $comment);
+    } else {
+        ep_reject_credit($credit, $byuserid, $comment);
+    }
+}
+
+/**
  * Annule un crédit : désinscription de l'étudiant tant que son inscription n'est pas validée, ou
  * retrait par la DEVE. La ligne est conservée (état terminal) plutôt que supprimée, pour garder
  * la trace de ce qui a été demandé, et sa place sur l'EP du catalogue est libérée.
@@ -1977,6 +2003,97 @@ function ep_get_activity_registrations($activityid, array $filters = [], $sort =
 }
 
 /**
+ * Traite la notation groupée d'un EP du catalogue : pour chaque inscription acceptée dont les
+ * ECTS restent à valider, une note (sur EP_GRADE_MAX, voir ep_grade_credit()) ou une validation
+ * directe sans note, au choix du responsable ligne par ligne. Une ligne sans note ni case cochée
+ * n'est pas traitée, pour laisser au responsable le temps d'y revenir plus tard sans l'obliger à
+ * statuer sur tout le monde en une fois.
+ *
+ * Ne prend en compte que les inscriptions actuellement acceptées (EP_STATUS_ENROLLED), relues en
+ * base plutôt que transmises par le formulaire : une ligne déjà validée ou refusée entre-temps
+ * (double soumission, deux onglets ouverts) est ignorée plutôt que reprise.
+ *
+ * @param int $activityid
+ * @param array $grades creditid => note soumise (chaîne, éventuellement vide) : voir
+ *                      ep_render_activity_grading_form().
+ * @param array $directvalidate creditid => case « Valider directement » cochée.
+ * @param int $byuserid
+ * @return int Nombre de crédits traités.
+ */
+function ep_process_activity_grading($activityid, array $grades, array $directvalidate, $byuserid) {
+    global $DB;
+
+    $enrolled = $DB->get_records('ep_credit', ['activityid' => $activityid, 'status' => EP_STATUS_ENROLLED]);
+
+    $processed = 0;
+    foreach ($enrolled as $credit) {
+        $rawgrade = trim((string) ($grades[$credit->id] ?? ''));
+        if ($rawgrade !== '' && is_numeric($rawgrade)) {
+            ep_grade_credit($credit, $byuserid, (float) $rawgrade);
+            $processed++;
+        } else if (!empty($directvalidate[$credit->id])) {
+            ep_validate_credit($credit, $byuserid, $credit->claimedects);
+            $processed++;
+        }
+    }
+
+    return $processed;
+}
+
+/**
+ * Rend le formulaire de notation groupée d'un EP du catalogue : une ligne par inscription
+ * acceptée dont les ECTS restent à valider, avec une note (sur EP_GRADE_MAX) qui décide seule de
+ * la validation ou du refus, et une case pour valider directement à la totalité des ECTS sans
+ * note. Voir ep_process_activity_grading() pour ce que chaque ligne devient une fois soumise.
+ *
+ * @param moodle_url $pageurl URL de la page, à laquelle le formulaire se soumet.
+ * @param array $registrations Inscriptions ENROLLED de l'EP, voir ep_get_activity_registrations()
+ *                             (enrichies de studentfullname et coursename — utile pour distinguer
+ *                             des étudiants de promotions différentes sur un EP partagé).
+ * @return string HTML
+ */
+function ep_render_activity_grading_form(moodle_url $pageurl, array $registrations) {
+    $out = html_writer::tag('p', get_string('gradingnotice', 'mod_ep'), ['class' => 'text-muted']);
+
+    $out .= html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false)]);
+    $out .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+
+    $table = new html_table();
+    $table->head = [
+        get_string('student', 'mod_ep'),
+        get_string('course'),
+        get_string('studyyear', 'mod_ep'),
+        get_string('claimedects', 'mod_ep'),
+        get_string('grade', 'mod_ep') . ' (/' . EP_GRADE_MAX . ')',
+        get_string('validatedirectly', 'mod_ep'),
+    ];
+    foreach ($registrations as $registration) {
+        $table->data[] = [
+            $registration->studentfullname,
+            format_string($registration->coursename),
+            ep_studyyear_label($registration->studyyear),
+            ep_format_ects($registration->claimedects),
+            html_writer::empty_tag('input', [
+                'type' => 'number', 'step' => '0.25', 'min' => 0, 'max' => EP_GRADE_MAX,
+                'name' => 'grade[' . $registration->id . ']', 'class' => 'form-control',
+                'aria-label' => get_string('grade', 'mod_ep') . ' — ' . $registration->studentfullname,
+            ]),
+            html_writer::checkbox('directvalidate[' . $registration->id . ']', 1, false, '', [
+                'aria-label' => get_string('validatedirectly', 'mod_ep') . ' — ' . $registration->studentfullname,
+            ]),
+        ];
+    }
+    $out .= html_writer::table($table);
+
+    $out .= html_writer::empty_tag('input', [
+        'type' => 'submit', 'value' => get_string('savechanges'), 'class' => 'btn btn-primary mt-2',
+    ]);
+    $out .= html_writer::end_tag('form');
+
+    return $out;
+}
+
+/**
  * Charge en une requête les étudiants concernés par une liste de crédits.
  *
  * @param array $credits
@@ -2462,6 +2579,14 @@ function ep_render_credit_summary(stdClass $credit, $type = null, $student = nul
         get_string('status', 'mod_ep'),
         html_writer::span(ep_status_label($credit->status), 'badge ' . ep_status_badgeclass($credit->status)),
     ];
+    if ($credit->grade !== null) {
+        // Une note s'affiche même sur un refus : « refusé, noté 6/20 » en dit plus qu'un refus
+        // muet, et c'est justement ce que produit une notation groupée sous la moyenne.
+        $rows[] = [get_string('grade', 'mod_ep'), get_string('gradevalue', 'mod_ep', (object) [
+            'grade' => format_float((float) $credit->grade, 2, true, true),
+            'max' => EP_GRADE_MAX,
+        ])];
+    }
     if ((int) $credit->status === EP_STATUS_VALIDATED) {
         $rows[] = [get_string('retainedects', 'mod_ep'), ep_format_ects($credit->retainedects)];
     }

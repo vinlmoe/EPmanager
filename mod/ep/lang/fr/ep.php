@@ -256,6 +256,17 @@ $string['decisionectsnotice'] = "L'EP est terminé : arrêtez le nombre d'ECTS e
 $string['acceptbeyondcapacity'] = "Toutes les places de cet EP sont déjà prises. Vous pouvez accepter cette "
     . "inscription malgré tout si vous le jugez utile : le nombre de places est un repère, pas une limite.";
 $string['activityoccupancy'] = 'Places : {$a->places} — inscriptions en attente : {$a->pending}';
+$string['gradebulk'] = 'Noter en groupe';
+$string['gradeactivity'] = 'Noter : {$a}';
+$string['gradingnotice'] = "Pour chaque étudiant, saisissez une note sur 20 — elle décide seule de la validation "
+    . "(à partir de 10/20, ECTS demandés retenus en totalité) ou du refus —, ou cochez « Valider » pour retenir "
+    . "directement la totalité des ECTS sans note. Une ligne laissée vide n'est pas traitée : vous pourrez y "
+    . "revenir plus tard.";
+$string['grade'] = 'Note';
+$string['gradevalue'] = '{$a->grade} / {$a->max}';
+$string['validatedirectly'] = 'Valider';
+$string['nogradableregistrations'] = "Aucune inscription n'attend de validation d'ECTS sur cet EP pour l'instant.";
+$string['gradingdone'] = '{$a} décision(s) enregistrée(s).';
 $string['allcreditsinscope'] = 'Tous les EP de votre périmètre';
 $string['nopendingcredits'] = 'Aucune demande n\'attend votre décision.';
 $string['nocredits'] = 'Aucun enseignement personnalisé.';
@@ -479,6 +490,7 @@ $string['privacy:metadata:ep_credit:weeks'] = 'Nombre de semaines déclarées, p
     . 'semaine.';
 $string['privacy:metadata:ep_credit:claimedects'] = 'Nombre d\'ECTS demandés.';
 $string['privacy:metadata:ep_credit:retainedects'] = 'Nombre d\'ECTS retenus après validation.';
+$string['privacy:metadata:ep_credit:grade'] = 'Note sur 20 attribuée lors d\'une notation groupée.';
 $string['privacy:metadata:ep_credit:status'] = 'État de la demande (en attente, validée, refusée, retirée).';
 $string['privacy:metadata:ep_credit:validatedby'] = 'Utilisateur ayant validé, refusé ou retiré la demande.';
 $string['privacy:metadata:ep_credit:validatorcomment'] = 'Commentaire du validateur.';

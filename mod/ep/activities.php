@@ -230,9 +230,17 @@ foreach ($activities as $activity) {
 
     $deleteurl = new moodle_url($baseurl,
         ['action' => 'delete', 'activityid' => $activity->id, 'sesskey' => sesskey()]);
+    // Le lien de notation groupée n'apparaît que s'il y a effectivement quelque chose à noter :
+    // sans ça, il mènerait à un écran vide sur la plupart des EP, la majorité du temps.
+    $gradeurl = $counts->enrolled > 0
+        ? new moodle_url('/mod/ep/activity_validate.php', ['id' => $cm->id, 'activityid' => $activity->id,
+            'returnurl' => $baseurl->out_as_local_url(false)])
+        : null;
+
     $actions = ep_render_actions([
         get_string('edit') => new moodle_url($baseurl, ['action' => 'edit', 'activityid' => $activity->id]),
         get_string('activityteachers', 'mod_ep') => $teachersurl,
+        get_string('gradebulk', 'mod_ep') => $gradeurl,
     ]) . html_writer::link($deleteurl, get_string('delete'), [
         'class' => 'btn btn-sm btn-outline-danger mr-1 mb-1',
         'onclick' => "return confirm('" . get_string('confirmdeleteactivity', 'mod_ep') . "');",
