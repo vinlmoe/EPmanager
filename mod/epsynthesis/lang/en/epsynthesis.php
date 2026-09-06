@@ -40,6 +40,8 @@ $string['pluginadministration'] = 'Personalised learning follow-up administratio
 
 $string['epsynthesis:addinstance'] = 'Add a new personalised learning follow-up activity';
 $string['epsynthesis:view'] = 'View the follow-up of own students and units';
+$string['epsynthesis:viewall'] = 'Follow up every academic unit in scope (academic office)';
+$string['epsynthesis:manageactivities'] = 'Define shared academic units and the people in charge of them';
 $string['epsynthesis:managelinks'] = 'Manage the linked "Personalised learning" activities';
 
 $string['epsynthesisname'] = 'Activity name';
@@ -57,8 +59,45 @@ $string['noactivities'] = 'No "Personalised learning" activity exists on this si
 $string['hiddencourse'] = 'hidden course';
 $string['hiddenactivity'] = 'hidden activity';
 
+// Shared academic units.
+$string['manageactivities'] = 'Shared academic units';
+$string['manageactivities_help'] = 'Units defined here are offered in the catalogue of every cohort this '
+    . 'activity follows: this is how one unit takes students from several years without being copied into each '
+    . 'cohort — two copies would each have their own places and enrolments, when they are in fact the same. Each '
+    . 'unit is validated by the person or people in charge of it, named here.';
+$string['addsharedactivity'] = 'Add a shared unit';
+$string['nosharedactivities'] = 'No shared unit is defined yet.';
+$string['sharedorigin'] = 'Shared unit';
+$string['sharedstudyyearrange'] = 'Study years concerned';
+$string['sharedstudyyearrange_help'] = 'Study years this unit is open to (0 = no restriction). A student\'s year '
+    . 'is that of their cohort, as set in the "Internship management" activity of their course: a student whose '
+    . 'cohort falls outside this range cannot enrol.';
+$string['sharedactivityteachers_help'] = 'Tick the teachers in charge of this unit. They, and only they, accept '
+    . 'enrolments and then validate the credits — for every student enrolled, whatever their cohort, and without '
+    . 'needing a role in each of those courses.';
+$string['nopotentialteachers'] = 'No teacher has access to this follow-up activity: enrol the teachers '
+    . 'concerned in this course first.';
+
+// Unit-by-unit enrolment follow-up.
+$string['registrationsfollowup'] = 'Academic unit follow-up';
+$string['registrationsfollowup_help'] = 'Where each academic unit stands: who asked to enrol, who was accepted, '
+    . 'and whose credits are still to be validated. It covers the shared units defined here and the units of '
+    . 'each cohort followed.';
+$string['viewregistrations'] = 'View enrolments';
+$string['nofollowupactivities'] = 'No academic unit to follow up: you are not in charge of any unit within the '
+    . 'scope of this activity.';
+$string['noregistrations'] = 'No enrolment to show.';
+$string['registrationorigin'] = 'Enrolment in "{$a->activity}" — cohort: {$a->course}';
+$string['decisionnotyours'] = 'This enrolment awaits the decision of the person in charge of the unit: you can '
+    . 'follow it here, but it is theirs to decide.';
+$string['errornotaregistration'] = 'This personalised learning is not a catalogue enrolment: it is validated by '
+    . "the student's referent teacher, in the \"Personalised learning\" activity of their cohort.";
+
 $string['noscope'] = 'You are not the referent teacher of any student and you are not in charge of any unit in '
     . 'the linked activities.';
 
-$string['privacy:metadata'] = 'The Personalised learning follow-up plugin stores no personal data: it only '
-    . 'displays data already held in the linked "Personalised learning" activities.';
+// Privacy. Everything the follow-up displays is read from the linked "Personalised learning" activities; the
+// only data of its own is who is named in charge of its shared units.
+$string['privacy:metadata:ep_activity_teacher'] = 'Teachers named as being in charge of a shared unit defined '
+    . 'in this follow-up activity.';
+$string['privacy:metadata:ep_activity_teacher:teacherid'] = 'Teacher in charge.';

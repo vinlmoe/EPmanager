@@ -28,9 +28,12 @@ php admin/cli/upgrade.php
 
 1. Dans le cours de la promotion — celui qui porte déjà l'activité « Gestion
    des stages » —, ajouter une activité **Enseignement personnalisé**.
-2. Renseigner l'**année d'étude courante** (elle détermine quelles années sont
-   présentées comme exigibles) et, le cas échéant, le **minimum d'ECTS sur
-   l'ensemble du cursus**.
+2. Renseigner, le cas échéant, le **minimum d'ECTS sur l'ensemble du cursus**.
+   L'**année d'étude courante** de la promotion n'est pas à ressaisir : elle
+   est lue dans l'activité « Gestion des stages » du cours
+   (`stage->currentstudyyear`), où elle est déjà tenue à jour d'une année sur
+   l'autre. Le paramètre du même nom n'est là que comme repli, si aucune
+   activité « Gestion des stages » du cours ne la renseigne.
 3. Depuis **Administration → Types d'EP et plafonds** :
    - fixer le **maximum d'ECTS retenus** de chaque type, sur le cursus et/ou
      par année (0 = pas de plafond) ;
@@ -40,10 +43,16 @@ php admin/cli/upgrade.php
    - rédiger la consigne affichée à l'étudiant pour chaque type déclarable.
 4. Depuis **Administration → Minimums d'ECTS**, saisir le minimum à valider
    pour chaque année d'étude.
-5. Depuis **Administration → Catalogue des EP internes**, créer les EP
-   proposés (intitulé, ECTS, années concernées, nombre de places) et désigner
-   pour chacun son ou ses **responsables** : ce sont eux qui valideront les
-   inscriptions.
+5. Depuis **Administration → Catalogue des EP internes**, créer les EP propres
+   à cette promotion (intitulé, ECTS, années concernées, nombre de places) et
+   désigner pour chacun son ou ses **responsables** : ce sont eux qui
+   accepteront les inscriptions puis valideront les ECTS.
+
+   Un EP auquel des étudiants de **plusieurs promotions** s'inscrivent ne se
+   crée pas ici : il se définit une seule fois dans l'activité « Suivi de
+   l'enseignement personnalisé » (voir `mod/epsynthesis/INSTALL.md`) et
+   apparaît alors au catalogue de toutes les promotions qu'elle suit. La page
+   du catalogue les rappelle en fin de liste, en lecture seule.
 
 ## Les six types et leur circuit
 
@@ -55,6 +64,27 @@ php admin/cli/upgrade.php
 | Expérience professionnelle | idem | idem |
 | Sport | idem | idem |
 | Académique externe | idem | idem |
+
+### Le circuit d'un EP académique, en trois temps
+
+1. **Inscription** de l'étudiant, depuis le catalogue. Elle n'est pas limitée
+   au nombre de places — tout étudiant à qui l'EP est ouvert peut la demander —
+   et ne donne aucun ECTS.
+2. **Acceptation de l'inscription** par le responsable de l'EP. C'est là que le
+   nombre de places joue : il lui est rappelé, avec le nombre d'inscriptions
+   déjà acceptées, mais ne le lie pas — il peut le dépasser s'il le juge utile.
+   L'étudiant est alors inscrit, toujours sans ECTS.
+3. **Validation des ECTS** par le responsable, à la fin de l'EP, au vu de ce
+   que l'étudiant y a fait. C'est là seulement que les ECTS sont acquis, et le
+   responsable peut n'en retenir qu'une partie.
+
+Un refus motivé est possible à chacune des deux décisions. Tant que les ECTS ne
+sont pas validés, ils apparaissent « en attente » dans les bilans de
+l'étudiant.
+
+Un étudiant ne peut s'inscrire à un EP que si l'**année d'étude courante de sa
+promotion** est dans la plage d'années de cet EP. Cette année est celle que
+renseigne l'activité « Gestion des stages » du cours.
 
 L'enseignant référent d'un étudiant n'est pas ressaisi ici : c'est celui qui
 lui est attribué dans l'activité « Gestion des stages » du même cours

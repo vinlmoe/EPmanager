@@ -86,10 +86,24 @@ function epsynthesis_update_instance($moduleinstance, $mform = null) {
  * @return bool True on success.
  */
 function epsynthesis_delete_instance($id) {
-    global $DB;
+    global $CFG, $DB;
+
+    require_once($CFG->dirroot . '/mod/ep/locallib.php');
 
     if (!$DB->get_record('epsynthesis', ['id' => $id])) {
         return false;
+    }
+
+    // Les EP partagés qu'elle définissait ne sont plus proposés nulle part, les activités liées
+    // ayant disparu avec elle. Ceux auxquels personne ne s'est inscrit sont supprimés ; ceux qui
+    // portent des inscriptions sont conservés tels quels — les ECTS déjà accordés aux étudiants
+    // s'y rattachent, et les effacer les laisserait sans origine (voir
+    // ep_render_shared_activity_origin(), qui signale un EP dont la synthèse a disparu).
+    $cm = get_coursemodule_from_instance('epsynthesis', $id, 0, false, IGNORE_MISSING);
+    if ($cm) {
+        foreach ($DB->get_fieldset_select('ep_activity', 'id', 'synthesiscmid = ?', [$cm->id]) as $activityid) {
+            ep_delete_activity($activityid);
+        }
     }
 
     $DB->delete_records('epsynthesis_link', ['synthesisid' => $id]);

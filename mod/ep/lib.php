@@ -32,6 +32,12 @@ define('EP_STATUS_REJECTED', -1);
 define('EP_STATUS_PENDING', 0);
 /** Crédit validé : ses ECTS entrent dans le décompte, sous réserve des plafonds par type. */
 define('EP_STATUS_VALIDATED', 1);
+/**
+ * Inscription à un EP du catalogue acceptée par son responsable : l'étudiant y a sa place et le
+ * suit, mais ses ECTS ne sont pas encore acquis — ils le seront à la fin de l'EP, quand le
+ * responsable validera ce que l'étudiant y a fait (voir EP_STATUS_VALIDATED).
+ */
+define('EP_STATUS_ENROLLED', 2);
 
 /** Nombre de lignes par page pour les listes paginées (DEVE / enseignants). */
 define('EP_LIST_PERPAGE', 40);

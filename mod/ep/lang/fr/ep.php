@@ -71,10 +71,13 @@ $string['hidden'] = 'masqué';
 $string['enabled'] = 'Activé';
 
 // Paramètres de l'instance.
-$string['currentstudyyear'] = 'Année d\'étude courante';
+$string['currentstudyyear'] = 'Année d\'étude courante (à défaut)';
 $string['currentstudyyear_help'] = "Année d'étude dans laquelle se trouve la promotion. Elle sert de référence : "
-    . "seuls les minimums de cette année et des années précédentes sont présentés comme exigibles, et l'étudiant "
-    . "peut rattacher un EP à l'année précédente (rattrapage) ou suivante (anticipation).";
+    . "elle dit à quels EP du catalogue les étudiants peuvent s'inscrire, quels minimums annuels leur sont déjà "
+    . "exigibles, et à quelle année ils peuvent rattacher un EP — la leur, la précédente (rattrapage) ou la "
+    . "suivante (anticipation).\n\nElle est normalement lue dans l'activité « Gestion des stages » du cours, où "
+    . "elle est déjà tenue à jour d'une année sur l'autre : ce paramètre ne sert que si aucune activité « Gestion "
+    . "des stages » du cours ne la renseigne.";
 $string['mincursusects'] = 'Minimum sur l\'ensemble du cursus';
 $string['mincursusects_help'] = "Nombre total d'ECTS d'enseignement personnalisé à valider sur l'ensemble du "
     . "cursus, tous types et toutes années confondus (0 = aucune obligation). Ce minimum s'ajoute aux minimums "
@@ -127,19 +130,35 @@ $string['tasksyncstagecredits'] = 'Attribution des ECTS d\'EP issus des stages c
 $string['catalogactivity'] = 'EP';
 $string['catalogactivitytype_help'] = "Type auquel rattacher cet EP : c'est lui qui détermine le plafond d'ECTS "
     . "applicable à l'étudiant. Il s'agit normalement du type académique interne.";
-$string['catalogactivityects_help'] = "Nombre d'ECTS attribués à l'étudiant lorsque le responsable valide son "
-    . "inscription. Il est propre à cet EP : l'étudiant ne le choisit pas.";
+$string['catalogactivityects_help'] = "Nombre d'ECTS attribués à l'étudiant lorsque le responsable valide sa "
+    . "participation, à la fin de l'EP. Il est propre à cet EP : l'étudiant ne le choisit pas.";
 $string['catalogactivityvisible_help'] = "Un EP masqué n'accepte plus de nouvelle inscription mais conserve celles "
     . "déjà prises. C'est ainsi qu'on ferme un EP qui n'est plus proposé, sans effacer les ECTS déjà accordés.";
 $string['ects'] = 'ECTS';
 $string['capacity'] = 'Nombre de places';
-$string['capacity_help'] = "0 signifie « places illimitées ». Les inscriptions en attente de validation occupent "
-    . "une place : ouvrir plus de places que ce que le responsable pourra valider reviendrait à en promettre une "
-    . "qui n'existe pas.";
+$string['capacity_help'] = "0 signifie « places illimitées ». Ce nombre ne bloque pas les inscriptions : les "
+    . "étudiants s'inscrivent librement et c'est le responsable qui arbitre lesquelles il accepte, quitte à "
+    . "dépasser le nombre de places s'il le juge utile. Seules les inscriptions acceptées occupent une place.";
 $string['places'] = 'Places';
-$string['placesleft'] = '{$a->left} sur {$a->total}';
+$string['placestaken'] = '{$a->taken} sur {$a->total}';
+$string['activityfull'] = 'complet';
 $string['unlimitedplaces'] = 'Illimitées';
-$string['registrations'] = 'Inscrits';
+$string['registrations'] = 'Inscriptions';
+$string['countpending'] = '{$a} en attente';
+$string['countenrolled'] = '{$a} acceptée(s)';
+$string['countvalidated'] = '{$a} validée(s)';
+$string['pendingregistrationscount'] = '{$a} inscription(s) en attente';
+$string['catalogactivitytype'] = 'Type d\'EP';
+$string['catalogactivityects'] = 'ECTS de cet EP';
+$string['catalogactivityvisible'] = 'Ouvert aux inscriptions';
+$string['sharedactivity'] = 'partagé';
+$string['sharedactivities'] = 'EP partagés proposés à cette promotion';
+$string['sharedactivities_help'] = "Ces EP sont définis dans une activité « Suivi de l'enseignement "
+    . "personnalisé », parce que des étudiants de plusieurs promotions s'y inscrivent. Ils figurent au catalogue "
+    . "de cette promotion au même titre que les autres, mais ne se modifient que là où ils sont définis.";
+$string['sharedactivityorphan'] = 'activité de suivi supprimée';
+$string['definedin'] = 'Défini dans';
+$string['noownactivities'] = "Aucun EP propre à cette promotion pour l'instant.";
 $string['openforregistration'] = 'Ouvert';
 $string['addactivity'] = 'Ajouter un EP au catalogue';
 $string['activitysaved'] = 'EP enregistré. Désignez maintenant son ou ses responsables.';
@@ -167,13 +186,17 @@ $string['sortorder'] = 'Ordre d\'affichage';
 $string['register'] = 'S\'inscrire';
 $string['registertoactivity'] = 'Inscription à : {$a}';
 $string['registerects'] = 'Cet EP donne droit à {$a} ECTS.';
-$string['registerpendingnotice'] = "Votre inscription sera transmise au responsable de l'EP. Les ECTS ne vous "
-    . "seront comptés qu'une fois qu'il l'aura validée.";
+$string['registerpendingnotice'] = "Votre inscription sera transmise au responsable de l'EP, qui décidera de la "
+    . "retenir ou non. Les ECTS ne vous seront comptés qu'à la fin de l'EP, lorsqu'il les validera.";
 $string['confirmregistration'] = 'Confirmer mon inscription';
-$string['registered'] = 'Inscription enregistrée, en attente de validation par le responsable.';
+$string['registered'] = 'Inscription enregistrée, en attente de la décision du responsable.';
 $string['registerclosed'] = 'Inscriptions fermées';
-$string['nofreeplace'] = 'Complet';
+$string['registerfullnotice'] = "Toutes les places de cet EP sont déjà prises. Vous pouvez tout de même vous "
+    . "inscrire : c'est le responsable qui décidera s'il retient votre inscription.";
+$string['registerfullshort'] = 'Complet : inscription soumise à l\'accord du responsable.';
 $string['notopentoyear'] = 'Hors de votre année d\'étude';
+$string['catalogprocessnotice'] = "S'inscrire n'occupe pas de place et ne donne aucun ECTS : le responsable de "
+    . "l'EP accepte d'abord les inscriptions, puis valide les ECTS à la fin de l'EP.";
 
 // Déclaration hors catalogue.
 $string['creditname'] = 'Intitulé';
@@ -198,11 +221,22 @@ $string['studentreferents'] = 'Enseignant(s) référent(s) : {$a}';
 
 // Validation.
 $string['awaitingmydecision'] = 'En attente de votre décision';
+$string['awaitingectsvalidation'] = 'EP suivis dont les ECTS restent à valider';
+$string['noenrolledcredits'] = "Aucun EP en cours n'attend de validation d'ECTS.";
+$string['acceptregistration'] = 'Accepter l\'inscription';
+$string['validateects'] = 'Valider les ECTS';
+$string['registrationaccepted'] = 'Inscription acceptée.';
+$string['decisionregistrationnotice'] = "Accepter l'inscription donne sa place à l'étudiant sur cet EP. Aucun "
+    . "ECTS ne lui est encore compté : vous les validerez à la fin de l'EP, au vu de ce qu'il y aura fait.";
+$string['decisionectsnotice'] = "L'EP est terminé : arrêtez le nombre d'ECTS effectivement retenus. Vous pouvez "
+    . "n'en retenir qu'une partie sans avoir à refuser toute la demande.";
+$string['acceptbeyondcapacity'] = "Toutes les places de cet EP sont déjà prises. Vous pouvez accepter cette "
+    . "inscription malgré tout si vous le jugez utile : le nombre de places est un repère, pas une limite.";
+$string['activityoccupancy'] = 'Places : {$a->places} — inscriptions en attente : {$a->pending}';
 $string['allcreditsinscope'] = 'Tous les EP de votre périmètre';
 $string['nopendingcredits'] = 'Aucune demande n\'attend votre décision.';
 $string['nocredits'] = 'Aucun enseignement personnalisé.';
 $string['validatecredit'] = 'Valider';
-$string['validate'] = 'Valider';
 $string['reject'] = 'Refuser';
 $string['decision'] = 'Décision';
 $string['validatorcomment'] = 'Commentaire';
@@ -232,6 +266,7 @@ $string['source_deve'] = 'DEVE';
 $string['status_cancelled'] = 'Retiré';
 $string['status_rejected'] = 'Refusé';
 $string['status_pending'] = 'En attente';
+$string['status_enrolled'] = 'Inscription acceptée';
 $string['status_validated'] = 'Validé';
 $string['allstatuses'] = 'Tous les statuts';
 $string['alltypes'] = 'Tous les types';
@@ -327,7 +362,7 @@ $string['errorcreditnoteditable'] = "Une inscription à un EP du catalogue ne se
 $string['errorcreditdecided'] = "Cette demande a déjà été traitée : elle ne peut plus être modifiée ni retirée.";
 $string['erroralreadyregistered'] = 'Vous êtes déjà inscrit à cet EP.';
 $string['errorregisterclosed'] = 'Cet EP n\'accepte plus d\'inscription.';
-$string['errornoplaceleft'] = 'Il n\'y a plus de place disponible sur cet EP.';
+$string['errorunknownactivity'] = "Cet EP n'existe pas, ou n'est pas proposé ici.";
 $string['errorwrongyear'] = 'Cet EP n\'est pas ouvert à cette année d\'étude.';
 $string['errorevidencemissing'] = 'Ce justificatif est introuvable.';
 

@@ -71,10 +71,13 @@ $string['hidden'] = 'hidden';
 $string['enabled'] = 'Enabled';
 
 // Instance settings.
-$string['currentstudyyear'] = 'Current study year';
-$string['currentstudyyear_help'] = 'Study year the cohort is currently in. It is used as the reference: only the '
-    . 'minimums of this year and earlier ones are presented as due, and a student may attach a unit to the '
-    . 'previous year (catch-up) or the next one (early completion).';
+$string['currentstudyyear'] = 'Current study year (fallback)';
+$string['currentstudyyear_help'] = 'Study year the cohort is currently in. It is used as the reference: it says '
+    . 'which catalogue units students may enrol in, which yearly minimums are already due, and which year a unit '
+    . 'may be attached to — theirs, the previous one (catch-up) or the next one (early completion).'
+    . "\n\nIt is normally read from the \"Internship management\" activity of the course, where it is already "
+    . 'kept up to date from year to year: this setting is only used when no "Internship management" activity of '
+    . 'the course provides it.';
 $string['mincursusects'] = 'Minimum over the whole programme';
 $string['mincursusects_help'] = 'Total number of personalised learning credits to be validated over the whole '
     . 'programme, all types and years together (0 = no requirement). This minimum adds to the yearly ones: '
@@ -128,17 +131,35 @@ $string['catalogactivity'] = 'Unit';
 $string['catalogactivitytype_help'] = 'Type this unit belongs to: it determines the credit cap that applies to '
     . 'the student. This is normally the internal academic type.';
 $string['catalogactivityects_help'] = 'Number of credits awarded to the student once the person in charge '
-    . 'validates their enrolment. It belongs to the unit: the student does not choose it.';
+    . 'validates their participation, at the end of the unit. It belongs to the unit: the student does not '
+    . 'choose it.';
 $string['catalogactivityvisible_help'] = 'A hidden unit accepts no new enrolment but keeps the ones already '
     . 'taken. This is how a unit that is no longer offered is closed, without erasing credits already awarded.';
 $string['ects'] = 'Credits';
 $string['capacity'] = 'Places';
-$string['capacity_help'] = '0 means "unlimited places". Enrolments awaiting validation take up a place: opening '
-    . 'more places than the person in charge can validate would promise a place that does not exist.';
+$string['capacity_help'] = '0 means "unlimited places". This number does not block enrolments: students enrol '
+    . 'freely and the person in charge decides which enrolments to accept, going beyond the number of places if '
+    . 'they see fit. Only accepted enrolments take up a place.';
 $string['places'] = 'Places';
-$string['placesleft'] = '{$a->left} of {$a->total}';
+$string['placestaken'] = '{$a->taken} of {$a->total}';
+$string['activityfull'] = 'full';
 $string['unlimitedplaces'] = 'Unlimited';
-$string['registrations'] = 'Enrolled';
+$string['registrations'] = 'Enrolments';
+$string['countpending'] = '{$a} pending';
+$string['countenrolled'] = '{$a} accepted';
+$string['countvalidated'] = '{$a} validated';
+$string['pendingregistrationscount'] = '{$a} enrolment(s) pending';
+$string['catalogactivitytype'] = 'Type';
+$string['catalogactivityects'] = 'Credits for this unit';
+$string['catalogactivityvisible'] = 'Open for enrolment';
+$string['sharedactivity'] = 'shared';
+$string['sharedactivities'] = 'Shared units offered to this cohort';
+$string['sharedactivities_help'] = 'These units are defined in a "Personalised learning follow-up" activity, '
+    . 'because students from several cohorts enrol in them. They appear in this cohort\'s catalogue like any '
+    . 'other, but can only be edited where they are defined.';
+$string['sharedactivityorphan'] = 'follow-up activity deleted';
+$string['definedin'] = 'Defined in';
+$string['noownactivities'] = 'No unit of this cohort\'s own yet.';
 $string['openforregistration'] = 'Open';
 $string['addactivity'] = 'Add a unit to the catalogue';
 $string['activitysaved'] = 'Unit saved. Now name the person or people in charge.';
@@ -166,13 +187,17 @@ $string['sortorder'] = 'Display order';
 $string['register'] = 'Enrol';
 $string['registertoactivity'] = 'Enrolling in: {$a}';
 $string['registerects'] = 'This unit is worth {$a} credits.';
-$string['registerpendingnotice'] = 'Your enrolment will be sent to the person in charge of the unit. The credits '
-    . 'will only count once they have validated it.';
+$string['registerpendingnotice'] = 'Your enrolment will be sent to the person in charge of the unit, who will '
+    . 'decide whether to accept it. The credits will only count at the end of the unit, once they validate them.';
 $string['confirmregistration'] = 'Confirm my enrolment';
-$string['registered'] = 'Enrolment saved, awaiting validation by the person in charge.';
+$string['registered'] = 'Enrolment saved, awaiting the decision of the person in charge.';
 $string['registerclosed'] = 'Enrolment closed';
-$string['nofreeplace'] = 'Full';
+$string['registerfullnotice'] = 'All places in this unit are already taken. You may still enrol: the person in '
+    . 'charge will decide whether to accept your enrolment.';
+$string['registerfullshort'] = 'Full: enrolment subject to acceptance.';
 $string['notopentoyear'] = 'Not open to your study year';
+$string['catalogprocessnotice'] = 'Enrolling takes up no place and awards no credits: the person in charge of '
+    . 'the unit first accepts enrolments, then validates the credits at the end of the unit.';
 
 // Declaration outside the catalogue.
 $string['creditname'] = 'Title';
@@ -197,11 +222,22 @@ $string['studentreferents'] = 'Referent teacher(s): {$a}';
 
 // Validation.
 $string['awaitingmydecision'] = 'Awaiting your decision';
+$string['awaitingectsvalidation'] = 'Units under way whose credits are still to be validated';
+$string['noenrolledcredits'] = 'No unit under way is awaiting credit validation.';
+$string['acceptregistration'] = 'Accept the enrolment';
+$string['validateects'] = 'Validate the credits';
+$string['registrationaccepted'] = 'Enrolment accepted.';
+$string['decisionregistrationnotice'] = 'Accepting the enrolment gives the student their place in this unit. No '
+    . 'credit is awarded yet: you will validate those at the end of the unit, in the light of what they did.';
+$string['decisionectsnotice'] = 'The unit is over: set the number of credits actually retained. You may retain '
+    . 'only part of them without rejecting the whole request.';
+$string['acceptbeyondcapacity'] = 'All places in this unit are already taken. You may still accept this '
+    . 'enrolment if you see fit: the number of places is a guide, not a limit.';
+$string['activityoccupancy'] = 'Places: {$a->places} — enrolments pending: {$a->pending}';
 $string['allcreditsinscope'] = 'Everything within your scope';
 $string['nopendingcredits'] = 'No request is awaiting your decision.';
 $string['nocredits'] = 'No personalised learning.';
 $string['validatecredit'] = 'Validate';
-$string['validate'] = 'Validate';
 $string['reject'] = 'Reject';
 $string['decision'] = 'Decision';
 $string['validatorcomment'] = 'Comment';
@@ -231,6 +267,7 @@ $string['source_deve'] = 'Academic office';
 $string['status_cancelled'] = 'Withdrawn';
 $string['status_rejected'] = 'Rejected';
 $string['status_pending'] = 'Pending';
+$string['status_enrolled'] = 'Enrolment accepted';
 $string['status_validated'] = 'Validated';
 $string['allstatuses'] = 'All statuses';
 $string['alltypes'] = 'All types';
@@ -327,7 +364,7 @@ $string['errorcreditdecided'] = 'This request has already been dealt with: it ca
     . 'withdrawn.';
 $string['erroralreadyregistered'] = 'You are already enrolled in this unit.';
 $string['errorregisterclosed'] = 'This unit accepts no further enrolment.';
-$string['errornoplaceleft'] = 'There is no place left in this unit.';
+$string['errorunknownactivity'] = 'This unit does not exist, or is not offered here.';
 $string['errorwrongyear'] = 'This unit is not open to that study year.';
 $string['errorevidencemissing'] = 'This supporting document cannot be found.';
 

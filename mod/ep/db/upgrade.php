@@ -27,13 +27,58 @@ defined('MOODLE_INTERNAL') || die();
 /**
  * Applique les évolutions de schéma successives depuis la version installée.
  *
- * Le plugin n'a pas encore connu de version publiée nécessitant une migration : la fonction est
- * là pour que la première évolution de schéma s'ajoute au bon endroit, plutôt que d'obliger à
- * réinstaller le plugin ce jour-là.
- *
  * @param int $oldversion Version actuellement installée.
  * @return bool
  */
 function xmldb_ep_upgrade($oldversion) {
+    global $DB;
+
+    $dbman = $DB->get_manager();
+
+    if ($oldversion < 2026090600) {
+
+        // Un EP du catalogue peut désormais être défini dans une activité « Suivi de
+        // l'enseignement personnalisé » plutôt que dans une promotion : des étudiants de
+        // promotions différentes s'inscrivent alors au même EP. Les EP existants restent propres
+        // à leur promotion (epid inchangé, synthesiscmid à 0).
+        $table = new xmldb_table('ep_activity');
+
+        $field = new xmldb_field('synthesiscmid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'epid');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // epid = 0 (EP partagé) et typeid = 0 (le type académique de l'instance de l'étudiant est
+        // retenu à l'inscription) deviennent des valeurs légitimes : les deux colonnes prennent
+        // une valeur par défaut, et les clés étrangères qui les déclaraient laissent place à de
+        // simples index.
+        $field = new xmldb_field('epid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $dbman->change_field_default($table, $field);
+        $field = new xmldb_field('typeid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $dbman->change_field_default($table, $field);
+
+        foreach ([
+            new xmldb_key('epid', XMLDB_KEY_FOREIGN, ['epid'], 'ep', ['id']),
+            new xmldb_key('typeid', XMLDB_KEY_FOREIGN, ['typeid'], 'ep_type', ['id']),
+        ] as $key) {
+            // La clé peut déjà avoir disparu (base restaurée, mise à jour rejouée) : la chercher
+            // avant de la retirer évite de faire échouer toute la mise à jour pour rien.
+            if ($dbman->find_key_name($table, $key)) {
+                $dbman->drop_key($table, $key);
+            }
+        }
+
+        $index = new xmldb_index('epid', XMLDB_INDEX_NOTUNIQUE, ['epid']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+        $index = new xmldb_index('synthesiscmid', XMLDB_INDEX_NOTUNIQUE, ['synthesiscmid']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        upgrade_mod_savepoint(true, 2026090600, 'ep');
+    }
+
     return true;
 }

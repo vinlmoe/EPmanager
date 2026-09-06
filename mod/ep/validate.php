@@ -16,9 +16,16 @@
 
 /**
  * Fiche d'un enseignement personnalisé porté au crédit d'un étudiant : le rappel de la demande et
- * de ses justificatifs, et — pour qui a le droit de statuer dessus — la validation (avec le
- * nombre d'ECTS effectivement retenu) ou le refus motivé. La même page sert de détail en lecture
- * seule à l'étudiant concerné, pour qu'il y retrouve la décision et son motif.
+ * de ses justificatifs, et — pour qui a le droit de statuer dessus — la décision attendue.
+ *
+ * Une inscription à un EP du catalogue en connaît deux, prises l'une après l'autre par le
+ * responsable de l'EP : accepter l'inscription (l'étudiant a sa place et suit l'EP, sans ECTS
+ * encore acquis), puis, à la fin de l'EP, valider les ECTS qu'il y a gagnés. Une déclaration hors
+ * catalogue n'en connaît qu'une, la validation des ECTS. Dans les deux cas, un refus motivé est
+ * possible à chaque étape.
+ *
+ * La même page sert de détail en lecture seule à l'étudiant concerné, pour qu'il y retrouve la
+ * décision et son motif.
  *
  * @package   mod_ep
  * @copyright 2026 Sébastien Lefebvre
@@ -64,6 +71,11 @@ $student = $DB->get_record('user', ['id' => $credit->userid], '*', MUST_EXIST);
 $type = $DB->get_record('ep_type', ['id' => $credit->typeid]);
 $activity = !empty($credit->activityid) ? $DB->get_record('ep_activity', ['id' => $credit->activityid]) : null;
 
+// Étape attendue : accepter l'inscription, ou valider les ECTS. Une inscription au catalogue les
+// traverse toutes les deux, une déclaration hors catalogue seulement la seconde.
+$isregistrationstep = ep_credit_is_registration_step($credit);
+$awaitsdecision = ep_credit_awaits_decision($credit);
+
 // Retrait d'un crédit par la DEVE : possible à tout moment, y compris sur un crédit déjà validé
 // (une pièce justificative peut se révéler fausse après coup). Les crédits attribués
 // automatiquement en sont exclus : ils seraient recréés à la synchronisation suivante, c'est le
@@ -74,17 +86,8 @@ if ($rights->validatedeve && $credit->source !== EP_SOURCE_STAGE
     redirect($backurl, get_string('creditcancelled', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
-if ($canvalidate && (int) $credit->status === EP_STATUS_PENDING && data_submitted() && confirm_sesskey()) {
-    $comment = optional_param('validatorcomment', '', PARAM_TEXT);
-    if (optional_param('rejectcredit', '', PARAM_RAW) !== '') {
-        ep_reject_credit($credit, $USER->id, $comment);
-        redirect($backurl, get_string('creditrejected', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
-    }
-    if (optional_param('validatecredit', '', PARAM_RAW) !== '') {
-        $retained = optional_param('retainedects', 0, PARAM_FLOAT);
-        ep_validate_credit($credit, $USER->id, $retained, $comment);
-        redirect($backurl, get_string('creditvalidated', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
-    }
+if ($canvalidate && $awaitsdecision) {
+    ep_handle_credit_decision($credit, $backurl);
 }
 
 echo $OUTPUT->header();
@@ -100,6 +103,17 @@ if ($activity) {
             'name' => format_string($activity->name),
             'teachers' => empty($teachers) ? '-' : implode(', ', array_map('fullname', $teachers)),
         ]), 'text-muted mb-3');
+
+    // État des inscriptions de l'EP : c'est ce qui manque au responsable pour décider s'il
+    // accepte celle-ci, et notamment s'il dépasse le nombre de places.
+    if ($canvalidate) {
+        $counts = ep_get_activity_registration_counts($activity->id);
+        echo ep_render_activity_occupancy($activity, $counts);
+
+        if ($isregistrationstep && !empty($activity->capacity) && $counts->taken >= $activity->capacity) {
+            echo $OUTPUT->notification(get_string('acceptbeyondcapacity', 'mod_ep'), 'warning');
+        }
+    }
 }
 
 echo $OUTPUT->heading(get_string('evidencefiles', 'mod_ep'), 4);
@@ -112,31 +126,9 @@ if ($credit->source === EP_SOURCE_STAGE) {
     exit;
 }
 
-if ($canvalidate && (int) $credit->status === EP_STATUS_PENDING) {
+if ($canvalidate && $awaitsdecision) {
     echo $OUTPUT->heading(get_string('decision', 'mod_ep'), 4);
-
-    // Le nombre d'ECTS retenu est proposé à la valeur demandée — celle de l'EP du catalogue, ou
-    // celle avancée par l'étudiant — et reste modifiable : le validateur peut n'en retenir
-    // qu'une partie sans avoir à refuser toute la demande.
-    echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false)]);
-    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
-    echo html_writer::tag('label', get_string('retainedects', 'mod_ep'), ['for' => 'retainedects']);
-    echo html_writer::empty_tag('input', [
-        'type' => 'number', 'step' => '0.25', 'min' => 0, 'name' => 'retainedects', 'id' => 'retainedects',
-        'value' => ep_format_ects_input($credit->claimedects), 'class' => 'form-control',
-    ]);
-    echo html_writer::tag('label', get_string('validatorcomment', 'mod_ep'), ['for' => 'validatorcomment']);
-    echo html_writer::tag('textarea', '',
-        ['name' => 'validatorcomment', 'id' => 'validatorcomment', 'rows' => 4, 'class' => 'form-control']);
-    echo html_writer::empty_tag('input', [
-        'type' => 'submit', 'name' => 'validatecredit', 'value' => get_string('validate', 'mod_ep'),
-        'class' => 'btn btn-primary mt-2 mr-2',
-    ]);
-    echo html_writer::empty_tag('input', [
-        'type' => 'submit', 'name' => 'rejectcredit', 'value' => get_string('reject', 'mod_ep'),
-        'class' => 'btn btn-danger mt-2',
-    ]);
-    echo html_writer::end_tag('form');
+    echo ep_render_credit_decision_form($pageurl, $credit);
 } else if ($canvalidate) {
     echo $OUTPUT->notification(get_string('creditalreadydecided', 'mod_ep'), 'info');
 }

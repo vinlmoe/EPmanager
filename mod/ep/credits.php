@@ -15,10 +15,11 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Écran de validation : d'abord les demandes qui attendent la décision de l'utilisateur
- * (inscriptions aux EP dont il est responsable, déclarations des étudiants dont il est référent —
- * toutes les demandes en attente pour la DEVE), puis la liste filtrable de tout ce qui est dans
- * son périmètre, pour retrouver une demande déjà traitée.
+ * Écran de validation : d'abord les demandes qui attendent la décision de l'utilisateur —
+ * inscriptions à accepter, puis EP suivis dont il reste à valider les ECTS, sur les EP dont il est
+ * responsable et les déclarations des étudiants dont il est référent (tout ce qui est en attente
+ * pour la DEVE) —, puis la liste filtrable de tout ce qui est dans son périmètre, pour retrouver
+ * une demande déjà traitée.
  *
  * @package   mod_ep
  * @copyright 2026 Sébastien Lefebvre
@@ -62,12 +63,24 @@ echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('validation', 'mod_ep'));
 echo ep_render_navlinks($ep, $cm, $context, $rights);
 
-// 1. Ce qui attend une décision de l'utilisateur : c'est pour cela qu'il ouvre cette page.
-$awaiting = ep_get_credits_awaiting($ep, $rights, 'timecreated', 'ASC');
-echo $OUTPUT->heading(get_string('awaitingmydecision', 'mod_ep'), 4);
-if (empty($awaiting)) {
-    echo $OUTPUT->notification(get_string('nopendingcredits', 'mod_ep'), 'info');
-} else {
+// 1. Ce qui attend une décision de l'utilisateur : c'est pour cela qu'il ouvre cette page. Les
+// deux étapes du circuit académique sont séparées — accepter des inscriptions et clôturer des EP
+// terminés ne se font pas au même moment de l'année, les mêler ferait perdre les unes dans les
+// autres.
+$steps = [
+    [EP_STATUS_PENDING, get_string('awaitingmydecision', 'mod_ep'), get_string('nopendingcredits', 'mod_ep')],
+    [EP_STATUS_ENROLLED, get_string('awaitingectsvalidation', 'mod_ep'),
+        get_string('noenrolledcredits', 'mod_ep')],
+];
+
+foreach ($steps as [$stepstatus, $stepheading, $stepempty]) {
+    $awaiting = ep_get_credits_awaiting($ep, $rights, 'timecreated', 'ASC', $stepstatus);
+    echo $OUTPUT->heading($stepheading, 4);
+    if (empty($awaiting)) {
+        echo $OUTPUT->notification($stepempty, 'info');
+        continue;
+    }
+
     $students = ep_get_credit_users($awaiting);
     $awaitingtable = new html_table();
     $awaitingtable->head = [
@@ -90,7 +103,7 @@ if (empty($awaiting)) {
             ep_format_ects($credit->claimedects),
             userdate($credit->timecreated, get_string('strftimedatetimeshort')),
             ep_render_actions([
-                get_string('validatecredit', 'mod_ep') => new moodle_url('/mod/ep/validate.php',
+                ep_credit_decision_label($credit) => new moodle_url('/mod/ep/validate.php',
                     ['id' => $cm->id, 'creditid' => $credit->id,
                         'returnurl' => $baseurl->out_as_local_url(false)]),
             ], 'btn btn-sm btn-primary mr-1 mb-1'),
@@ -145,8 +158,8 @@ $table->head = [
 foreach ($credits as $credit) {
     $student = $students[$credit->userid] ?? null;
     $type = $types[$credit->typeid] ?? null;
-    $canvalidate = ep_rights_can_validate($rights, $credit) && (int) $credit->status === EP_STATUS_PENDING;
-    $label = $canvalidate ? get_string('validatecredit', 'mod_ep') : get_string('viewdetails', 'mod_ep');
+    $canvalidate = ep_rights_can_validate($rights, $credit) && ep_credit_awaits_decision($credit);
+    $label = $canvalidate ? ep_credit_decision_label($credit) : get_string('viewdetails', 'mod_ep');
 
     $table->data[] = [
         $student ? fullname($student) : '-',

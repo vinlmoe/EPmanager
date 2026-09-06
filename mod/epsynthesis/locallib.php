@@ -53,17 +53,220 @@ function epsynthesis_render_managelinks_notice(stdClass $epsynthesis, stdClass $
 }
 
 /**
+ * Barre de navigation de l'activité : les deux vues du suivi (validation, pilotage), le suivi des
+ * EP académiques EP par EP, et — pour qui les gère — la définition des EP partagés et le choix
+ * des activités liées.
+ *
+ * @param stdClass $epsynthesis
+ * @param stdClass $cm
+ * @param context $context
+ * @param string $current Page courante ('entries', 'dashboard', 'registrations'), exclue de la barre.
+ * @return string HTML
+ */
+function epsynthesis_render_navlinks(stdClass $epsynthesis, stdClass $cm, context $context, $current = '') {
+    $links = [];
+    if ($current !== 'entries') {
+        $links[get_string('validation', 'mod_ep')] =
+            new moodle_url('/mod/epsynthesis/entries.php', ['id' => $cm->id]);
+    }
+    if ($current !== 'dashboard') {
+        $links[get_string('pilotage', 'mod_ep')] =
+            new moodle_url('/mod/epsynthesis/dashboard.php', ['id' => $cm->id]);
+    }
+    if ($current !== 'registrations') {
+        $links[get_string('registrationsfollowup', 'mod_epsynthesis')] =
+            new moodle_url('/mod/epsynthesis/registrations.php', ['id' => $cm->id]);
+    }
+    if (has_capability('mod/epsynthesis:manageactivities', $context)) {
+        $links[get_string('manageactivities', 'mod_epsynthesis')] =
+            new moodle_url('/mod/epsynthesis/activities.php', ['id' => $cm->id]);
+    }
+    if (has_capability('mod/epsynthesis:managelinks', $context)) {
+        $links[get_string('managelinks', 'mod_epsynthesis')] =
+            new moodle_url('/mod/epsynthesis/administration.php', ['id' => $cm->id]);
+    }
+
+    return html_writer::div(ep_render_actions($links, 'btn btn-secondary mr-1 mb-1'), 'ep-navlinks mb-3');
+}
+
+/**
+ * EP académiques suivis dans cette synthèse, EP par EP : ceux qui y sont définis pour plusieurs
+ * promotions à la fois, et ceux que chaque promotion suivie a créés pour elle seule.
+ *
+ * Chacun n'apparaît qu'à qui a affaire à lui : son responsable, qui a les inscriptions à accepter
+ * puis les ECTS à valider, et la DEVE (mod/epsynthesis:viewall), qui suit l'ensemble. Cette
+ * visibilité ne donne aucun droit de décision supplémentaire : statuer sur une inscription reste
+ * soumis aux droits de l'activité d'origine.
+ *
+ * @param stdClass $epsynthesis
+ * @param stdClass $cm Course-module de la synthèse.
+ * @param context $context
+ * @param int $userid
+ * @return array activityid => stdClass{activity, shared, origin, epcmid, counts, isresponsible}
+ */
+function epsynthesis_get_followup_activities(stdClass $epsynthesis, stdClass $cm, context $context, $userid) {
+    global $DB;
+
+    $canviewall = has_capability('mod/epsynthesis:viewall', $context, $userid);
+    $responsible = $DB->get_fieldset_select('ep_activity_teacher', 'activityid',
+        'teacherid = :userid', ['userid' => $userid]);
+    $responsible = array_flip(array_map('intval', $responsible));
+
+    $rows = [];
+
+    // 1. Les EP partagés définis ici : ce sont eux que la synthèse porte en propre.
+    foreach (ep_get_shared_activities([(int) $cm->id]) as $activity) {
+        $rows[(int) $activity->id] = (object) [
+            'activity' => $activity,
+            'shared' => true,
+            'origin' => get_string('sharedorigin', 'mod_epsynthesis'),
+            'epcmid' => 0,
+        ];
+    }
+
+    // 2. Les EP propres à chaque promotion suivie, pour que la DEVE et les responsables retrouvent
+    // au même endroit tout ce qui se passe, qu'un EP ait été créé ici ou là.
+    foreach (epsynthesis_get_links($epsynthesis->id) as $epcmid => $link) {
+        if (!$link->visible || !$link->coursevisible) {
+            continue;
+        }
+        foreach (ep_get_activities($link->epid) as $activity) {
+            $rows[(int) $activity->id] = (object) [
+                'activity' => $activity,
+                'shared' => false,
+                'origin' => format_string($link->coursename),
+                'epcmid' => (int) $epcmid,
+            ];
+        }
+    }
+
+    foreach ($rows as $activityid => $row) {
+        $row->isresponsible = isset($responsible[$activityid]);
+        if (!$canviewall && !$row->isresponsible) {
+            unset($rows[$activityid]);
+            continue;
+        }
+        $row->counts = ep_get_activity_registration_counts($activityid);
+    }
+
+    uasort($rows, function($a, $b) {
+        return [$a->shared ? 0 : 1, (int) $a->activity->sortorder, core_text::strtolower($a->activity->name)]
+            <=> [$b->shared ? 0 : 1, (int) $b->activity->sortorder, core_text::strtolower($b->activity->name)];
+    });
+
+    return $rows;
+}
+
+/**
+ * Charge un EP suivi par cette synthèse en vérifiant qu'il entre dans le périmètre de
+ * l'utilisateur, comme le fait epsynthesis_get_followup_activities() pour la liste — mais sans
+ * parcourir tout le périmètre quand un seul EP est demandé.
+ *
+ * @param stdClass $epsynthesis
+ * @param stdClass $cm Course-module de la synthèse.
+ * @param context $context
+ * @param int $userid
+ * @param int $activityid
+ * @return stdClass|null {activity, shared, origin, epcmid, isresponsible}
+ */
+function epsynthesis_get_followup_activity(stdClass $epsynthesis, stdClass $cm, context $context, $userid,
+        $activityid) {
+    global $DB;
+
+    $activity = $DB->get_record('ep_activity', ['id' => $activityid]);
+    if (!$activity) {
+        return null;
+    }
+
+    if (ep_activity_is_shared($activity)) {
+        if ((int) $activity->synthesiscmid !== (int) $cm->id) {
+            return null;
+        }
+        $row = (object) [
+            'activity' => $activity,
+            'shared' => true,
+            'origin' => get_string('sharedorigin', 'mod_epsynthesis'),
+            'epcmid' => 0,
+        ];
+    } else {
+        $row = null;
+        foreach (epsynthesis_get_links($epsynthesis->id) as $epcmid => $link) {
+            if ((int) $link->epid !== (int) $activity->epid || !$link->visible || !$link->coursevisible) {
+                continue;
+            }
+            $row = (object) [
+                'activity' => $activity,
+                'shared' => false,
+                'origin' => format_string($link->coursename),
+                'epcmid' => (int) $epcmid,
+            ];
+            break;
+        }
+        if (!$row) {
+            return null;
+        }
+    }
+
+    $row->isresponsible = ep_is_activity_teacher($activity->id, $userid);
+    if (!$row->isresponsible && !has_capability('mod/epsynthesis:viewall', $context, $userid)) {
+        return null;
+    }
+
+    return $row;
+}
+
+/**
+ * Indique si l'utilisateur peut statuer, depuis la synthèse, sur une inscription donnée : soit il
+ * est responsable de l'EP — ce que la DEVE lui a délégué en le désignant, y compris pour des
+ * étudiants d'une promotion où il n'a aucun rôle —, soit il est DEVE dans l'activité d'origine.
+ *
+ * Voir ep_can_validate_credit() : la règle est la même, seule la façon d'y arriver diffère, la
+ * synthèse ne connaissant pas le contexte de l'activité d'origine avant de l'avoir cherché.
+ *
+ * @param stdClass $credit
+ * @param stdClass $followuprow Voir epsynthesis_get_followup_activity().
+ * @param int $epcmid Course-module de l'activité mod_ep d'où vient le crédit.
+ * @param int $userid
+ * @return bool
+ */
+function epsynthesis_can_decide(stdClass $credit, stdClass $followuprow, $epcmid, $userid) {
+    if (!ep_credit_awaits_decision($credit)) {
+        return false;
+    }
+    if (!empty($followuprow->isresponsible)) {
+        return true;
+    }
+
+    $epcontext = context_module::instance($epcmid, IGNORE_MISSING);
+
+    return $epcontext && has_capability('mod/ep:validatedeve', $epcontext, $userid);
+}
+
+/**
+ * Enseignants pouvant être désignés responsables d'un EP partagé : ceux qui ont accès à cette
+ * synthèse, c'est-à-dire les enseignants du cours de suivi. Un EP partagé s'adressant à plusieurs
+ * promotions, son responsable n'a pas à être enseignant dans l'une d'elles en particulier.
+ *
+ * @param context $context
+ * @return array
+ */
+function epsynthesis_get_potential_teachers(context $context) {
+    return get_enrolled_users($context, 'mod/epsynthesis:view', 0, 'u.*', 'u.lastname, u.firstname');
+}
+
+/**
  * Liste des course-modules d'activités « Enseignement personnalisé » actuellement liées à une
  * instance de synthèse.
  *
  * @param int $synthesisid
- * @return array cmid => stdClass{linkid, epcmid, courseid, coursename, epname, visible, coursevisible}
+ * @return array cmid => stdClass{linkid, epcmid, epid, courseid, coursename, epname, visible,
+ *                                coursevisible}
  */
 function epsynthesis_get_links($synthesisid) {
     global $DB;
 
-    $sql = "SELECT l.id AS linkid, l.epcmid, cm.visible, e.name AS epname, c.id AS courseid,
-                   c.fullname AS coursename, c.visible AS coursevisible
+    $sql = "SELECT l.id AS linkid, l.epcmid, cm.instance AS epid, cm.visible, e.name AS epname,
+                   c.id AS courseid, c.fullname AS coursename, c.visible AS coursevisible
               FROM {epsynthesis_link} l
               JOIN {course_modules} cm ON cm.id = l.epcmid
               JOIN {ep} e ON e.id = cm.instance
@@ -142,9 +345,10 @@ function epsynthesis_set_links($synthesisid, array $epcmids) {
  * Détermine, pour l'utilisateur donné, le sous-ensemble des activités liées sur lesquelles il a
  * effectivement quelque chose à suivre : une activité liée n'entre dans le périmètre que si
  * l'utilisateur a toujours la capacité mod/ep:evaluateteacher sur l'instance d'origine (retrait
- * de rôle, promotion archivée...) et qu'il y est référent d'au moins un étudiant ou responsable
- * d'au moins un EP du catalogue. La synthèse ne fait ainsi que refléter les droits déjà accordés
- * dans chaque cours, elle n'en accorde aucun de plus.
+ * de rôle, promotion archivée...) — ou qu'il est responsable d'un EP partagé, ce qui vaut par
+ * soi-même — et qu'il y est référent d'au moins un étudiant ou responsable d'au moins un EP du
+ * catalogue. La synthèse ne fait ainsi que refléter les droits déjà accordés ailleurs, elle n'en
+ * accorde aucun de plus.
  *
  * @param int $synthesisid
  * @param int $userid
@@ -171,12 +375,16 @@ function epsynthesis_get_active_links($synthesisid, $userid) {
             continue;
         }
 
-        if (!has_capability('mod/ep:evaluateteacher', $context, $userid)) {
-            continue;
-        }
-
         $ep = $DB->get_record('ep', ['id' => $cm->instance], '*', MUST_EXIST);
         $rights = ep_get_user_rights($ep, $context, $userid);
+
+        // Le droit de valider dans l'activité d'origine reste la règle. L'exception est le
+        // responsable d'un EP partagé : c'est sa désignation qui lui donne la main sur les
+        // inscriptions de son EP, y compris celles d'étudiants d'une promotion où il n'a aucun
+        // rôle — sans quoi un EP ouvert à plusieurs promotions n'aurait personne pour le suivre.
+        if (!$rights->evaluateteacher && !ep_rights_has_shared_responsibility($rights)) {
+            continue;
+        }
         if (empty($rights->referentids) && empty($rights->responsibleids)) {
             continue;
         }
@@ -300,6 +508,11 @@ function epsynthesis_render_list_filters(moodle_url $baseurl, array $typeoptions
  */
 function epsynthesis_decorate_credit(stdClass $credit, stdClass $link, array $students) {
     $credit->cmid = $link->cm->id;
+    // Une inscription à un EP partagé se traite depuis la synthèse qui définit cet EP : son
+    // responsable n'a pas forcément accès au cours de l'étudiant (voir
+    // epsynthesis_credit_action_url()).
+    $credit->sharedbysynthesiscmid = !empty($credit->activityid)
+        ? (ep_get_shared_activity_owners()[(int) $credit->activityid] ?? 0) : 0;
     $credit->coursename = $link->coursename;
     $credit->typename = isset($link->types[$credit->typeid])
         ? format_string($link->types[$credit->typeid]->name) : '-';
@@ -310,16 +523,44 @@ function epsynthesis_decorate_credit(stdClass $credit, stdClass $link, array $st
 }
 
 /**
+ * Écran où traiter un crédit : celui de la synthèse pour une inscription à un EP partagé — son
+ * responsable n'a pas forcément accès au cours de l'étudiant —, celui de l'activité d'origine
+ * pour tout le reste, où l'on retrouve les justificatifs et le dossier complet de l'étudiant.
+ *
+ * @param stdClass $credit Crédit décoré (voir epsynthesis_decorate_credit()).
+ * @param stdClass $cm Course-module de la synthèse.
+ * @param moodle_url $returnurl Écran de retour après la décision.
+ * @return moodle_url
+ */
+function epsynthesis_credit_action_url(stdClass $credit, stdClass $cm, moodle_url $returnurl) {
+    // Un EP partagé défini dans une autre synthèse ne se traite pas ici : c'est là-bas que son
+    // responsable le suit, et l'écran de décision d'ici le refuserait.
+    if ((int) ($credit->sharedbysynthesiscmid ?? 0) === (int) $cm->id) {
+        return new moodle_url('/mod/epsynthesis/decide.php', [
+            'id' => $cm->id, 'creditid' => $credit->id,
+            'returnurl' => $returnurl->out_as_local_url(false),
+        ]);
+    }
+
+    return new moodle_url('/mod/ep/validate.php', [
+        'id' => $credit->cmid, 'creditid' => $credit->id,
+        'returnurl' => $returnurl->out_as_local_url(false),
+    ]);
+}
+
+/**
  * Crédits en attente de la décision de l'utilisateur, agrégés sur toutes les activités actives et
  * triés du plus ancien au plus récent : c'est le retard accumulé qui doit remonter en premier.
  *
  * @param array $activelinks Voir epsynthesis_get_active_links().
+ * @param int $status Étape attendue : EP_STATUS_PENDING (décision à prendre sur la demande) ou
+ *                    EP_STATUS_ENROLLED (ECTS à valider en fin d'EP).
  * @return array Crédits enrichis (cmid, coursename, typename, studentfullname).
  */
-function epsynthesis_get_credits_awaiting(array $activelinks) {
+function epsynthesis_get_credits_awaiting(array $activelinks, $status = EP_STATUS_PENDING) {
     $rows = [];
     foreach ($activelinks as $link) {
-        $credits = ep_get_credits_awaiting($link->ep, $link->rights, 'timecreated', 'ASC');
+        $credits = ep_get_credits_awaiting($link->ep, $link->rights, 'timecreated', 'ASC', $status);
         if (empty($credits)) {
             continue;
         }

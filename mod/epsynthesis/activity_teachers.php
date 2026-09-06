@@ -15,46 +15,53 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Affectation des enseignants responsables d'un EP du catalogue : ce sont eux, et eux seuls, qui
- * valident les inscriptions à cet EP (voir ep_can_validate_credit()).
+ * Affectation des enseignants responsables d'un EP partagé. Ce sont eux qui acceptent les
+ * inscriptions à cet EP, puis qui en valident les ECTS à la fin — pour tous les étudiants qui s'y
+ * sont inscrits, quelle que soit leur promotion.
  *
- * @package   mod_ep
+ * Les responsables se choisissent parmi les enseignants de ce cours de suivi : un EP partagé
+ * s'adressant à plusieurs promotions, son responsable n'a pas de raison d'être enseignant dans
+ * l'une d'elles en particulier.
+ *
+ * @package   mod_epsynthesis
  * @copyright 2026 Sébastien Lefebvre
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 require(__DIR__ . '/../../config.php');
-require_once($CFG->dirroot . '/mod/ep/locallib.php');
+require_once($CFG->dirroot . '/mod/epsynthesis/locallib.php');
 
 $id = required_param('id', PARAM_INT);
 $activityid = required_param('activityid', PARAM_INT);
 
-$cm = get_coursemodule_from_id('ep', $id, 0, false, MUST_EXIST);
+$cm = get_coursemodule_from_id('epsynthesis', $id, 0, false, MUST_EXIST);
 $course = get_course($cm->course);
-$ep = $DB->get_record('ep', ['id' => $cm->instance], '*', MUST_EXIST);
+$epsynthesis = $DB->get_record('epsynthesis', ['id' => $cm->instance], '*', MUST_EXIST);
 
 require_login($course, true, $cm);
 $context = context_module::instance($cm->id);
-require_capability('mod/ep:manage', $context);
+require_capability('mod/epsynthesis:manageactivities', $context);
 
-// Les responsables d'un EP partagé se désignent dans la synthèse qui le définit, pas ici : cette
-// page ne connaît que les EP propres à la promotion.
-$activity = $DB->get_record('ep_activity',
-    ['id' => $activityid, 'epid' => $ep->id, 'synthesiscmid' => 0], '*', MUST_EXIST);
+$activity = ep_get_shared_activity($cm->id, $activityid);
+if (!$activity) {
+    throw new moodle_exception('errorunknownactivity', 'mod_ep',
+        (new moodle_url('/mod/epsynthesis/activities.php', ['id' => $cm->id]))->out(false));
+}
 
-$baseurl = new moodle_url('/mod/ep/activity_teachers.php', ['id' => $cm->id, 'activityid' => $activity->id]);
-$returnurl = new moodle_url('/mod/ep/activities.php', ['id' => $cm->id]);
+$baseurl = new moodle_url('/mod/epsynthesis/activity_teachers.php',
+    ['id' => $cm->id, 'activityid' => $activity->id]);
+$returnurl = new moodle_url('/mod/epsynthesis/activities.php', ['id' => $cm->id]);
 $PAGE->set_url($baseurl);
-$PAGE->set_title(format_string($ep->name) . ' - ' . get_string('activityteachers', 'mod_ep'));
+$PAGE->set_title(format_string($epsynthesis->name) . ' - ' . get_string('activityteachers', 'mod_ep'));
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
-$potential = ep_get_potential_teachers($context);
+$potential = epsynthesis_get_potential_teachers($context);
 
 if (optional_param('save', 0, PARAM_INT) && confirm_sesskey()) {
     // Seuls les enseignants effectivement proposés sont retenus : une valeur ajoutée à la main
-    // dans la requête ne doit pas rendre responsable d'un EP quelqu'un qui n'a même pas le droit
-    // de valider dans cette activité.
+    // dans la requête ne doit pas rendre responsable d'un EP quelqu'un qui n'a même pas accès à
+    // cette synthèse.
     $selected = array_intersect(optional_param_array('teacherid', [], PARAM_INT), array_keys($potential));
     ep_set_activity_teachers($activity->id, $selected);
     redirect($returnurl, get_string('activityteacherssaved', 'mod_ep'), null,
@@ -66,10 +73,10 @@ $assigned = ep_get_activity_teachers($activity->id);
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('activityteachersfor', 'mod_ep', format_string($activity->name)));
 echo html_writer::link($returnurl, get_string('back'));
-echo html_writer::tag('p', get_string('activityteachers_help', 'mod_ep'));
+echo html_writer::tag('p', get_string('sharedactivityteachers_help', 'mod_epsynthesis'));
 
 if (empty($potential)) {
-    echo $OUTPUT->notification(get_string('nopotentialteachers', 'mod_ep'), 'warning');
+    echo $OUTPUT->notification(get_string('nopotentialteachers', 'mod_epsynthesis'), 'warning');
     echo $OUTPUT->footer();
     exit;
 }

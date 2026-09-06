@@ -54,8 +54,7 @@ $PAGE->set_context($context);
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($epsynthesis->name));
-echo html_writer::link(new moodle_url('/mod/epsynthesis/dashboard.php', ['id' => $cm->id]),
-    get_string('pilotage', 'mod_ep'));
+echo epsynthesis_render_navlinks($epsynthesis, $cm, $context, 'entries');
 
 if ($epsynthesis->intro) {
     echo $OUTPUT->box(format_module_intro('epsynthesis', $epsynthesis, $cm->id), 'generalbox mod_introbox');
@@ -74,12 +73,22 @@ if (empty($activelinks)) {
 epsynthesis_sync_active_links($activelinks);
 
 // 1. Ce qui attend une décision de l'utilisateur, toutes promotions confondues : c'est pour cela
-// qu'il ouvre cette page.
-$awaiting = epsynthesis_get_credits_awaiting($activelinks);
-echo $OUTPUT->heading(get_string('awaitingmydecision', 'mod_ep'), 4);
-if (empty($awaiting)) {
-    echo $OUTPUT->notification(get_string('nopendingcredits', 'mod_ep'), 'info');
-} else {
+// qu'il ouvre cette page. Les deux étapes du circuit académique sont séparées — accepter des
+// inscriptions et clôturer des EP terminés ne se font pas au même moment de l'année.
+$steps = [
+    [EP_STATUS_PENDING, get_string('awaitingmydecision', 'mod_ep'), get_string('nopendingcredits', 'mod_ep')],
+    [EP_STATUS_ENROLLED, get_string('awaitingectsvalidation', 'mod_ep'),
+        get_string('noenrolledcredits', 'mod_ep')],
+];
+
+foreach ($steps as [$stepstatus, $stepheading, $stepempty]) {
+    $awaiting = epsynthesis_get_credits_awaiting($activelinks, $stepstatus);
+    echo $OUTPUT->heading($stepheading, 4);
+    if (empty($awaiting)) {
+        echo $OUTPUT->notification($stepempty, 'info');
+        continue;
+    }
+
     $awaitingtable = new html_table();
     $awaitingtable->head = [
         get_string('course'),
@@ -101,9 +110,8 @@ if (empty($awaiting)) {
             ep_format_ects($credit->claimedects),
             userdate($credit->timecreated, get_string('strftimedatetimeshort')),
             ep_render_actions([
-                get_string('validatecredit', 'mod_ep') => new moodle_url('/mod/ep/validate.php',
-                    ['id' => $credit->cmid, 'creditid' => $credit->id,
-                        'returnurl' => $baseurl->out_as_local_url(false)]),
+                ep_credit_decision_label($credit) =>
+                    epsynthesis_credit_action_url($credit, $cm, $baseurl),
             ], 'btn btn-sm btn-primary mr-1 mb-1'),
         ];
     }
@@ -155,9 +163,8 @@ $table->head = [
 
 foreach ($credits as $credit) {
     $link = $activelinks[$credit->cmid];
-    $canvalidate = ep_rights_can_validate($link->rights, $credit)
-        && (int) $credit->status === EP_STATUS_PENDING;
-    $label = $canvalidate ? get_string('validatecredit', 'mod_ep') : get_string('viewdetails', 'mod_ep');
+    $canvalidate = ep_rights_can_validate($link->rights, $credit) && ep_credit_awaits_decision($credit);
+    $label = $canvalidate ? ep_credit_decision_label($credit) : get_string('viewdetails', 'mod_ep');
 
     $table->data[] = [
         format_string($credit->coursename),
@@ -169,9 +176,7 @@ foreach ($credits as $credit) {
         (int) $credit->status === EP_STATUS_VALIDATED ? ep_format_ects($credit->retainedects) : '-',
         html_writer::span(ep_status_label($credit->status), 'badge ' . ep_status_badgeclass($credit->status)),
         ep_render_actions([
-            $label => new moodle_url('/mod/ep/validate.php',
-                ['id' => $credit->cmid, 'creditid' => $credit->id,
-                    'returnurl' => $listurl->out_as_local_url(false)]),
+            $label => epsynthesis_credit_action_url($credit, $cm, $listurl),
         ]),
     ];
 }

@@ -80,8 +80,7 @@ if ($studentid) {
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($epsynthesis->name));
-echo html_writer::link(new moodle_url('/mod/epsynthesis/entries.php', ['id' => $cm->id]),
-    get_string('validation', 'mod_ep'));
+echo epsynthesis_render_navlinks($epsynthesis, $cm, $context, 'dashboard');
 
 if ($epsynthesis->intro) {
     echo $OUTPUT->box(format_module_intro('epsynthesis', $epsynthesis, $cm->id), 'generalbox mod_introbox');

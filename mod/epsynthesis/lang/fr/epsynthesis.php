@@ -40,6 +40,8 @@ $string['pluginadministration'] = 'Administration de Suivi de l\'enseignement pe
 
 $string['epsynthesis:addinstance'] = 'Ajouter une activité Suivi de l\'enseignement personnalisé';
 $string['epsynthesis:view'] = 'Voir la synthèse de ses propres étudiants et EP';
+$string['epsynthesis:viewall'] = 'Suivre tous les EP académiques du périmètre (DEVE)';
+$string['epsynthesis:manageactivities'] = 'Définir les EP académiques partagés et leurs responsables';
 $string['epsynthesis:managelinks'] = 'Gérer les activités « Enseignement personnalisé » liées';
 
 $string['epsynthesisname'] = 'Nom de l\'activité';
@@ -57,9 +59,46 @@ $string['noactivities'] = 'Aucune activité « Enseignement personnalisé » n\'
 $string['hiddencourse'] = 'cours masqué';
 $string['hiddenactivity'] = 'activité masquée';
 
+// EP académiques partagés.
+$string['manageactivities'] = 'EP académiques partagés';
+$string['manageactivities_help'] = "Les EP définis ici sont proposés au catalogue de toutes les promotions "
+    . "suivies par cette activité : c'est ainsi qu'un même EP accueille des étudiants d'années différentes sans "
+    . "être recopié dans chaque promotion — deux copies auraient chacune leurs places et leurs inscrits, alors "
+    . "que ce sont les mêmes. Chaque EP est validé par son ou ses responsables, désignés ici.";
+$string['addsharedactivity'] = 'Ajouter un EP partagé';
+$string['nosharedactivities'] = "Aucun EP partagé n'est défini pour l'instant.";
+$string['sharedorigin'] = 'EP partagé';
+$string['sharedstudyyearrange'] = 'Années d\'étude concernées';
+$string['sharedstudyyearrange_help'] = "Années d'étude auxquelles cet EP est ouvert (0 = sans restriction). "
+    . "L'année d'un étudiant est celle de sa promotion, telle que la renseigne l'activité « Gestion des stages » "
+    . "de son cours : un étudiant dont la promotion est hors de cette plage ne peut pas s'inscrire.";
+$string['sharedactivityteachers_help'] = "Cochez les enseignants responsables de cet EP. Ce sont eux, et eux "
+    . "seuls, qui acceptent les inscriptions puis valident les ECTS — pour tous les inscrits, quelle que soit "
+    . "leur promotion, et sans avoir besoin d'un rôle dans le cours de chacune.";
+$string['nopotentialteachers'] = "Aucun enseignant n'a accès à cette activité de suivi : inscrivez d'abord les "
+    . "enseignants concernés à ce cours.";
+
+// Suivi des inscriptions, EP par EP.
+$string['registrationsfollowup'] = 'Suivi des EP académiques';
+$string['registrationsfollowup_help'] = "Où en est chaque EP académique : qui a demandé à s'y inscrire, qui a "
+    . "été accepté, et pour qui les ECTS restent à valider. Y figurent les EP partagés définis ici et les EP "
+    . "propres à chaque promotion suivie.";
+$string['viewregistrations'] = 'Voir les inscriptions';
+$string['nofollowupactivities'] = "Aucun EP académique à suivre : vous n'êtes responsable d'aucun EP sur le "
+    . "périmètre de cette activité.";
+$string['noregistrations'] = 'Aucune inscription à afficher.';
+$string['registrationorigin'] = 'Inscription à l\'EP « {$a->activity} » — promotion : {$a->course}';
+$string['decisionnotyours'] = "Cette inscription attend la décision du responsable de l'EP : vous la suivez "
+    . "ici, mais c'est à lui de se prononcer.";
+$string['errornotaregistration'] = "Cet enseignement personnalisé n'est pas une inscription à un EP du "
+    . "catalogue : il se valide dans l'activité « Enseignement personnalisé » de la promotion de l'étudiant, par "
+    . "son enseignant référent.";
+
 $string['noscope'] = "Aucun étudiant ne vous est attribué comme enseignant référent et vous n'êtes responsable "
     . "d'aucun EP sur les activités liées.";
 
-$string['privacy:metadata'] = "Le plugin Suivi de l'enseignement personnalisé ne stocke aucune donnée "
-    . "personnelle : il affiche uniquement des données déjà présentes dans les activités « Enseignement "
-    . "personnalisé » liées.";
+// Confidentialité. Tout ce que la synthèse affiche est lu dans les activités « Enseignement personnalisé »
+// liées ; la seule donnée qui lui soit propre est la désignation des responsables de ses EP partagés.
+$string['privacy:metadata:ep_activity_teacher'] = "Enseignants désignés responsables d'un EP partagé défini dans "
+    . "cette activité de suivi.";
+$string['privacy:metadata:ep_activity_teacher:teacherid'] = 'Enseignant responsable.';

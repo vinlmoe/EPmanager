@@ -15,8 +15,13 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Gestion du catalogue des EP internes par la DEVE : ajout, édition, ouverture/fermeture aux
- * inscriptions, suppression, et accès à l'affectation des responsables de chaque EP.
+ * Gestion du catalogue des EP par la DEVE de la promotion : ajout, édition, ouverture/fermeture
+ * aux inscriptions, suppression, et accès à l'affectation des responsables de chaque EP.
+ *
+ * Seuls les EP propres à cette promotion se gèrent ici. Les EP partagés — définis dans une
+ * activité « Suivi de l'enseignement personnalisé » parce que des étudiants de plusieurs
+ * promotions s'y inscrivent — sont rappelés en fin de page, en lecture seule : les modifier ici
+ * changerait ce que voient les autres promotions.
  *
  * @package   mod_ep
  * @copyright 2026 Sébastien Lefebvre
@@ -58,20 +63,20 @@ $alltypes = ep_get_types($ep->id);
 // qu'il faut faire dans ce cas.
 if ($action === 'delete' && $activityid) {
     require_sesskey();
-    $activity = $DB->get_record('ep_activity', ['id' => $activityid, 'epid' => $ep->id], '*', MUST_EXIST);
-    if ($DB->record_exists('ep_credit', ['activityid' => $activity->id])) {
+    $activity = $DB->get_record('ep_activity',
+        ['id' => $activityid, 'epid' => $ep->id, 'synthesiscmid' => 0], '*', MUST_EXIST);
+    if (!ep_delete_activity($activity->id)) {
         redirect($baseurl, get_string('erroractivityinuse', 'mod_ep'), null,
             \core\output\notification::NOTIFY_ERROR);
     }
-    $DB->delete_records('ep_activity_teacher', ['activityid' => $activity->id]);
-    $DB->delete_records('ep_activity', ['id' => $activity->id]);
     redirect($baseurl, get_string('activitydeleted', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
 // Bascule rapide ouvert / fermé aux inscriptions.
 if ($action === 'togglevisible' && $activityid) {
     require_sesskey();
-    $activity = $DB->get_record('ep_activity', ['id' => $activityid, 'epid' => $ep->id], '*', MUST_EXIST);
+    $activity = $DB->get_record('ep_activity',
+        ['id' => $activityid, 'epid' => $ep->id, 'synthesiscmid' => 0], '*', MUST_EXIST);
     $activity->visible = $activity->visible ? 0 : 1;
     $activity->timemodified = time();
     $DB->update_record('ep_activity', $activity);
@@ -87,7 +92,8 @@ if ($action === 'edit') {
     $formurl = new moodle_url($baseurl, ['action' => 'edit', 'activityid' => $activityid]);
     $activity = null;
     if ($activityid) {
-        $activity = $DB->get_record('ep_activity', ['id' => $activityid, 'epid' => $ep->id], '*', MUST_EXIST);
+        $activity = $DB->get_record('ep_activity',
+            ['id' => $activityid, 'epid' => $ep->id, 'synthesiscmid' => 0], '*', MUST_EXIST);
         // Un EP créé sur un type depuis désactivé reste modifiable sur ce type : le retirer de la
         // liste ferait basculer silencieusement l'EP sur un autre type à l'enregistrement.
         if (!isset($types[$activity->typeid]) && isset($alltypes[$activity->typeid])) {
@@ -126,9 +132,19 @@ if ($action === 'edit') {
         if (!isset($types[$data->typeid])) {
             throw new moodle_exception('errorinvalidtype', 'mod_ep', $baseurl->out(false));
         }
+        // L'EP visé est revérifié : l'identifiant vient d'un champ caché du formulaire, et une
+        // valeur forgée ne doit pas permettre de réécrire l'EP d'une autre promotion, ni de
+        // s'approprier un EP partagé en le rattachant à celle-ci.
+        if (!empty($data->activityid) && !$DB->record_exists('ep_activity',
+                ['id' => $data->activityid, 'epid' => $ep->id, 'synthesiscmid' => 0])) {
+            throw new moodle_exception('errorunknownactivity', 'mod_ep', $baseurl->out(false));
+        }
 
         $record = new stdClass();
         $record->epid = $ep->id;
+        // EP propre à cette promotion : il n'est défini dans aucune synthèse (voir
+        // mod/epsynthesis/activities.php pour les EP partagés).
+        $record->synthesiscmid = 0;
         $record->typeid = (int) $data->typeid;
         $record->name = $data->name;
         $record->description = $data->description;
@@ -170,8 +186,9 @@ echo html_writer::link(new moodle_url($baseurl, ['action' => 'edit']), get_strin
     ['class' => 'btn btn-primary d-block mt-2 mb-3', 'style' => 'width:fit-content']);
 
 $activities = ep_get_activities($ep->id);
+$shared = ep_get_shared_activities(ep_get_synthesis_cmids($ep));
 
-if (empty($activities)) {
+if (empty($activities) && empty($shared)) {
     echo $OUTPUT->notification(get_string('nocatalogactivities', 'mod_ep'), 'info');
     echo $OUTPUT->footer();
     exit;
@@ -192,7 +209,7 @@ $table->head = [
 
 foreach ($activities as $activity) {
     $type = $alltypes[$activity->typeid] ?? null;
-    $remaining = ep_get_activity_remaining_places($activity);
+    $counts = ep_get_activity_registration_counts($activity->id);
 
     $togglevisibleurl = new moodle_url($baseurl,
         ['action' => 'togglevisible', 'activityid' => $activity->id, 'sesskey' => sesskey()]);
@@ -226,15 +243,54 @@ foreach ($activities as $activity) {
         $type ? format_string($type->name) : '-',
         ep_format_ects($activity->ects),
         ep_studyyear_range_label($activity->minstudyyear, $activity->maxstudyyear),
-        $remaining === null
-            ? get_string('unlimitedplaces', 'mod_ep')
-            : get_string('placesleft', 'mod_ep', (object) ['left' => $remaining, 'total' => $activity->capacity]),
-        ep_get_activity_taken_places($activity->id),
+        ep_render_places_cell($activity, $counts),
+        ep_render_registration_counts($counts),
         $teacherscell,
         $visible,
         $actions,
     ];
 }
 
-echo html_writer::table($table);
+if (empty($table->data)) {
+    echo $OUTPUT->notification(get_string('noownactivities', 'mod_ep'), 'info');
+} else {
+    echo html_writer::table($table);
+}
+
+// Les EP partagés, en lecture seule : ils comptent dans le catalogue de cette promotion, mais
+// c'est l'activité de suivi qui les définit — les corriger ici, à l'insu des autres promotions
+// inscrites, serait le meilleur moyen de les faire diverger.
+if (!empty($shared)) {
+    echo $OUTPUT->heading(get_string('sharedactivities', 'mod_ep'), 4);
+    echo html_writer::tag('p', get_string('sharedactivities_help', 'mod_ep'), ['class' => 'text-muted']);
+
+    $sharedtable = new html_table();
+    $sharedtable->head = [
+        get_string('catalogactivity', 'mod_ep'),
+        get_string('ects', 'mod_ep'),
+        get_string('studyyearrange', 'mod_ep'),
+        get_string('places', 'mod_ep'),
+        get_string('registrations', 'mod_ep'),
+        get_string('activityteachers', 'mod_ep'),
+        get_string('openforregistration', 'mod_ep'),
+        get_string('definedin', 'mod_ep'),
+    ];
+    foreach ($shared as $activity) {
+        $counts = ep_get_activity_registration_counts($activity->id);
+        $teachers = ep_get_activity_teachers($activity->id);
+
+        $sharedtable->data[] = [
+            format_string($activity->name),
+            ep_format_ects($activity->ects),
+            ep_studyyear_range_label($activity->minstudyyear, $activity->maxstudyyear),
+            ep_render_places_cell($activity, $counts),
+            ep_render_registration_counts($counts),
+            empty($teachers) ? '-' : implode(', ', array_map('fullname', $teachers)),
+            $activity->visible ? get_string('yes') : get_string('no'),
+            ep_render_shared_activity_origin($activity),
+        ];
+    }
+    echo html_writer::table($sharedtable);
+}
+
 echo $OUTPUT->footer();

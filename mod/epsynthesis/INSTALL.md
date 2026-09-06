@@ -1,12 +1,18 @@
 # Suivi de l'enseignement personnalisé (mod_epsynthesis)
 
-Module d'activité complémentaire à `mod_ep` : donne à un enseignant une vue
-unique de tout ce qu'il a à suivre en matière d'enseignement personnalisé —
-les inscriptions aux EP dont il est responsable et les déclarations des
-étudiants dont il est enseignant référent —, tous cours/promotions `mod_ep`
-confondus, sans avoir à naviguer d'un cours à l'autre.
+Module d'activité complémentaire à `mod_ep`, avec deux rôles :
 
-C'est le pendant exact de `mod_stagesynthesis` pour `mod_stage`.
+- **suivre** : donner à un enseignant une vue unique de tout ce qu'il a à
+  suivre en matière d'enseignement personnalisé — les inscriptions aux EP dont
+  il est responsable et les déclarations des étudiants dont il est enseignant
+  référent —, tous cours/promotions `mod_ep` confondus ;
+- **définir les EP académiques partagés** : ceux auxquels des étudiants de
+  plusieurs promotions s'inscrivent. Ils sont créés ici une seule fois et
+  apparaissent au catalogue de toutes les promotions suivies, au lieu d'être
+  recopiés dans chacune — deux copies auraient chacune leurs places et leurs
+  inscrits, alors que ce sont les mêmes.
+
+C'est le pendant de `mod_stagesynthesis` pour `mod_stage`.
 
 - **Prérequis** : `mod_ep` installé (dépendance déclarée dans `version.php`),
   lui-même dépendant de `mod_stage`.
@@ -34,6 +40,10 @@ php admin/cli/upgrade.php
    personnalisé » (une par promotion) qui doivent y remonter. Décocher une
    activité (promotion sortie, pas encore concernée...) la retire de la
    synthèse sans rien modifier dans l'activité d'origine.
+5. Depuis **EP académiques partagés**, créer les EP ouverts à plusieurs
+   promotions (intitulé, ECTS, années d'étude concernées, nombre de places) et
+   désigner pour chacun son ou ses **responsables**, parmi les enseignants de
+   ce cours de suivi.
 
 ## Fonctionnement
 
@@ -51,15 +61,60 @@ et ne montre que les activités où il a toujours la capacité
 cours, ou révoquer un de ces rôles, le retire donc automatiquement de la
 synthèse — aucune synchronisation à faire.
 
-Deux écrans, comme dans `mod_ep` :
+La seule exception est le **responsable d'un EP partagé** : cet EP s'adressant
+à plusieurs promotions, il n'a pas de raison d'être enseignant dans l'une
+d'elles en particulier. C'est sa désignation comme responsable qui lui donne la
+main sur les inscriptions de son EP, et sur elles seules.
 
-- **Validation** (page d'atterrissage) : ce qui attend une décision, puis la
-  liste filtrable de tout le périmètre.
+Trois écrans :
+
+- **Validation** (page d'atterrissage) : ce qui attend une décision —
+  inscriptions à accepter, puis EP terminés dont les ECTS restent à valider —,
+  puis la liste filtrable de tout le périmètre.
 - **Tableau de pilotage** : une ligne par étudiant dont l'utilisateur est
   référent, avec l'accès à sa situation détaillée. Être responsable d'un EP
-  donne à valider des inscriptions, pas à suivre le dossier complet d'un
+  donne à statuer sur des inscriptions, pas à suivre le dossier complet d'un
   étudiant : ces étudiants-là ne figurent donc pas dans le pilotage.
+- **Suivi des EP académiques** : une ligne par EP — les EP partagés définis
+  ici et ceux propres à chaque promotion suivie — avec l'état de ses
+  inscriptions (demandées, acceptées, validées) et l'accès à la liste de ses
+  inscrits, toutes promotions confondues. C'est la vue du responsable, et
+  celle de la DEVE : avec `mod/epsynthesis:viewall`, elle y suit l'ensemble
+  des EP académiques du périmètre.
 
-Chaque ligne renvoie vers la page habituelle de l'activité d'origine
-(`mod/ep/validate.php`) : la décision elle-même continue de se prendre dans le
-cours de la promotion concernée.
+Une ligne renvoie vers la page habituelle de l'activité d'origine
+(`mod/ep/validate.php`), où l'on retrouve le dossier de l'étudiant et ses
+justificatifs. Les inscriptions aux EP partagés font exception et se traitent
+dans la synthèse (`mod/epsynthesis/decide.php`), leur responsable n'ayant pas
+forcément accès au cours de l'étudiant ; le formulaire de décision y est le
+même, à l'identique.
+
+## Le circuit d'un EP académique
+
+1. **Inscription** de l'étudiant, depuis le catalogue de sa promotion. Elle
+   n'est pas limitée au nombre de places et ne donne aucun ECTS.
+2. **Acceptation de l'inscription** par le responsable de l'EP. Le nombre de
+   places lui est rappelé, mais ne le lie pas : il peut le dépasser s'il le
+   juge utile.
+3. **Validation des ECTS** par le responsable, à la fin de l'EP, au vu de ce
+   que l'étudiant y a fait. C'est là seulement que les ECTS sont acquis.
+
+Un étudiant ne peut s'inscrire à un EP que si l'année d'étude courante de sa
+promotion est dans la plage d'années de cet EP. Cette année est celle que
+renseigne l'activité « Gestion des stages » de son cours (`mod_stage`) : elle
+n'est pas ressaisie ici.
+
+## Capacités
+
+| Capacité | Pour qui |
+| --- | --- |
+| `mod/epsynthesis:view` | Enseignants : leur propre périmètre |
+| `mod/epsynthesis:viewall` | DEVE : suivre tous les EP académiques du périmètre |
+| `mod/epsynthesis:manageactivities` | DEVE : définir les EP partagés et leurs responsables |
+| `mod/epsynthesis:managelinks` | DEVE : choisir les activités liées |
+
+## Tests
+
+```bash
+vendor/bin/phpunit --testsuite mod_epsynthesis_testsuite
+```

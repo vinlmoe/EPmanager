@@ -22,13 +22,17 @@ global $CFG;
 require_once($CFG->dirroot . '/mod/ep/locallib.php');
 
 /**
- * Circuit des EP académiques internes : inscription au catalogue, décompte des places, et
- * validation par le responsable de l'EP — qui est le seul, avec la DEVE, à pouvoir se prononcer.
+ * Circuit des EP académiques internes, en trois temps : l'étudiant s'inscrit (sans limite de
+ * places), le responsable de l'EP accepte ou non son inscription (le nombre de places est un
+ * repère, pas un verrou), puis valide les ECTS à la fin de l'EP. Le responsable est le seul, avec
+ * la DEVE, à pouvoir se prononcer.
  *
  * @package    mod_ep
  * @copyright  2026 Sébastien Lefebvre
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers     ::ep_register_to_activity
+ * @covers     ::ep_accept_registration
+ * @covers     ::ep_get_activity_registration_counts
  * @covers     ::ep_get_activity_remaining_places
  * @covers     ::ep_can_validate_credit
  * @covers     ::ep_validate_credit
@@ -80,10 +84,11 @@ final class catalog_test extends \advanced_testcase {
     }
 
     /**
-     * S'inscrire ne donne pas d'ECTS : la demande reste en attente, avec le nombre d'ECTS de
-     * l'EP, jusqu'à ce que son responsable se prononce.
+     * Le circuit complet : s'inscrire ne donne pas d'ECTS, et l'acceptation de l'inscription non
+     * plus — l'étudiant a sa place et suit l'EP, mais ses ECTS n'arrivent qu'à la validation de
+     * fin d'EP. Tant qu'ils ne sont pas validés, ils comptent comme en attente.
      */
-    public function test_registration_awards_nothing_until_validated(): void {
+    public function test_registration_awards_nothing_until_the_ects_are_validated(): void {
         $creditid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3);
 
         $credit = $this->credit($creditid);
@@ -95,11 +100,46 @@ final class catalog_test extends \advanced_testcase {
         $this->assertEquals(0, $progress->totalretained);
         $this->assertEquals(3, $progress->totalpending);
 
+        // Acceptation de l'inscription : l'étudiant est inscrit, toujours sans ECTS.
+        ep_accept_registration($this->credit($creditid), $this->owner->id);
+
+        $credit = $this->credit($creditid);
+        $this->assertEquals(EP_STATUS_ENROLLED, $credit->status);
+        $this->assertEquals(0, $credit->retainedects);
+
+        $progress = ep_get_student_progress($this->ep, $this->student->id);
+        $this->assertEquals(0, $progress->totalretained);
+        $this->assertEquals(3, $progress->totalpending);
+
+        // Fin de l'EP : le responsable valide les ECTS.
         ep_validate_credit($this->credit($creditid), $this->owner->id, 3);
 
         $progress = ep_get_student_progress($this->ep, $this->student->id);
         $this->assertEquals(3, $progress->totalretained);
         $this->assertEquals(0, $progress->totalpending);
+    }
+
+    /**
+     * Le responsable a la main aux deux étapes du circuit : sur l'inscription à accepter, puis
+     * sur les ECTS à valider.
+     */
+    public function test_owner_decides_at_both_steps(): void {
+        $creditid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3);
+
+        $credit = $this->credit($creditid);
+        $this->assertTrue(ep_credit_is_registration_step($credit));
+        $this->assertTrue(ep_can_validate_credit($this->ep, $credit, $this->context, $this->owner->id));
+
+        ep_accept_registration($credit, $this->owner->id);
+
+        $credit = $this->credit($creditid);
+        $this->assertFalse(ep_credit_is_registration_step($credit));
+        $this->assertTrue(ep_credit_awaits_decision($credit));
+        $this->assertTrue(ep_can_validate_credit($this->ep, $credit, $this->context, $this->owner->id));
+
+        ep_validate_credit($credit, $this->owner->id, 3);
+
+        $this->assertFalse(ep_credit_awaits_decision($this->credit($creditid)));
     }
 
     /**
@@ -132,22 +172,56 @@ final class catalog_test extends \advanced_testcase {
     }
 
     /**
-     * Les inscriptions en attente occupent une place : ouvrir plus de places que ce que le
-     * responsable pourra valider reviendrait à en promettre une qui n'existe pas. Une demande
-     * retirée ou refusée libère la sienne.
+     * Seules les inscriptions acceptées occupent une place : une demande en attente n'en prend
+     * pas, puisque le responsable ne l'a pas encore retenue. Une inscription retirée ou refusée
+     * libère la sienne.
      */
-    public function test_pending_registrations_take_up_a_place(): void {
+    public function test_only_accepted_registrations_take_up_a_place(): void {
         $this->assertSame(2, ep_get_activity_remaining_places($this->activity));
 
         $firstid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3);
+        $this->assertSame(2, ep_get_activity_remaining_places($this->activity));
+
+        ep_accept_registration($this->credit($firstid), $this->owner->id);
         $this->assertSame(1, ep_get_activity_remaining_places($this->activity));
 
-        $other = $this->getDataGenerator()->create_user();
-        ep_register_to_activity($this->ep, $this->activity, $other->id, 3);
-        $this->assertSame(0, ep_get_activity_remaining_places($this->activity));
+        // Les ECTS validés ne libèrent pas la place : l'étudiant a bien suivi l'EP.
+        ep_validate_credit($this->credit($firstid), $this->owner->id, 3);
+        $this->assertSame(1, ep_get_activity_remaining_places($this->activity));
 
         ep_cancel_credit($this->credit($firstid), $this->student->id);
-        $this->assertSame(1, ep_get_activity_remaining_places($this->activity));
+        $this->assertSame(2, ep_get_activity_remaining_places($this->activity));
+    }
+
+    /**
+     * S'inscrire n'est pas limité au nombre de places : c'est le responsable qui arbitre, et il
+     * peut retenir plus d'inscriptions qu'il n'y a de places s'il le juge utile.
+     */
+    public function test_registration_is_not_limited_by_capacity(): void {
+        $students = [$this->student];
+        for ($i = 0; $i < 2; $i++) {
+            $students[] = $this->getDataGenerator()->create_user();
+        }
+
+        $creditids = [];
+        foreach ($students as $student) {
+            $creditids[] = ep_register_to_activity($this->ep, $this->activity, $student->id, 3);
+        }
+
+        // Trois demandes sur un EP de deux places : aucune n'a été refusée à l'inscription.
+        $counts = ep_get_activity_registration_counts($this->activity->id);
+        $this->assertSame(3, $counts->pending);
+        $this->assertSame(0, $counts->taken);
+        $this->assertSame(2, ep_get_activity_remaining_places($this->activity));
+
+        foreach ($creditids as $creditid) {
+            ep_accept_registration($this->credit($creditid), $this->owner->id);
+        }
+
+        $counts = ep_get_activity_registration_counts($this->activity->id);
+        $this->assertSame(3, $counts->enrolled);
+        $this->assertSame(3, $counts->taken);
+        $this->assertSame(0, ep_get_activity_remaining_places($this->activity));
     }
 
     /**
@@ -166,6 +240,10 @@ final class catalog_test extends \advanced_testcase {
      */
     public function test_active_registration_blocks_a_second_one(): void {
         $creditid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3);
+        $this->assertNotFalse(ep_get_active_registration($this->activity->id, $this->student->id));
+
+        // Une inscription acceptée en est une, elle aussi.
+        ep_accept_registration($this->credit($creditid), $this->owner->id);
         $this->assertNotFalse(ep_get_active_registration($this->activity->id, $this->student->id));
 
         ep_reject_credit($this->credit($creditid), $this->owner->id, 'Absences répétées');

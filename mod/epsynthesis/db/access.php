@@ -50,6 +50,31 @@ $capabilities = [
         ],
     ],
 
+    // Suivre les EP académiques et leurs inscriptions sur tout le périmètre de la synthèse, et
+    // pas seulement sur les EP dont on est responsable : c'est la vue de la DEVE (« synthèse
+    // générale »). Elle ne donne à voir que ce que les activités liées contiennent déjà — statuer
+    // sur une inscription reste soumis aux droits de l'activité d'origine (mod/ep:validatedeve ou
+    // responsabilité de l'EP).
+    'mod/epsynthesis:viewall' => [
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => [
+            'editingteacher' => CAP_ALLOW,
+            'manager' => CAP_ALLOW,
+        ],
+    ],
+
+    // Définir ici les EP académiques ouverts à plusieurs promotions à la fois, et désigner leurs
+    // responsables.
+    'mod/epsynthesis:manageactivities' => [
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => [
+            'editingteacher' => CAP_ALLOW,
+            'manager' => CAP_ALLOW,
+        ],
+    ],
+
     // Gérer la liste des activités « Enseignement personnalisé » qui remontent ici.
     'mod/epsynthesis:managelinks' => [
         'captype' => 'write',

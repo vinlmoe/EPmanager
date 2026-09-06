@@ -33,6 +33,7 @@ require_once($CFG->dirroot . '/mod/stage/locallib.php');
  * @covers     ::ep_sync_stage_credits
  * @covers     ::ep_get_eligible_stage_entries
  * @covers     ::ep_get_referent_students
+ * @covers     ::ep_get_current_studyyear
  */
 final class stage_sync_test extends \advanced_testcase {
 
@@ -234,5 +235,29 @@ final class stage_sync_test extends \advanced_testcase {
 
         stage_set_student_teachers($this->stage->id, $this->student->id, []);
         $this->assertSame([], ep_get_referent_students($this->ep, $teacher->id));
+    }
+
+    /**
+     * L'année d'étude courante de la promotion est celle de l'activité « Gestion des stages » du
+     * cours : c'est là qu'elle est tenue à jour d'une année sur l'autre, et c'est elle qui dit à
+     * quels EP du catalogue les étudiants peuvent s'inscrire. Le paramètre de l'activité
+     * « Enseignement personnalisé » ne sert que si aucune activité de stage ne la renseigne.
+     */
+    public function test_current_studyyear_comes_from_the_stage_activity(): void {
+        global $DB;
+
+        // Tant que mod_stage ne la renseigne pas, le paramètre de l'activité fait foi.
+        $this->assertSame(3, ep_get_current_studyyear($this->ep));
+
+        $DB->set_field('stage', 'currentstudyyear', 5, ['id' => $this->stage->id]);
+        $this->assertSame(5, ep_get_current_studyyear($this->ep));
+
+        // Et c'est elle qui décide de l'ouverture d'un EP du catalogue à cette promotion.
+        $activity = $this->getDataGenerator()->get_plugin_generator('mod_ep')
+            ->create_activity($this->ep, ['minstudyyear' => 4, 'maxstudyyear' => 5]);
+        $this->assertTrue(ep_activity_open_to_year($activity, ep_get_current_studyyear($this->ep)));
+
+        $DB->set_field('stage', 'currentstudyyear', 2, ['id' => $this->stage->id]);
+        $this->assertFalse(ep_activity_open_to_year($activity, ep_get_current_studyyear($this->ep)));
     }
 }

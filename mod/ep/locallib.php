@@ -44,6 +44,8 @@ function ep_status_label($status) {
             return get_string('status_rejected', 'mod_ep');
         case EP_STATUS_PENDING:
             return get_string('status_pending', 'mod_ep');
+        case EP_STATUS_ENROLLED:
+            return get_string('status_enrolled', 'mod_ep');
         case EP_STATUS_VALIDATED:
             return get_string('status_validated', 'mod_ep');
         default:
@@ -65,6 +67,8 @@ function ep_status_badgeclass($status) {
             return 'badge-danger';
         case EP_STATUS_PENDING:
             return 'badge-info';
+        case EP_STATUS_ENROLLED:
+            return 'badge-primary';
         case EP_STATUS_VALIDATED:
             return 'badge-success';
         default:
@@ -79,7 +83,8 @@ function ep_status_badgeclass($status) {
  */
 function ep_status_options() {
     $options = [];
-    foreach ([EP_STATUS_CANCELLED, EP_STATUS_REJECTED, EP_STATUS_PENDING, EP_STATUS_VALIDATED] as $status) {
+    foreach ([EP_STATUS_CANCELLED, EP_STATUS_REJECTED, EP_STATUS_PENDING, EP_STATUS_ENROLLED,
+            EP_STATUS_VALIDATED] as $status) {
         $options[$status] = ep_status_label($status);
     }
     return $options;
@@ -163,15 +168,39 @@ function ep_studyyear_range_label($minstudyyear, $maxstudyyear) {
 }
 
 /**
+ * Année d'étude courante de la promotion. Elle est lue dans l'activité « Gestion des stages » du
+ * même cours (stage->currentstudyyear), où elle est déjà tenue à jour d'une année sur l'autre :
+ * la ressaisir ici ferait diverger les deux. Le paramètre de l'activité (ep->currentstudyyear) ne
+ * sert que de repli, quand aucune activité « Gestion des stages » liée ne la renseigne.
+ *
+ * C'est cette année qui dit si un étudiant peut s'inscrire à un EP du catalogue (voir
+ * ep_activity_open_to_year()) et quels minimums annuels lui sont déjà exigibles.
+ *
+ * @param stdClass $ep
+ * @return int Année d'étude courante, 0 si elle n'est renseignée nulle part.
+ */
+function ep_get_current_studyyear(stdClass $ep) {
+    $year = 0;
+    foreach (ep_get_linked_stage_instances($ep) as $instance) {
+        // Un cours peut porter plusieurs activités « Gestion des stages » (une d'archive, par
+        // exemple) : la promotion reste la même, on retient l'année la plus avancée qu'elles
+        // annoncent plutôt que celle de la première rencontrée.
+        $year = max($year, (int) ($instance->stage->currentstudyyear ?? 0));
+    }
+
+    return $year ?: (int) $ep->currentstudyyear;
+}
+
+/**
  * Années d'étude qu'un étudiant peut choisir en rattachement d'un EP : l'année courante de
- * l'activité, la précédente (rattrapage) et la suivante (anticipation), comme dans mod_stage.
+ * la promotion, la précédente (rattrapage) et la suivante (anticipation), comme dans mod_stage.
  * Tant que l'année courante n'est pas renseignée, toutes les années sont proposées.
  *
  * @param stdClass $ep
  * @return array int => libellé
  */
 function ep_studyyear_selectable_options(stdClass $ep) {
-    $currentyear = (int) $ep->currentstudyyear;
+    $currentyear = ep_get_current_studyyear($ep);
     if (empty($currentyear)) {
         return ep_studyyear_options();
     }
@@ -327,7 +356,8 @@ function ep_type_option_label(stdClass $type) {
 // ---------------------------------------------------------------------------------------------
 
 /**
- * EP du catalogue d'une instance.
+ * EP du catalogue propres à une instance (par opposition aux EP partagés, définis dans une
+ * activité « Suivi de l'enseignement personnalisé » — voir ep_get_shared_activities()).
  *
  * @param int $epid
  * @param bool $onlyvisible
@@ -336,11 +366,254 @@ function ep_type_option_label(stdClass $type) {
 function ep_get_activities($epid, $onlyvisible = false) {
     global $DB;
 
-    $conditions = ['epid' => $epid];
+    $conditions = ['epid' => $epid, 'synthesiscmid' => 0];
     if ($onlyvisible) {
         $conditions['visible'] = 1;
     }
     return $DB->get_records('ep_activity', $conditions, 'sortorder ASC, name ASC');
+}
+
+/**
+ * Indique si un EP du catalogue est partagé, c'est-à-dire défini dans une activité « Suivi de
+ * l'enseignement personnalisé » et ouvert à toutes les promotions qu'elle suit, plutôt que propre
+ * à une seule promotion.
+ *
+ * @param stdClass $activity
+ * @return bool
+ */
+function ep_activity_is_shared(stdClass $activity) {
+    return !empty($activity->synthesiscmid);
+}
+
+/**
+ * Course-module de l'instance mod_ep donnée : les EP partagés sont rattachés aux synthèses par
+ * course-module, pas par identifiant d'instance.
+ *
+ * @param stdClass $ep
+ * @return stdClass|false
+ */
+function ep_get_cm(stdClass $ep) {
+    return get_coursemodule_from_instance('ep', $ep->id, 0, false, IGNORE_MISSING);
+}
+
+/**
+ * Activités « Suivi de l'enseignement personnalisé » qui suivent cette instance, identifiées par
+ * leur course-module : ce sont elles qui peuvent lui proposer des EP partagés. La liaison est
+ * celle que la synthèse a elle-même déclarée (epsynthesis_link) — l'instance mod_ep n'a rien à
+ * paramétrer de son côté, et rien n'est écrit dans les tables de la synthèse.
+ *
+ * @param stdClass $ep
+ * @return int[] Course-modules d'activités mod_epsynthesis, sans doublon.
+ */
+function ep_get_synthesis_cmids(stdClass $ep) {
+    global $DB;
+
+    // mod_epsynthesis est facultatif : sans lui, il n'y a pas d'EP partagé, et le catalogue se
+    // limite aux EP propres à la promotion.
+    if (!$DB->get_manager()->table_exists('epsynthesis_link')) {
+        return [];
+    }
+
+    $cm = ep_get_cm($ep);
+    if (!$cm) {
+        return [];
+    }
+
+    $sql = "SELECT DISTINCT scm.id
+              FROM {epsynthesis_link} l
+              JOIN {epsynthesis} s ON s.id = l.synthesisid
+              JOIN {course_modules} scm ON scm.instance = s.id
+              JOIN {modules} m ON m.id = scm.module AND m.name = 'epsynthesis'
+             WHERE l.epcmid = :epcmid";
+
+    return array_map('intval', array_keys($DB->get_records_sql($sql, ['epcmid' => $cm->id])));
+}
+
+/**
+ * EP partagés définis dans les synthèses données.
+ *
+ * @param int[] $synthesiscmids Voir ep_get_synthesis_cmids().
+ * @param bool $onlyvisible
+ * @return array id => stdClass
+ */
+function ep_get_shared_activities(array $synthesiscmids, $onlyvisible = false) {
+    global $DB;
+
+    if (empty($synthesiscmids)) {
+        return [];
+    }
+
+    [$insql, $params] = $DB->get_in_or_equal($synthesiscmids, SQL_PARAMS_NAMED, 'sc');
+    $where = "synthesiscmid $insql";
+    if ($onlyvisible) {
+        $where .= ' AND visible = 1';
+    }
+
+    return $DB->get_records_select('ep_activity', $where, $params, 'sortorder ASC, name ASC');
+}
+
+/**
+ * Catalogue complet proposé aux étudiants d'une instance : les EP propres à leur promotion et les
+ * EP partagés des synthèses qui la suivent, présentés ensemble — l'étudiant n'a pas à savoir où
+ * chaque EP a été défini.
+ *
+ * @param stdClass $ep
+ * @param bool $onlyvisible
+ * @return array id => stdClass
+ */
+function ep_get_catalog_activities(stdClass $ep, $onlyvisible = false) {
+    $activities = ep_get_activities($ep->id, $onlyvisible)
+        + ep_get_shared_activities(ep_get_synthesis_cmids($ep), $onlyvisible);
+
+    uasort($activities, function($a, $b) {
+        return [(int) $a->sortorder, core_text::strtolower($a->name)]
+            <=> [(int) $b->sortorder, core_text::strtolower($b->name)];
+    });
+
+    return $activities;
+}
+
+/**
+ * Charge un EP du catalogue en vérifiant qu'il est bien proposé à l'instance donnée : soit il lui
+ * appartient, soit il est partagé par une synthèse qui la suit. Un identifiant forgé ne doit pas
+ * permettre d'inscrire un étudiant à un EP d'une autre promotion.
+ *
+ * @param stdClass $ep
+ * @param int $activityid
+ * @return stdClass|null
+ */
+function ep_get_catalog_activity(stdClass $ep, $activityid) {
+    global $DB;
+
+    $activity = $DB->get_record('ep_activity', ['id' => $activityid]);
+    if (!$activity) {
+        return null;
+    }
+    if (!ep_activity_is_shared($activity)) {
+        return (int) $activity->epid === (int) $ep->id ? $activity : null;
+    }
+
+    return in_array((int) $activity->synthesiscmid, ep_get_synthesis_cmids($ep), true) ? $activity : null;
+}
+
+/**
+ * Tous les EP partagés de la plateforme, associés à la synthèse qui les définit
+ * (id => synthesiscmid). Sert aux listes qui doivent distinguer, ligne à ligne, une inscription à
+ * un EP partagé d'une inscription à un EP de promotion, et savoir où la traiter, sans une requête
+ * par ligne. La liste est courte et ne change pas en cours de page : elle n'est chargée qu'une
+ * fois.
+ *
+ * @return array activityid => synthesiscmid
+ */
+function ep_get_shared_activity_owners() {
+    global $DB;
+
+    static $owners = null;
+
+    // Le cache ne vaut que pour la page en cours ; sous PHPUnit, où les données sont réinitialisées
+    // entre deux tests sans que le processus change, il serait faux dès le second test.
+    if ($owners === null || (defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
+        $owners = array_map('intval', $DB->get_records_select_menu('ep_activity',
+            'synthesiscmid > 0', null, '', 'id, synthesiscmid'));
+    }
+    return $owners;
+}
+
+/**
+ * Charge un EP partagé en vérifiant qu'il est bien défini dans la synthèse donnée : sans cette
+ * vérification, un identifiant forgé permettrait de modifier depuis une synthèse un EP défini
+ * dans une autre.
+ *
+ * @param int $synthesiscmid Course-module de l'activité mod_epsynthesis.
+ * @param int $activityid
+ * @return stdClass|null
+ */
+function ep_get_shared_activity($synthesiscmid, $activityid) {
+    global $DB;
+
+    $activity = $DB->get_record('ep_activity',
+        ['id' => $activityid, 'synthesiscmid' => $synthesiscmid]);
+
+    return $activity ?: null;
+}
+
+/**
+ * Crée ou met à jour un EP partagé défini dans une synthèse. Un EP partagé n'appartient à aucune
+ * promotion (epid = 0) et ne désigne aucun type (typeid = 0) : c'est le type académique interne
+ * de l'instance de chaque étudiant qui s'applique, avec les plafonds de sa promotion.
+ *
+ * @param int $synthesiscmid Course-module de l'activité mod_epsynthesis.
+ * @param stdClass $data name, description, ects, minstudyyear, maxstudyyear, capacity, sortorder,
+ *                      visible, et activityid pour une modification.
+ * @return int Identifiant de l'EP enregistré.
+ */
+function ep_save_shared_activity($synthesiscmid, stdClass $data) {
+    global $DB;
+
+    $record = (object) [
+        'epid' => 0,
+        'synthesiscmid' => (int) $synthesiscmid,
+        'typeid' => 0,
+        'name' => $data->name,
+        'description' => (string) ($data->description ?? ''),
+        'ects' => round((float) $data->ects, 2),
+        'minstudyyear' => (int) $data->minstudyyear,
+        'maxstudyyear' => (int) $data->maxstudyyear,
+        'capacity' => max(0, (int) $data->capacity),
+        'sortorder' => (int) $data->sortorder,
+        'visible' => !empty($data->visible) ? 1 : 0,
+        'timemodified' => time(),
+    ];
+
+    if (!empty($data->activityid)) {
+        $record->id = (int) $data->activityid;
+        $DB->update_record('ep_activity', $record);
+        return $record->id;
+    }
+
+    $record->timecreated = time();
+    return $DB->insert_record('ep_activity', $record);
+}
+
+/**
+ * Supprime un EP du catalogue et l'affectation de ses responsables. La suppression est refusée
+ * dès qu'une inscription y porte : les crédits déjà accordés perdraient l'EP auquel ils se
+ * rattachent. Fermer l'EP aux inscriptions (visible = 0) est ce qu'il faut faire dans ce cas.
+ *
+ * @param int $activityid
+ * @return bool Faux si l'EP est utilisé et n'a donc pas été supprimé.
+ */
+function ep_delete_activity($activityid) {
+    global $DB;
+
+    if ($DB->record_exists('ep_credit', ['activityid' => $activityid])) {
+        return false;
+    }
+
+    $DB->delete_records('ep_activity_teacher', ['activityid' => $activityid]);
+    $DB->delete_records('ep_activity', ['id' => $activityid]);
+
+    return true;
+}
+
+/**
+ * Type d'EP sous lequel un EP du catalogue est porté au crédit d'un étudiant de l'instance
+ * donnée. Un EP propre à la promotion désigne lui-même son type ; un EP partagé n'en désigne
+ * aucun — les types sont propres à chaque instance — et relève du type académique interne de
+ * l'instance de l'étudiant, c'est-à-dire de ses plafonds à lui.
+ *
+ * @param stdClass $ep
+ * @param stdClass $activity
+ * @return stdClass|null Le type, ou null s'il n'existe pas (ou plus) dans cette instance.
+ */
+function ep_get_activity_type(stdClass $ep, stdClass $activity) {
+    global $DB;
+
+    if (ep_activity_is_shared($activity)) {
+        return ep_get_type_by_code($ep->id, EP_TYPE_ACADEMIC) ?: null;
+    }
+
+    return $DB->get_record('ep_type', ['id' => $activity->typeid, 'epid' => $ep->id]) ?: null;
 }
 
 /**
@@ -402,42 +675,80 @@ function ep_is_activity_teacher($activityid, $userid) {
 }
 
 /**
- * EP du catalogue dont un utilisateur est responsable, dans une instance donnée.
+ * EP dont un utilisateur est responsable parmi ceux que propose une instance donnée : les EP
+ * propres à cette promotion comme les EP partagés des synthèses qui la suivent.
  *
- * @param int $epid
+ * @param stdClass $ep
  * @param int $userid
  * @return array id => stdClass
  */
-function ep_get_responsible_activities($epid, $userid) {
+function ep_get_responsible_activities(stdClass $ep, $userid) {
     global $DB;
 
-    $sql = "SELECT a.*
-              FROM {ep_activity} a
-              JOIN {ep_activity_teacher} at ON at.activityid = a.id
-             WHERE a.epid = :epid AND at.teacherid = :userid
-          ORDER BY a.sortorder ASC, a.name ASC";
+    $activities = ep_get_catalog_activities($ep);
+    if (empty($activities)) {
+        return [];
+    }
 
-    return $DB->get_records_sql($sql, ['epid' => $epid, 'userid' => $userid]);
+    [$insql, $params] = $DB->get_in_or_equal(array_keys($activities), SQL_PARAMS_NAMED, 'a');
+    $params['userid'] = $userid;
+    $responsible = $DB->get_fieldset_select('ep_activity_teacher', 'activityid',
+        "activityid $insql AND teacherid = :userid", $params);
+
+    return array_intersect_key($activities, array_flip(array_map('intval', $responsible)));
 }
 
 /**
- * Nombre de places occupées sur un EP du catalogue : les inscriptions validées et celles encore
- * en attente. Les inscriptions en attente sont comptées à dessein — ouvrir plus de places que ce
- * que le responsable pourra valider reviendrait à promettre une place qui n'existe pas.
+ * Décompte des inscriptions d'un EP du catalogue, par état du circuit : demandées (en attente de
+ * la décision du responsable), acceptées (l'étudiant suit l'EP, ses ECTS ne sont pas encore
+ * acquis), validées (ECTS acquis), refusées et retirées.
+ *
+ * @param int $activityid
+ * @return stdClass {pending, enrolled, validated, rejected, cancelled, taken}
+ *                  'taken' : places occupées, c'est-à-dire inscriptions acceptées puis validées.
+ */
+function ep_get_activity_registration_counts($activityid) {
+    global $DB;
+
+    $sql = "SELECT status, COUNT(1) AS nb
+              FROM {ep_credit}
+             WHERE activityid = :activityid
+          GROUP BY status";
+    $rows = $DB->get_records_sql($sql, ['activityid' => $activityid]);
+
+    $count = function($status) use ($rows) {
+        return isset($rows[$status]) ? (int) $rows[$status]->nb : 0;
+    };
+
+    $counts = (object) [
+        'pending' => $count(EP_STATUS_PENDING),
+        'enrolled' => $count(EP_STATUS_ENROLLED),
+        'validated' => $count(EP_STATUS_VALIDATED),
+        'rejected' => $count(EP_STATUS_REJECTED),
+        'cancelled' => $count(EP_STATUS_CANCELLED),
+    ];
+    $counts->taken = $counts->enrolled + $counts->validated;
+
+    return $counts;
+}
+
+/**
+ * Nombre de places occupées sur un EP du catalogue : les inscriptions que le responsable a
+ * acceptées, et celles dont il a déjà validé les ECTS. Les inscriptions encore en attente n'en
+ * occupent aucune — s'inscrire n'est pas limité au nombre de places, c'est le responsable qui
+ * arbitre ensuite qui garde la sienne.
  *
  * @param int $activityid
  * @return int
  */
 function ep_get_activity_taken_places($activityid) {
-    global $DB;
-
-    [$insql, $inparams] = $DB->get_in_or_equal([EP_STATUS_PENDING, EP_STATUS_VALIDATED], SQL_PARAMS_NAMED, 'st');
-    return $DB->count_records_select('ep_credit',
-        "activityid = :activityid AND status $insql", ['activityid' => $activityid] + $inparams);
+    return ep_get_activity_registration_counts($activityid)->taken;
 }
 
 /**
- * Places restantes sur un EP du catalogue, ou null s'il n'a pas de limite.
+ * Places restantes sur un EP du catalogue, ou null s'il n'a pas de limite. Une valeur nulle ou
+ * négative n'interdit pas d'accepter une inscription de plus : le nombre de places est un repère
+ * donné au responsable, pas un verrou (voir ep_accept_registration()).
  *
  * @param stdClass $activity
  * @return int|null
@@ -473,8 +784,8 @@ function ep_activity_open_to_year(stdClass $activity, $studyyear) {
 
 /**
  * Inscription en cours d'un étudiant sur un EP du catalogue, s'il en a une qui compte encore
- * (en attente ou validée). Une inscription annulée ou refusée n'en est pas une : elle n'empêche
- * pas de se réinscrire.
+ * (demandée, acceptée ou validée). Une inscription annulée ou refusée n'en est pas une : elle
+ * n'empêche pas de se réinscrire.
  *
  * @param int $activityid
  * @param int $userid
@@ -483,7 +794,8 @@ function ep_activity_open_to_year(stdClass $activity, $studyyear) {
 function ep_get_active_registration($activityid, $userid) {
     global $DB;
 
-    [$insql, $inparams] = $DB->get_in_or_equal([EP_STATUS_PENDING, EP_STATUS_VALIDATED], SQL_PARAMS_NAMED, 'st');
+    [$insql, $inparams] = $DB->get_in_or_equal(
+        [EP_STATUS_PENDING, EP_STATUS_ENROLLED, EP_STATUS_VALIDATED], SQL_PARAMS_NAMED, 'st');
     $records = $DB->get_records_select('ep_credit',
         "activityid = :activityid AND userid = :userid AND status $insql",
         ['activityid' => $activityid, 'userid' => $userid] + $inparams, 'timecreated DESC', '*', 0, 1);
@@ -629,6 +941,10 @@ function ep_create_credit(stdClass $ep, $userid, stdClass $type, array $data) {
  * Inscrit un étudiant à un EP du catalogue. Le nombre d'ECTS demandé est celui de l'EP : il n'est
  * pas au choix de l'étudiant, c'est l'EP qui le porte.
  *
+ * L'inscription n'est pas limitée au nombre de places : tout étudiant à qui l'EP est ouvert peut
+ * la demander, et c'est le responsable qui arbitre ensuite lesquelles il retient (voir
+ * ep_accept_registration()). Elle ne donne aucun ECTS — ils sont validés à la fin de l'EP.
+ *
  * @param stdClass $ep
  * @param stdClass $activity
  * @param int $userid
@@ -636,9 +952,10 @@ function ep_create_credit(stdClass $ep, $userid, stdClass $type, array $data) {
  * @return int Identifiant du crédit créé.
  */
 function ep_register_to_activity(stdClass $ep, stdClass $activity, $userid, $studyyear) {
-    global $DB;
-
-    $type = $DB->get_record('ep_type', ['id' => $activity->typeid], '*', MUST_EXIST);
+    $type = ep_get_activity_type($ep, $activity);
+    if (!$type) {
+        throw new moodle_exception('errorinvalidtype', 'mod_ep');
+    }
 
     return ep_create_credit($ep, $userid, $type, [
         'activityid' => $activity->id,
@@ -648,6 +965,76 @@ function ep_register_to_activity(stdClass $ep, stdClass $activity, $userid, $stu
         'claimedects' => $activity->ects,
         'source' => EP_SOURCE_STUDENT,
     ]);
+}
+
+/**
+ * Accepte l'inscription d'un étudiant à un EP du catalogue : il y a sa place et le suit, sans
+ * qu'aucun ECTS ne lui soit encore acquis — ils le seront à la fin de l'EP, quand le responsable
+ * validera ce qu'il y a fait (voir ep_validate_credit()).
+ *
+ * Le nombre de places n'est pas vérifié ici : il est donné au responsable comme repère, à lui de
+ * décider s'il accepte un étudiant de plus. Le refuser d'office l'obligerait à fermer l'EP ou à
+ * en relever la capacité pour un cas particulier.
+ *
+ * @param stdClass $credit
+ * @param int $byuserid
+ * @param string $comment
+ * @return void
+ */
+function ep_accept_registration(stdClass $credit, $byuserid, $comment = '') {
+    global $DB;
+
+    $credit->status = EP_STATUS_ENROLLED;
+    $credit->retainedects = 0;
+    $credit->validatedby = $byuserid;
+    $credit->validatetime = time();
+    $credit->validatorcomment = $comment;
+    $credit->timemodified = time();
+
+    $DB->update_record('ep_credit', $credit);
+}
+
+/**
+ * Indique si un crédit vient d'une inscription à un EP du catalogue — par opposition à une
+ * déclaration hors catalogue ou à une attribution automatique. Ce sont les seuls crédits à passer
+ * par l'étape d'acceptation de l'inscription avant la validation des ECTS.
+ *
+ * @param stdClass $credit
+ * @return bool
+ */
+function ep_credit_is_registration(stdClass $credit) {
+    return !empty($credit->activityid);
+}
+
+/**
+ * Indique si la décision attendue sur un crédit est l'acceptation de l'inscription — la première
+ * étape du circuit académique — plutôt que la validation des ECTS.
+ *
+ * @param stdClass $credit
+ * @return bool
+ */
+function ep_credit_is_registration_step(stdClass $credit) {
+    return ep_credit_is_registration($credit) && (int) $credit->status === EP_STATUS_PENDING;
+}
+
+/**
+ * Statuts sur lesquels une décision reste à prendre : une inscription demandée (l'accepter ou la
+ * refuser) et une inscription acceptée (valider ses ECTS à la fin de l'EP, ou la refuser).
+ *
+ * @return int[]
+ */
+function ep_credit_open_statuses() {
+    return [EP_STATUS_PENDING, EP_STATUS_ENROLLED];
+}
+
+/**
+ * Indique si un crédit attend encore une décision.
+ *
+ * @param stdClass $credit
+ * @return bool
+ */
+function ep_credit_awaits_decision(stdClass $credit) {
+    return in_array((int) $credit->status, ep_credit_open_statuses(), true);
 }
 
 /**
@@ -722,11 +1109,17 @@ function ep_cancel_credit(stdClass $credit, $byuserid, $comment = '') {
 /**
  * Détermine qui a le droit de statuer sur un crédit donné.
  *
- * Un crédit issu du catalogue relève de son responsable, et de lui seul : c'est lui qui sait si
- * l'étudiant a suivi son EP. Un crédit déclaré hors catalogue (engagement, expérience
- * professionnelle, sport, académique externe) relève de l'enseignant référent de l'étudiant, tel
- * qu'il est déjà défini dans l'activité « Gestion des stages » du même cours. Dans les deux cas,
- * la DEVE (mod/ep:validatedeve) peut statuer, notamment quand aucun référent n'est attribué.
+ * Un crédit issu du catalogue relève de son responsable, et de lui seul : c'est lui qui accepte
+ * l'inscription, puis qui sait, à la fin de l'EP, si l'étudiant l'a suivi. Un crédit déclaré hors
+ * catalogue (engagement, expérience professionnelle, sport, académique externe) relève de
+ * l'enseignant référent de l'étudiant, tel qu'il est déjà défini dans l'activité « Gestion des
+ * stages » du même cours. Dans les deux cas, la DEVE (mod/ep:validatedeve) peut statuer,
+ * notamment quand aucun référent n'est attribué.
+ *
+ * Un EP partagé fait exception au rôle du cours : son responsable statue sur ses inscriptions
+ * quelle que soit la promotion de l'étudiant, sans avoir de rôle dans le cours de celle-ci —
+ * c'est ce que la DEVE lui délègue en le désignant responsable d'un EP ouvert à plusieurs
+ * promotions.
  *
  * Un crédit attribué automatiquement n'est validable par personne : il n'y a rien à vérifier, et
  * une validation manuelle serait de toute façon écrasée à la synchronisation suivante.
@@ -738,7 +1131,7 @@ function ep_cancel_credit(stdClass $credit, $byuserid, $comment = '') {
  * @return bool
  */
 function ep_can_validate_credit(stdClass $ep, stdClass $credit, context $context, $userid = null) {
-    global $USER;
+    global $DB, $USER;
 
     $userid = $userid ?: $USER->id;
 
@@ -748,13 +1141,24 @@ function ep_can_validate_credit(stdClass $ep, stdClass $credit, context $context
     if (has_capability('mod/ep:validatedeve', $context, $userid)) {
         return true;
     }
+
+    if (ep_credit_is_registration($credit)) {
+        $activity = $DB->get_record('ep_activity', ['id' => $credit->activityid]);
+        if (!$activity || !ep_is_activity_teacher($activity->id, $userid)) {
+            return false;
+        }
+        // Un EP partagé s'adresse à plusieurs promotions : son responsable statue sur toutes ses
+        // inscriptions, y compris celles d'étudiants d'un cours où il n'a lui-même aucun rôle —
+        // c'est précisément ce que la DEVE lui délègue en le désignant responsable. Un EP propre
+        // à une promotion reste soumis au droit de valider dans cette promotion.
+        return ep_activity_is_shared($activity)
+            || has_capability('mod/ep:evaluateteacher', $context, $userid);
+    }
+
     if (!has_capability('mod/ep:evaluateteacher', $context, $userid)) {
         return false;
     }
 
-    if (!empty($credit->activityid)) {
-        return ep_is_activity_teacher($credit->activityid, $userid);
-    }
     return in_array((int) $credit->userid, ep_get_referent_students($ep, $userid), true);
 }
 
@@ -1092,7 +1496,10 @@ function ep_get_student_progress(stdClass $ep, $userid) {
         if ((int) $credit->status === EP_STATUS_VALIDATED) {
             $validated[$typeid][$year] = ($validated[$typeid][$year] ?? 0) + (float) $credit->retainedects;
             $years[$year] = true;
-        } else if ((int) $credit->status === EP_STATUS_PENDING) {
+        } else if (ep_credit_awaits_decision($credit)) {
+            // Une inscription acceptée par le responsable compte ici, avec les demandes encore en
+            // attente : l'étudiant suit l'EP, mais ses ECTS ne seront acquis qu'à la validation
+            // de fin d'EP.
             $pending[$typeid] = ($pending[$typeid] ?? 0) + (float) $credit->claimedects;
             $years[$year] = true;
         }
@@ -1198,20 +1605,22 @@ function ep_get_student_progress(stdClass $ep, $userid) {
 
 /**
  * Ne retient, parmi les bilans annuels, que les années déjà exigibles : l'année d'étude courante
- * de l'activité et les précédentes. Les objectifs des années à venir ne sont pas encore dus —
- * les compter ferait apparaître en retard toute une promotion qui est parfaitement à jour. Tant
- * que l'année courante n'est pas renseignée, toutes les années sont retenues.
+ * de la promotion (voir ep_get_current_studyyear()) et les précédentes. Les objectifs des années
+ * à venir ne sont pas encore dus — les compter ferait apparaître en retard toute une promotion
+ * qui est parfaitement à jour. Tant que l'année courante n'est pas renseignée, toutes les années
+ * sont retenues.
  *
  * @param stdClass $ep
  * @param array $yearrows Bilans annuels de ep_get_student_progress().
  * @return array Sous-ensemble de $yearrows.
  */
 function ep_filter_due_years(stdClass $ep, array $yearrows) {
-    if (empty($ep->currentstudyyear)) {
+    $currentyear = ep_get_current_studyyear($ep);
+    if (empty($currentyear)) {
         return $yearrows;
     }
-    return array_filter($yearrows, function($row) use ($ep) {
-        return $row->studyyear <= $ep->currentstudyyear;
+    return array_filter($yearrows, function($row) use ($currentyear) {
+        return $row->studyyear <= $currentyear;
     });
 }
 
@@ -1237,7 +1646,7 @@ function ep_get_pilotage_overview(stdClass $ep, context $context, ?array $restri
         $credits = ep_get_student_credits($ep->id, $student->id);
         $pending = 0;
         foreach ($credits as $credit) {
-            if ((int) $credit->status === EP_STATUS_PENDING) {
+            if (ep_credit_awaits_decision($credit)) {
                 $pending++;
             }
         }
@@ -1379,6 +1788,69 @@ function ep_get_filtered_credits($epid, array $filters = [], $sort = 'timecreate
 }
 
 /**
+ * Inscriptions portant sur un EP du catalogue, toutes promotions confondues : un EP partagé est
+ * défini une fois et suivi par des étudiants de plusieurs instances mod_ep, chacun avec son
+ * dossier d'ECTS. Chaque ligne porte donc, en plus du crédit, l'étudiant, la promotion d'origine
+ * et le course-module de son activité — nécessaire pour ouvrir sa fiche de validation.
+ *
+ * @param int $activityid
+ * @param array $filters ['search' => nom étudiant, 'status' => int|'', 'studyyear' => int|'']
+ * @param string $sort 'student', 'course', 'studyyear', 'status' ou 'timecreated'.
+ * @param string $dir 'ASC' ou 'DESC'.
+ * @return array id => stdClass Crédit enrichi de studentfullname, epname, coursename, cmid.
+ */
+function ep_get_activity_registrations($activityid, array $filters = [], $sort = 'student', $dir = 'ASC') {
+    global $DB;
+
+    $params = ['activityid' => $activityid];
+    $where = ['c.activityid = :activityid'];
+
+    if (!empty($filters['search'])) {
+        $fullname = $DB->sql_concat('u.firstname', "' '", 'u.lastname');
+        $where[] = $DB->sql_like($fullname, ':search', false, false);
+        $params['search'] = '%' . $DB->sql_like_escape($filters['search']) . '%';
+    }
+    if (isset($filters['status']) && $filters['status'] !== '') {
+        $where[] = 'c.status = :status';
+        $params['status'] = (int) $filters['status'];
+    }
+    if (isset($filters['studyyear']) && $filters['studyyear'] !== '') {
+        $where[] = 'c.studyyear = :studyyear';
+        $params['studyyear'] = (int) $filters['studyyear'];
+    }
+
+    $sortmap = [
+        'student' => 'u.lastname, u.firstname',
+        'course' => 'co.fullname',
+        'studyyear' => 'c.studyyear',
+        'status' => 'c.status',
+        'timecreated' => 'c.timecreated',
+    ];
+    $sortcolumn = $sortmap[$sort] ?? $sortmap['student'];
+    $dir = strtoupper($dir) === 'DESC' ? 'DESC' : 'ASC';
+
+    $sql = "SELECT c.*, e.name AS epname, co.id AS courseid, co.fullname AS coursename, cm.id AS cmid
+              FROM {ep_credit} c
+              JOIN {user} u ON u.id = c.userid
+              JOIN {ep} e ON e.id = c.epid
+              JOIN {course} co ON co.id = e.course
+              JOIN {modules} m ON m.name = 'ep'
+              JOIN {course_modules} cm ON cm.instance = e.id AND cm.module = m.id
+             WHERE " . implode(' AND ', $where) . "
+          ORDER BY $sortcolumn $dir, c.id ASC";
+
+    $rows = $DB->get_records_sql($sql, $params);
+
+    $students = ep_get_credit_users($rows);
+    foreach ($rows as $row) {
+        $student = $students[$row->userid] ?? null;
+        $row->studentfullname = $student ? fullname($student) : '-';
+    }
+
+    return $rows;
+}
+
+/**
  * Charge en une requête les étudiants concernés par une liste de crédits.
  *
  * @param array $credits
@@ -1408,10 +1880,11 @@ function ep_get_credit_users(array $credits) {
  * @param stdClass $ep
  * @param context $context
  * @param int|null $userid Utilisateur courant par défaut.
- * @return stdClass {validatedeve, viewall, manage, evaluateteacher, referentids, responsibleids}
+ * @return stdClass {validatedeve, viewall, manage, evaluateteacher, referentids, responsibleids,
+ *                   responsibleactivities}
  */
 function ep_get_user_rights(stdClass $ep, context $context, $userid = null) {
-    global $USER;
+    global $DB, $USER;
 
     $userid = $userid ?: $USER->id;
 
@@ -1423,11 +1896,20 @@ function ep_get_user_rights(stdClass $ep, context $context, $userid = null) {
         'evaluateteacher' => has_capability('mod/ep:evaluateteacher', $context, $userid),
         'referentids' => [],
         'responsibleids' => [],
+        'responsibleactivities' => [],
     ];
 
     if ($rights->evaluateteacher) {
         $rights->referentids = ep_get_referent_students($ep, $userid);
-        $rights->responsibleids = array_map('intval', array_keys(ep_get_responsible_activities($ep->id, $userid)));
+    }
+
+    // La responsabilité d'un EP partagé ne suppose pas de rôle enseignant dans cette promotion
+    // (voir ep_can_validate_credit()) : elle est donc cherchée pour tout le monde, mais seulement
+    // après avoir vérifié d'un coup que l'utilisateur est responsable de quelque chose — la table
+    // est courte, et cela évite trois requêtes à chaque page ouverte par un étudiant.
+    if ($rights->evaluateteacher || $DB->record_exists('ep_activity_teacher', ['teacherid' => $userid])) {
+        $rights->responsibleactivities = ep_get_responsible_activities($ep, $userid);
+        $rights->responsibleids = array_map('intval', array_keys($rights->responsibleactivities));
     }
 
     return $rights;
@@ -1448,13 +1930,36 @@ function ep_rights_can_validate(stdClass $rights, stdClass $credit) {
     if ($rights->validatedeve) {
         return true;
     }
+    if (ep_credit_is_registration($credit)) {
+        $activity = $rights->responsibleactivities[(int) $credit->activityid] ?? null;
+        if (!$activity) {
+            return false;
+        }
+        return ep_activity_is_shared($activity) || $rights->evaluateteacher;
+    }
+
     if (!$rights->evaluateteacher) {
         return false;
     }
-    if (!empty($credit->activityid)) {
-        return in_array((int) $credit->activityid, $rights->responsibleids, true);
-    }
     return in_array((int) $credit->userid, $rights->referentids, true);
+}
+
+/**
+ * Indique si l'utilisateur est responsable d'au moins un EP partagé dans cette instance. Cette
+ * responsabilité vaut par elle-même, sans rôle enseignant dans la promotion de l'étudiant : c'est
+ * ce qui permet à un EP ouvert à plusieurs promotions d'avoir un seul responsable (voir
+ * ep_can_validate_credit()).
+ *
+ * @param stdClass $rights Voir ep_get_user_rights().
+ * @return bool
+ */
+function ep_rights_has_shared_responsibility(stdClass $rights) {
+    foreach ($rights->responsibleactivities as $activity) {
+        if (ep_activity_is_shared($activity)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -1472,18 +1977,22 @@ function ep_rights_has_validation_scope(stdClass $rights) {
 }
 
 /**
- * Crédits en attente de la décision de l'utilisateur : ses inscriptions à valider comme
- * responsable d'EP, et les déclarations de ses étudiants à valider comme enseignant référent. La
- * DEVE voit toutes les demandes en attente.
+ * Crédits en attente de la décision de l'utilisateur : les inscriptions aux EP dont il est
+ * responsable — celles à accepter, puis celles dont il reste à valider les ECTS en fin d'EP — et
+ * les déclarations de ses étudiants à valider comme enseignant référent. La DEVE voit toutes les
+ * demandes en attente.
  *
  * @param stdClass $ep
  * @param stdClass $rights Voir ep_get_user_rights().
  * @param string $sort
  * @param string $dir
+ * @param int $status Étape attendue : EP_STATUS_PENDING (décision à prendre sur la demande) ou
+ *                    EP_STATUS_ENROLLED (ECTS à valider en fin d'EP).
  * @return array
  */
-function ep_get_credits_awaiting($ep, stdClass $rights, $sort = 'timecreated', $dir = 'ASC') {
-    $filters = ['status' => EP_STATUS_PENDING];
+function ep_get_credits_awaiting($ep, stdClass $rights, $sort = 'timecreated', $dir = 'ASC',
+        $status = EP_STATUS_PENDING) {
+    $filters = ['status' => $status];
 
     if ($rights->validatedeve) {
         return ep_get_filtered_credits($ep->id, $filters, $sort, $dir);
@@ -1523,6 +2032,78 @@ function ep_render_actions(array $links, $class = 'btn btn-sm btn-secondary mr-1
         $out .= html_writer::link($url, $label, ['class' => $class]);
     }
     return $out !== '' ? $out : $empty;
+}
+
+/**
+ * Rend la cellule « Places » d'un EP du catalogue : les places occupées rapportées à la capacité,
+ * et la mention « complet » quand elles le sont toutes — un repère pour le responsable, pas un
+ * verrou : il reste libre d'accepter une inscription de plus.
+ *
+ * @param stdClass $activity
+ * @param stdClass|null $counts Voir ep_get_activity_registration_counts() ; calculé si absent.
+ * @return string HTML
+ */
+function ep_render_places_cell(stdClass $activity, ?stdClass $counts = null) {
+    if (empty($activity->capacity)) {
+        return get_string('unlimitedplaces', 'mod_ep');
+    }
+
+    $counts = $counts ?: ep_get_activity_registration_counts($activity->id);
+    $cell = get_string('placestaken', 'mod_ep',
+        (object) ['taken' => $counts->taken, 'total' => $activity->capacity]);
+
+    if ($counts->taken >= (int) $activity->capacity) {
+        $cell .= ' ' . html_writer::span(get_string('activityfull', 'mod_ep'), 'badge badge-warning');
+    }
+    return $cell;
+}
+
+/**
+ * Rend le décompte des inscriptions d'un EP du catalogue, étape par étape : ce qui attend une
+ * décision, ce qui est accepté et suivi, ce dont les ECTS sont acquis. Un total unique masquerait
+ * précisément ce que le responsable a encore à faire.
+ *
+ * @param stdClass $counts Voir ep_get_activity_registration_counts().
+ * @return string HTML
+ */
+function ep_render_registration_counts(stdClass $counts) {
+    $badges = [];
+    if ($counts->pending > 0) {
+        $badges[] = html_writer::span(get_string('countpending', 'mod_ep', $counts->pending), 'badge badge-info');
+    }
+    if ($counts->enrolled > 0) {
+        $badges[] = html_writer::span(get_string('countenrolled', 'mod_ep', $counts->enrolled),
+            'badge badge-primary');
+    }
+    if ($counts->validated > 0) {
+        $badges[] = html_writer::span(get_string('countvalidated', 'mod_ep', $counts->validated),
+            'badge badge-success');
+    }
+
+    return empty($badges) ? '-' : implode(' ', $badges);
+}
+
+/**
+ * Rend l'origine d'un EP partagé : l'activité « Suivi de l'enseignement personnalisé » où il est
+ * défini, avec le lien vers sa gestion. C'est là, et nulle part ailleurs, qu'il se modifie.
+ *
+ * @param stdClass $activity
+ * @return string HTML
+ */
+function ep_render_shared_activity_origin(stdClass $activity) {
+    if (!ep_activity_is_shared($activity)) {
+        return '-';
+    }
+
+    $cm = get_coursemodule_from_id('epsynthesis', $activity->synthesiscmid, 0, false, IGNORE_MISSING);
+    if (!$cm) {
+        // Synthèse supprimée : l'EP reste au catalogue des promotions qui l'ont déjà pris, mais
+        // plus personne ne peut le modifier — mieux vaut le dire que d'afficher un lien mort.
+        return html_writer::span(get_string('sharedactivityorphan', 'mod_ep'), 'text-muted');
+    }
+
+    $url = new moodle_url('/mod/epsynthesis/activities.php', ['id' => $cm->id]);
+    return html_writer::link($url, format_string($cm->name));
 }
 
 /**
@@ -1810,6 +2391,21 @@ function ep_render_evidence_files(stdClass $cm, context $context, stdClass $cred
 }
 
 /**
+ * Libellé de la décision attendue sur un crédit : accepter l'inscription, pour une inscription au
+ * catalogue encore en attente ; valider les ECTS, pour une inscription acceptée dont l'EP est
+ * terminé comme pour une déclaration hors catalogue.
+ *
+ * @param stdClass $credit
+ * @return string
+ */
+function ep_credit_decision_label(stdClass $credit) {
+    if (ep_credit_is_registration($credit) && (int) $credit->status === EP_STATUS_PENDING) {
+        return get_string('acceptregistration', 'mod_ep');
+    }
+    return get_string('validatecredit', 'mod_ep');
+}
+
+/**
  * Actions proposées sur un crédit dans la liste des EP d'un étudiant. Chaque action n'apparaît que
  * si l'utilisateur y a droit ET que le crédit est dans un état où elle a un sens : un bouton qui
  * mène à un refus est pire que pas de bouton du tout.
@@ -1824,7 +2420,7 @@ function ep_render_credit_actions(stdClass $credit, stdClass $cm, stdClass $righ
     global $PAGE;
 
     $returnurl = $PAGE->url ? $PAGE->url->out_as_local_url(false) : null;
-    $canvalidate = ep_rights_can_validate($rights, $credit) && (int) $credit->status === EP_STATUS_PENDING;
+    $canvalidate = ep_rights_can_validate($rights, $credit) && ep_credit_awaits_decision($credit);
     $canview = $isowner || $rights->viewall || ep_rights_can_validate($rights, $credit);
 
     $detailurl = new moodle_url('/mod/ep/validate.php', ['id' => $cm->id, 'creditid' => $credit->id]);
@@ -1834,7 +2430,7 @@ function ep_render_credit_actions(stdClass $credit, stdClass $cm, stdClass $righ
 
     $actions = [];
     if ($canvalidate) {
-        $actions[get_string('validatecredit', 'mod_ep')] = $detailurl;
+        $actions[ep_credit_decision_label($credit)] = $detailurl;
     } else if ($canview) {
         $actions[get_string('viewdetails', 'mod_ep')] = $detailurl;
     }
@@ -1851,6 +2447,128 @@ function ep_render_credit_actions(stdClass $credit, stdClass $cm, stdClass $righ
     }
 
     return ep_render_actions($actions);
+}
+
+/**
+ * Traite la décision soumise sur un crédit : refus motivé, acceptation de l'inscription ou
+ * validation des ECTS, selon l'étape où il en est. Redirige vers $backurl dès qu'une décision est
+ * prise, et ne fait rien si le formulaire n'a pas été soumis.
+ *
+ * L'appelant a déjà vérifié que l'utilisateur a le droit de statuer et que le crédit attend une
+ * décision : ce sont deux questions de contexte (activité d'origine ou synthèse), pas de
+ * formulaire. Factorisé pour que l'écran de mod_ep et celui de la synthèse — d'où le responsable
+ * d'un EP partagé statue sans avoir de rôle dans la promotion de l'étudiant — restent identiques.
+ *
+ * @param stdClass $credit
+ * @param moodle_url $backurl Écran de retour après la décision.
+ * @param int|null $byuserid Utilisateur courant par défaut.
+ * @return void
+ */
+function ep_handle_credit_decision(stdClass $credit, moodle_url $backurl, $byuserid = null) {
+    global $USER;
+
+    if (!data_submitted() || !confirm_sesskey()) {
+        return;
+    }
+
+    $byuserid = $byuserid ?: $USER->id;
+    $comment = optional_param('validatorcomment', '', PARAM_TEXT);
+
+    if (optional_param('rejectcredit', '', PARAM_RAW) !== '') {
+        ep_reject_credit($credit, $byuserid, $comment);
+        redirect($backurl, get_string('creditrejected', 'mod_ep'), null,
+            \core\output\notification::NOTIFY_SUCCESS);
+    }
+
+    if (ep_credit_is_registration_step($credit)) {
+        if (optional_param('acceptregistration', '', PARAM_RAW) !== '') {
+            // Le nombre de places n'est pas vérifié : c'est au responsable d'arbitrer, l'écran lui
+            // dit seulement où il en est.
+            ep_accept_registration($credit, $byuserid, $comment);
+            redirect($backurl, get_string('registrationaccepted', 'mod_ep'), null,
+                \core\output\notification::NOTIFY_SUCCESS);
+        }
+        return;
+    }
+
+    if (optional_param('validatecredit', '', PARAM_RAW) !== '') {
+        ep_validate_credit($credit, $byuserid, optional_param('retainedects', 0, PARAM_FLOAT), $comment);
+        redirect($backurl, get_string('creditvalidated', 'mod_ep'), null,
+            \core\output\notification::NOTIFY_SUCCESS);
+    }
+}
+
+/**
+ * Rend le formulaire de décision correspondant à l'étape où en est le crédit : accepter ou
+ * refuser l'inscription, ou bien arrêter les ECTS retenus en fin d'EP.
+ *
+ * @param moodle_url $pageurl URL de la page, à laquelle le formulaire se soumet.
+ * @param stdClass $credit
+ * @return string HTML
+ */
+function ep_render_credit_decision_form(moodle_url $pageurl, stdClass $credit) {
+    $isregistrationstep = ep_credit_is_registration_step($credit);
+
+    $out = html_writer::tag('p', $isregistrationstep
+        ? get_string('decisionregistrationnotice', 'mod_ep')
+        : get_string('decisionectsnotice', 'mod_ep'), ['class' => 'text-muted']);
+
+    $out .= html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false)]);
+    $out .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+
+    // Le nombre d'ECTS ne se fixe qu'à la seconde étape : à l'inscription, l'EP n'a pas encore eu
+    // lieu, il n'y a rien à mesurer. Il est proposé à la valeur demandée — celle de l'EP du
+    // catalogue, ou celle avancée par l'étudiant — et reste modifiable : le validateur peut n'en
+    // retenir qu'une partie sans avoir à refuser toute la demande.
+    if (!$isregistrationstep) {
+        $out .= html_writer::tag('label', get_string('retainedects', 'mod_ep'), ['for' => 'retainedects']);
+        $out .= html_writer::empty_tag('input', [
+            'type' => 'number', 'step' => '0.25', 'min' => 0, 'name' => 'retainedects', 'id' => 'retainedects',
+            'value' => ep_format_ects_input($credit->claimedects), 'class' => 'form-control',
+        ]);
+    }
+
+    $out .= html_writer::tag('label', get_string('validatorcomment', 'mod_ep'), ['for' => 'validatorcomment']);
+    $out .= html_writer::tag('textarea', '',
+        ['name' => 'validatorcomment', 'id' => 'validatorcomment', 'rows' => 4, 'class' => 'form-control']);
+
+    $out .= html_writer::empty_tag('input', $isregistrationstep
+        ? [
+            'type' => 'submit', 'name' => 'acceptregistration',
+            'value' => get_string('acceptregistration', 'mod_ep'), 'class' => 'btn btn-primary mt-2 mr-2',
+        ]
+        : [
+            'type' => 'submit', 'name' => 'validatecredit', 'value' => get_string('validateects', 'mod_ep'),
+            'class' => 'btn btn-primary mt-2 mr-2',
+        ]);
+    $out .= html_writer::empty_tag('input', [
+        'type' => 'submit', 'name' => 'rejectcredit', 'value' => get_string('reject', 'mod_ep'),
+        'class' => 'btn btn-danger mt-2',
+    ]);
+    $out .= html_writer::end_tag('form');
+
+    return $out;
+}
+
+/**
+ * Rend l'état des inscriptions d'un EP du catalogue à l'intention de celui qui doit statuer :
+ * places occupées et demandes encore en attente. C'est ce qui lui manque pour décider s'il
+ * accepte une inscription de plus, et notamment s'il dépasse le nombre de places.
+ *
+ * @param stdClass $activity
+ * @param stdClass|null $counts Voir ep_get_activity_registration_counts() ; calculé si absent.
+ * @return string HTML
+ */
+function ep_render_activity_occupancy(stdClass $activity, ?stdClass $counts = null) {
+    $counts = $counts ?: ep_get_activity_registration_counts($activity->id);
+
+    return html_writer::div(get_string('activityoccupancy', 'mod_ep', (object) [
+        'places' => empty($activity->capacity)
+            ? get_string('unlimitedplaces', 'mod_ep')
+            : get_string('placestaken', 'mod_ep',
+                (object) ['taken' => $counts->taken, 'total' => $activity->capacity]),
+        'pending' => $counts->pending,
+    ]), 'text-muted mb-3');
 }
 
 /**

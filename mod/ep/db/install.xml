@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/ep/db" VERSION="20260905" COMMENT="XMLDB file for module mod_ep"
+<XMLDB PATH="mod/ep/db" VERSION="20260906" COMMENT="XMLDB file for module mod_ep"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
@@ -62,12 +62,15 @@
       </INDEXES>
     </TABLE>
 
-    <TABLE NAME="ep_activity" COMMENT="EP du catalogue interne proposé aux étudiants : chacun porte son propre nombre d'ECTS et son ou ses responsables, qui valident les inscriptions">
+    <TABLE NAME="ep_activity" COMMENT="EP du catalogue proposé aux étudiants : chacun porte son propre nombre d'ECTS et son ou ses responsables, qui valident les inscriptions puis les ECTS. Un EP est soit propre à une promotion (epid renseigné), soit défini dans une activité « Suivi de l'enseignement personnalisé » (synthesiscmid renseigné) et alors ouvert à toutes les promotions qu'elle suit.">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
-        <FIELD NAME="epid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
-        <FIELD NAME="typeid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"
-            COMMENT="Type d'EP auquel le catalogue rattache cet EP (normalement le type académique interne)"/>
+        <FIELD NAME="epid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Instance mod_ep propriétaire de cet EP, ou 0 s'il est partagé (voir synthesiscmid) : des étudiants de promotions différentes s'inscrivent alors au même EP"/>
+        <FIELD NAME="synthesiscmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Course-module de l'activité « Suivi de l'enseignement personnalisé » où cet EP est défini (0 = EP propre à une promotion). Il est proposé aux instances mod_ep que cette synthèse suit (epsynthesis_link)."/>
+        <FIELD NAME="typeid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Type d'EP auquel le catalogue rattache cet EP (normalement le type académique interne). 0 pour un EP partagé : les types sont propres à chaque instance mod_ep, c'est donc le type académique de l'instance de l'étudiant qui est retenu à l'inscription."/>
         <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="description" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="ects" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
@@ -75,7 +78,7 @@
         <FIELD NAME="minstudyyear" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="maxstudyyear" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="capacity" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
-            COMMENT="Nombre de places (0 = illimité) : les inscriptions en attente comptent, pour ne pas ouvrir plus de places que ce que le responsable pourra valider"/>
+            COMMENT="Nombre de places (0 = illimité). Les inscriptions ne sont pas bloquées quand il est atteint : c'est le responsable qui arbitre à la validation, et il peut dépasser le nombre de places s'il le juge utile. Seules les inscriptions acceptées (statuts 2 et 1) occupent une place."/>
         <FIELD NAME="visible" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"
             COMMENT="Proposé au catalogue : un EP masqué n'accepte plus de nouvelle inscription mais conserve celles déjà prises"/>
         <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
@@ -84,9 +87,11 @@
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
-        <KEY NAME="epid" TYPE="foreign" FIELDS="epid" REFTABLE="ep" REFFIELDS="id"/>
-        <KEY NAME="typeid" TYPE="foreign" FIELDS="typeid" REFTABLE="ep_type" REFFIELDS="id"/>
       </KEYS>
+      <INDEXES>
+        <INDEX NAME="epid" UNIQUE="false" FIELDS="epid"/>
+        <INDEX NAME="synthesiscmid" UNIQUE="false" FIELDS="synthesiscmid"/>
+      </INDEXES>
     </TABLE>
 
     <TABLE NAME="ep_activity_teacher" COMMENT="Responsable d'un EP du catalogue : valide les inscriptions des étudiants à cet EP et à lui seul">
@@ -125,7 +130,7 @@
         <FIELD NAME="retainedects" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="ECTS retenus après validation, avant application des plafonds par type (voir ep_get_student_progress())"/>
         <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
-            COMMENT="-2 annulé, -1 refusé, 0 en attente de validation, 1 validé"/>
+            COMMENT="-2 annulé, -1 refusé, 0 en attente de validation, 1 validé, 2 inscription acceptée par le responsable de l'EP (ECTS pas encore validés)"/>
         <FIELD NAME="source" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="student" SEQUENCE="false"
             COMMENT="Origine du crédit : student (inscription ou déclaration de l'étudiant), stage (attribution automatique depuis mod_stage), deve (saisi par la DEVE)"/>
         <FIELD NAME="sourceref" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
