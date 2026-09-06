@@ -31,7 +31,7 @@ class mod_ep_generator extends testing_module_generator {
      *
      * @param stdClass|int $ep
      * @param string $code Un des EP_TYPE_*.
-     * @param array $settings maxects, maxectsperyear, ectsperday, enabled.
+     * @param array $settings maxects, maxectsperyear, ectsperday, ectsmode, ectsvalue, enabled.
      * @return stdClass Le type mis à jour.
      */
     public function configure_type($ep, $code, array $settings = []) {
@@ -43,7 +43,7 @@ class mod_ep_generator extends testing_module_generator {
             throw new coding_exception('Type inconnu : ' . $code);
         }
 
-        foreach (['maxects', 'maxectsperyear', 'ectsperday', 'enabled'] as $field) {
+        foreach (['maxects', 'maxectsperyear', 'ectsperday', 'ectsmode', 'ectsvalue', 'enabled'] as $field) {
             if (array_key_exists($field, $settings)) {
                 $type->$field = $settings[$field];
             }

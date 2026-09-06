@@ -33,6 +33,11 @@ Un EP académique auquel des étudiants de **plusieurs promotions** s'inscrivent
 est défini une seule fois dans `mod_epsynthesis`, qui sert aussi à suivre, EP
 par EP, où en sont ses inscriptions.
 
+Pour les types que l'étudiant déclare lui-même, la DEVE choisit d'où vient le
+nombre d'ECTS demandés : **proposé par l'étudiant** au cas par cas, **forfait
+par déclaration** (1 ECTS par déclaration de sport, par exemple) ou **compté à
+la semaine** (N ECTS par semaine déclarée).
+
 Chaque type a son **maximum d'ECTS retenus**, sur le cursus et/ou par année.
 Ce qui dépasse reste acquis mais cesse d'être compté, et revient au décompte si
 le plafond est relevé.

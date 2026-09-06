@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_epsynthesis';
-$plugin->version   = 2026090600;
+$plugin->version   = 2026090601;
 $plugin->requires  = 2022041900; // Moodle 4.0+.
 $plugin->maturity  = MATURITY_BETA;
 $plugin->release   = '0.2.0';
@@ -34,5 +34,5 @@ $plugin->dependencies = [
     // académiques partagés qu'elle définit, enregistrés dans le catalogue de mod_ep (ep_activity)
     // et rattachés à cette activité, parce que des étudiants de plusieurs promotions s'y
     // inscrivent (voir ep_save_shared_activity()).
-    'mod_ep' => 2026090600,
+    'mod_ep' => 2026090601,
 ];

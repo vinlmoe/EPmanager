@@ -112,6 +112,7 @@ if ($credit) {
         'description' => $credit->description,
         'studyyear' => $credit->studyyear,
         'claimedects' => (float) $credit->claimedects,
+        'weeks' => (float) $credit->weeks,
         'evidence' => $draftitemid,
     ]);
 } else {
@@ -129,12 +130,19 @@ if ($mform->is_cancelled()) {
     }
     $type = $types[$data->typeid];
 
+    // Le nombre d'ECTS demandés vient de la règle du type, jamais du seul formulaire : selon le
+    // type, c'est le nombre proposé par l'étudiant, un forfait, ou les semaines déclarées
+    // multipliées par le barème. Les champs sans objet sont ignorés, même s'ils ont été soumis.
+    $claimedects = ep_type_claimed_ects($type, $data->claimedects ?? 0, $data->weeks ?? 0);
+    $weeks = ep_type_declared_weeks($type, $data->weeks ?? 0);
+
     if ($credit) {
         $credit->typeid = $type->id;
         $credit->studyyear = (int) $data->studyyear;
         $credit->name = $data->name;
         $credit->description = $data->description;
-        $credit->claimedects = round((float) $data->claimedects, 2);
+        $credit->claimedects = $claimedects;
+        $credit->weeks = $weeks;
         $credit->timemodified = time();
         $DB->update_record('ep_credit', $credit);
         $savedid = $credit->id;
@@ -143,7 +151,8 @@ if ($mform->is_cancelled()) {
             'studyyear' => (int) $data->studyyear,
             'name' => $data->name,
             'description' => $data->description,
-            'claimedects' => $data->claimedects,
+            'claimedects' => $claimedects,
+            'weeks' => $weeks,
             'source' => EP_SOURCE_STUDENT,
         ]);
     }

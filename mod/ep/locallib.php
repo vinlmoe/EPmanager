@@ -270,11 +270,119 @@ function ep_create_default_types($epid) {
             'maxects' => 0,
             'maxectsperyear' => 0,
             'ectsperday' => 0,
+            'ectsmode' => EP_ECTS_MODE_FREE,
+            'ectsvalue' => 0,
             'sortorder' => $definition['sortorder'],
             'timecreated' => $now,
             'timemodified' => $now,
         ]);
     }
+}
+
+/**
+ * Règles de calcul du nombre d'ECTS demandés par une déclaration, proposées à la DEVE pour les
+ * types que l'étudiant déclare lui-même.
+ *
+ * @return array code => libellé
+ */
+function ep_ects_mode_options() {
+    return [
+        EP_ECTS_MODE_FREE => get_string('ectsmode_free', 'mod_ep'),
+        EP_ECTS_MODE_FLAT => get_string('ectsmode_flat', 'mod_ep'),
+        EP_ECTS_MODE_WEEKLY => get_string('ectsmode_weekly', 'mod_ep'),
+    ];
+}
+
+/**
+ * Règle de calcul applicable à un type. Elle ne concerne que les types déclarés par l'étudiant :
+ * un EP du catalogue porte ses propres ECTS et un type attribué automatiquement suit son barème
+ * par jour de stage — quelle que soit la valeur enregistrée, ils s'en tiennent là.
+ *
+ * @param stdClass $type
+ * @return string Un des EP_ECTS_MODE_*.
+ */
+function ep_type_ects_mode(stdClass $type) {
+    if (!empty($type->catalog) || !empty($type->autovalidate)) {
+        return EP_ECTS_MODE_FREE;
+    }
+
+    $mode = (string) ($type->ectsmode ?? EP_ECTS_MODE_FREE);
+
+    return array_key_exists($mode, ep_ects_mode_options()) ? $mode : EP_ECTS_MODE_FREE;
+}
+
+/**
+ * Nombre d'ECTS demandés par une déclaration, d'après la règle de son type : le nombre proposé
+ * par l'étudiant, le forfait du type, ou les semaines déclarées multipliées par le barème.
+ *
+ * C'est la seule source du nombre demandé : ce que le formulaire a pu envoyer dans les champs qui
+ * ne servent pas au mode retenu est ignoré, plutôt que d'accorder son forfait à qui aurait changé
+ * la valeur d'un champ masqué.
+ *
+ * @param stdClass $type
+ * @param float $claimedects Nombre proposé par l'étudiant (mode libre uniquement).
+ * @param float $weeks Semaines déclarées (mode par semaine uniquement).
+ * @return float
+ */
+function ep_type_claimed_ects(stdClass $type, $claimedects = 0, $weeks = 0) {
+    switch (ep_type_ects_mode($type)) {
+        case EP_ECTS_MODE_FLAT:
+            return round(max(0, (float) $type->ectsvalue), 2);
+        case EP_ECTS_MODE_WEEKLY:
+            return round(max(0, (float) $weeks) * max(0, (float) $type->ectsvalue), 2);
+        default:
+            return round(max(0, (float) $claimedects), 2);
+    }
+}
+
+/**
+ * Nombre de semaines à conserver sur une déclaration : celui que l'étudiant a déclaré si son type
+ * se compte à la semaine, zéro sinon — une durée sans effet sur le décompte n'a rien à faire dans
+ * le dossier.
+ *
+ * @param stdClass $type
+ * @param float $weeks
+ * @return float
+ */
+function ep_type_declared_weeks(stdClass $type, $weeks) {
+    if (ep_type_ects_mode($type) !== EP_ECTS_MODE_WEEKLY) {
+        return 0;
+    }
+    return round(max(0, (float) $weeks), 2);
+}
+
+/**
+ * Rappel de la règle d'un type, à afficher à l'étudiant qui déclare comme à la DEVE qui
+ * paramètre : « forfait de 1 ECTS par déclaration », « 0,5 ECTS par semaine déclarée », ou
+ * l'indication que le nombre reste à proposer.
+ *
+ * @param stdClass $type
+ * @return string
+ */
+function ep_type_ects_rule_label(stdClass $type) {
+    switch (ep_type_ects_mode($type)) {
+        case EP_ECTS_MODE_FLAT:
+            return get_string('ectsruleflat', 'mod_ep', ep_format_ects($type->ectsvalue));
+        case EP_ECTS_MODE_WEEKLY:
+            return get_string('ectsruleweekly', 'mod_ep', ep_format_ects($type->ectsvalue));
+        default:
+            return get_string('ectsrulefree', 'mod_ep');
+    }
+}
+
+/**
+ * Indique si la règle d'un type est utilisable en l'état : un forfait ou un barème par semaine
+ * laissé à 0 ne donnerait que des déclarations à 0 ECTS, refusées à la saisie. La DEVE doit le
+ * voir, et l'étudiant ne doit pas se heurter à un type qu'elle a oublié de régler.
+ *
+ * @param stdClass $type
+ * @return bool
+ */
+function ep_type_ects_rule_is_set(stdClass $type) {
+    if (ep_type_ects_mode($type) === EP_ECTS_MODE_FREE) {
+        return true;
+    }
+    return (float) $type->ectsvalue > 0;
 }
 
 /**
@@ -345,9 +453,20 @@ function ep_get_catalogable_types($epid) {
  */
 function ep_type_option_label(stdClass $type) {
     $label = format_string($type->name);
-    if ($type->maxects > 0) {
-        $label .= ' (' . get_string('maxectsshort', 'mod_ep', ep_format_ects($type->maxects)) . ')';
+
+    // Ce qui change d'un type à l'autre au moment de choisir : ce qu'il rapporte, et le plafond
+    // au-delà duquel il cesse de compter.
+    $notes = [];
+    if (ep_type_ects_mode($type) !== EP_ECTS_MODE_FREE) {
+        $notes[] = ep_type_ects_rule_label($type);
     }
+    if ($type->maxects > 0) {
+        $notes[] = get_string('maxectsshort', 'mod_ep', ep_format_ects($type->maxects));
+    }
+    if (!empty($notes)) {
+        $label .= ' (' . implode(' — ', $notes) . ')';
+    }
+
     return $label;
 }
 
@@ -904,7 +1023,10 @@ function ep_get_student_credits($epid, $userid) {
  * @param stdClass $ep
  * @param int $userid
  * @param stdClass $type
- * @param array $data name, description, claimedects, studyyear, activityid, source, sourceref.
+ * @param array $data name, description, claimedects, weeks, studyyear, activityid, source,
+ *                     sourceref. Le nombre d'ECTS demandés est celui que l'appelant a arrêté :
+ *                     pour une déclaration, il vient de la règle du type (voir
+ *                     ep_type_claimed_ects()).
  * @return int Identifiant du crédit créé.
  */
 function ep_create_credit(stdClass $ep, $userid, stdClass $type, array $data) {
@@ -923,6 +1045,7 @@ function ep_create_credit(stdClass $ep, $userid, stdClass $type, array $data) {
         'name' => (string) ($data['name'] ?? ''),
         'description' => (string) ($data['description'] ?? ''),
         'claimedects' => $claimed,
+        'weeks' => round((float) ($data['weeks'] ?? 0), 2),
         'retainedects' => $auto ? $claimed : 0,
         'status' => $auto ? EP_STATUS_VALIDATED : EP_STATUS_PENDING,
         'source' => (string) ($data['source'] ?? EP_SOURCE_STUDENT),
@@ -2326,6 +2449,11 @@ function ep_render_credit_summary(stdClass $credit, $type = null, $student = nul
     $rows[] = [get_string('type', 'mod_ep'), $type ? format_string($type->name) : '-'];
     $rows[] = [get_string('creditname', 'mod_ep'), format_string($credit->name)];
     $rows[] = [get_string('studyyear', 'mod_ep'), ep_studyyear_label($credit->studyyear)];
+    if ((float) $credit->weeks > 0) {
+        // Sur un type compté à la semaine, le nombre d'ECTS ne se comprend qu'avec la durée dont
+        // il découle : les séparer obligerait le validateur à refaire le calcul pour vérifier.
+        $rows[] = [get_string('weeks', 'mod_ep'), format_float((float) $credit->weeks, 2, true, true)];
+    }
     $rows[] = [get_string('claimedects', 'mod_ep'), ep_format_ects($credit->claimedects)];
     $rows[] = [
         get_string('status', 'mod_ep'),

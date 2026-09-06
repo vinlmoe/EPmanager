@@ -111,13 +111,31 @@ $string['typeinstruction'] = 'Consigne affichée à l\'étudiant';
 $string['typessaved'] = 'Types d\'EP enregistrés.';
 $string['managetypes_help'] = "Les six types sont fixes : ils se paramètrent et se désactivent, ils ne s'ajoutent "
     . "ni ne se suppriment. Un plafond à 0 signifie « pas de plafond ». Les ECTS validés au-delà d'un plafond "
-    . "restent acquis : ils cessent seulement d'être comptés, et reviennent au décompte si le plafond est relevé.";
-$string['managetypes_desc'] = "Libellé, consigne, activation, maximum d'ECTS retenus (par année et sur le cursus) "
-    . "et, pour le type stage, nombre d'ECTS par jour de stage complémentaire validé.";
+    . "restent acquis : ils cessent seulement d'être comptés, et reviennent au décompte si le plafond est "
+    . "relevé.\n\nLa colonne « Calcul des ECTS » dit, pour chaque type déclaré par l'étudiant, d'où vient le "
+    . "nombre d'ECTS demandés : proposé par l'étudiant au cas par cas, forfaitaire (par exemple 1 ECTS par "
+    . "déclaration de sport), ou compté à la semaine. Le barème saisi sous la règle est le forfait, ou le nombre "
+    . "d'ECTS par semaine.";
+$string['managetypes_desc'] = "Libellé, consigne, activation, maximum d'ECTS retenus (par année et sur le cursus), "
+    . "calcul des ECTS d'une déclaration (proposés par l'étudiant, forfait, ou par semaine) et, pour le type "
+    . "stage, nombre d'ECTS par jour de stage complémentaire validé.";
 $string['maxects'] = 'Maximum sur le cursus';
 $string['maxectsperyear'] = 'Maximum par année';
 $string['maxectsshort'] = 'max. {$a} ECTS';
 $string['ectsperday'] = 'ECTS par jour de stage';
+$string['ectsrule'] = 'Calcul des ECTS';
+$string['ectsvalue'] = 'Barème';
+$string['ectsvalueunset'] = 'barème à définir';
+$string['ectsmode_free'] = 'Proposés par l\'étudiant';
+$string['ectsmode_flat'] = 'Forfait par déclaration';
+$string['ectsmode_weekly'] = 'Par semaine déclarée';
+$string['ectsrulefree'] = 'ECTS proposés par l\'étudiant';
+$string['ectsruleflat'] = 'Forfait de {$a} ECTS par déclaration';
+$string['ectsruleweekly'] = '{$a} ECTS par semaine déclarée';
+$string['ectsrulecatalog'] = 'Chaque EP du catalogue porte ses propres ECTS.';
+$string['weeks'] = 'Nombre de semaines';
+$string['weeks_help'] = "Nombre de semaines que cet enseignement personnalisé a représenté. Les ECTS demandés en "
+    . "découlent : ce type se compte à la semaine, vous n'avez pas de nombre d'ECTS à proposer.";
 $string['syncstagecredits'] = 'Resynchroniser les EP de type stage';
 $string['syncstagecredits_help'] = "Recalcule immédiatement les ECTS attribués automatiquement d'après les stages "
     . "complémentaires validés par la DEVE. Ce recalcul est de toute façon fait chaque nuit et à l'ouverture des "
@@ -205,7 +223,9 @@ $string['creditdescription_help'] = "Décrivez ce que vous avez fait, quand, et 
     . "description et sur vos justificatifs que votre enseignant référent se prononcera.";
 $string['claimedects'] = 'ECTS demandés';
 $string['claimedects_help'] = "Nombre d'ECTS que vous demandez pour cet EP. Le validateur peut n'en retenir qu'une "
-    . "partie sans refuser pour autant toute votre demande.";
+    . "partie sans refuser pour autant toute votre demande.\n\nCe champ ne s'affiche que pour les types qui vous "
+    . "laissent proposer un nombre : les autres accordent un forfait par déclaration, ou se comptent à la "
+    . "semaine.";
 $string['evidencefiles'] = 'Justificatifs';
 $string['evidencefiles_help'] = "Attestations, conventions, diplômes... tout document permettant de vérifier ce "
     . "que vous déclarez.";
@@ -348,6 +368,9 @@ $string['exportcredits_desc'] = "Une ligne par EP porté au crédit d'un étudia
 
 // Erreurs.
 $string['errorpositiveects'] = 'Le nombre d\'ECTS doit être supérieur à 0.';
+$string['errorpositiveweeks'] = 'Le nombre de semaines doit être supérieur à 0.';
+$string['errortypeectsunset'] = "Le barème de ce type d'EP n'a pas encore été défini : signalez-le à la DEVE, qui "
+    . "doit le renseigner avant que vous puissiez déclarer un EP de ce type.";
 $string['errornegativeects'] = 'Le nombre d\'ECTS ne peut pas être négatif.';
 $string['errornegativecapacity'] = 'Le nombre de places ne peut pas être négatif.';
 $string['errorstudyyearrange'] = 'L\'année minimale ne peut pas être postérieure à l\'année maximale.';
@@ -372,6 +395,8 @@ $string['privacy:metadata:ep_credit'] = "Les enseignements personnalisés porté
 $string['privacy:metadata:ep_credit:userid'] = 'Étudiant à qui l\'enseignement personnalisé est porté au crédit.';
 $string['privacy:metadata:ep_credit:name'] = 'Intitulé de l\'enseignement personnalisé.';
 $string['privacy:metadata:ep_credit:description'] = 'Description et justification saisies par l\'étudiant.';
+$string['privacy:metadata:ep_credit:weeks'] = 'Nombre de semaines déclarées, pour les types comptés à la '
+    . 'semaine.';
 $string['privacy:metadata:ep_credit:claimedects'] = 'Nombre d\'ECTS demandés.';
 $string['privacy:metadata:ep_credit:retainedects'] = 'Nombre d\'ECTS retenus après validation.';
 $string['privacy:metadata:ep_credit:status'] = 'État de la demande (en attente, validée, refusée, retirée).';

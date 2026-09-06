@@ -17,7 +17,13 @@
 /**
  * Paramétrage par la DEVE des types d'enseignement personnalisé : leur libellé, la consigne
  * affichée à l'étudiant, le maximum d'ECTS retenu pour chacun (sur le cursus et, si besoin, par
- * année) et, pour le type stage, le barème d'ECTS par jour de stage complémentaire validé.
+ * année) et la façon dont le nombre d'ECTS d'une déclaration est établi.
+ *
+ * Cette dernière règle diffère d'un type à l'autre : le type stage suit un barème par jour de
+ * stage complémentaire validé ; un type déclaré par l'étudiant laisse le nombre à son
+ * appréciation, accorde un forfait par déclaration (un ECTS par déclaration de sport, par
+ * exemple) ou se compte à la semaine ; un type du catalogue n'en a pas, chaque EP portant ses
+ * propres ECTS.
  *
  * Les six types sont fixes (ce sont eux que le module sait traiter) : ils se paramètrent et se
  * désactivent, ils ne s'ajoutent ni ne se suppriment.
@@ -69,8 +75,15 @@ if ($action === 'save' && data_submitted() && confirm_sesskey()) {
         $type->enabled = optional_param('enabled_' . $type->id, 0, PARAM_INT) ? 1 : 0;
         $type->maxects = max(0, round(optional_param('maxects_' . $type->id, 0, PARAM_FLOAT), 2));
         $type->maxectsperyear = max(0, round(optional_param('maxectsperyear_' . $type->id, 0, PARAM_FLOAT), 2));
-        if ($type->code === EP_TYPE_STAGE) {
+
+        // Le barème n'a de sens que là où il s'applique : par jour pour le type stage, par
+        // déclaration ou par semaine pour les types déclarés. Un type du catalogue n'en a pas.
+        if (!empty($type->autovalidate)) {
             $type->ectsperday = max(0, round(optional_param('ectsperday_' . $type->id, 0, PARAM_FLOAT), 3));
+        } else if (empty($type->catalog)) {
+            $mode = optional_param('ectsmode_' . $type->id, EP_ECTS_MODE_FREE, PARAM_ALPHA);
+            $type->ectsmode = array_key_exists($mode, ep_ects_mode_options()) ? $mode : EP_ECTS_MODE_FREE;
+            $type->ectsvalue = max(0, round(optional_param('ectsvalue_' . $type->id, 0, PARAM_FLOAT), 2));
         }
         $type->timemodified = time();
         $DB->update_record('ep_type', $type);
@@ -103,7 +116,7 @@ $table->head = [
     get_string('enabled', 'mod_ep'),
     get_string('maxects', 'mod_ep'),
     get_string('maxectsperyear', 'mod_ep'),
-    get_string('ectsperday', 'mod_ep'),
+    get_string('ectsrule', 'mod_ep'),
     get_string('typeinstruction', 'mod_ep'),
 ];
 
@@ -118,13 +131,44 @@ foreach ($types as $type) {
         $attribution = html_writer::span(get_string('attributiondeclared', 'mod_ep'), 'badge badge-info');
     }
 
-    $ectsperdaycell = '-';
-    if ($type->code === EP_TYPE_STAGE) {
-        $ectsperdaycell = html_writer::empty_tag('input', [
-            'type' => 'number', 'step' => '0.001', 'min' => 0, 'name' => 'ectsperday_' . $type->id,
-            'value' => ep_format_ects_input($type->ectsperday),
-            'class' => 'form-control',
-        ]);
+    // Comment le nombre d'ECTS d'un EP de ce type est établi. La colonne change de contenu selon
+    // le type : un barème par jour pour le type stage, une règle à choisir pour les types que
+    // l'étudiant déclare, rien pour ceux qui se prennent au catalogue — chaque EP y porte les
+    // siens (voir le catalogue).
+    if (!empty($type->autovalidate)) {
+        $ectsrulecell = html_writer::tag('label', get_string('ectsperday', 'mod_ep'),
+            ['for' => 'ectsperday_' . $type->id, 'class' => 'small mb-1'])
+            . html_writer::empty_tag('input', [
+                'type' => 'number', 'step' => '0.001', 'min' => 0, 'name' => 'ectsperday_' . $type->id,
+                'id' => 'ectsperday_' . $type->id,
+                'value' => ep_format_ects_input($type->ectsperday),
+                'class' => 'form-control',
+            ]);
+    } else if (!empty($type->catalog)) {
+        $ectsrulecell = html_writer::span(get_string('ectsrulecatalog', 'mod_ep'), 'text-muted');
+    } else {
+        // Le barème reste saisissable même en mode « proposés par l'étudiant », où il ne
+        // s'applique pas : le vider à chaque enregistrement ferait perdre un forfait déjà réglé
+        // dès qu'on passe le type en libre le temps d'une année.
+        $ectsrulecell = html_writer::select(ep_ects_mode_options(), 'ectsmode_' . $type->id,
+                ep_type_ects_mode($type), false,
+                ['class' => 'form-control mb-1', 'aria-label' => get_string('ectsrule', 'mod_ep')])
+            . html_writer::tag('label', get_string('ectsvalue', 'mod_ep'),
+                ['for' => 'ectsvalue_' . $type->id, 'class' => 'small mb-1'])
+            . html_writer::empty_tag('input', [
+                'type' => 'number', 'step' => '0.25', 'min' => 0, 'name' => 'ectsvalue_' . $type->id,
+                'id' => 'ectsvalue_' . $type->id,
+                'value' => ep_format_ects_input($type->ectsvalue),
+                'class' => 'form-control',
+            ]);
+        // Un forfait ou un barème par semaine laissé à 0 ne donnerait que des déclarations à
+        // 0 ECTS, refusées à la saisie : le signaler ici est le seul endroit où la DEVE le verra.
+        if (!ep_type_ects_rule_is_set($type)) {
+            $ectsrulecell .= html_writer::div(
+                html_writer::span(get_string('ectsvalueunset', 'mod_ep'), 'badge badge-warning'), 'mt-1');
+        } else {
+            $ectsrulecell .= html_writer::div(ep_type_ects_rule_label($type), 'text-muted small mt-1');
+        }
     }
 
     $table->data[] = [
@@ -141,7 +185,7 @@ foreach ($types as $type) {
             'type' => 'number', 'step' => '0.25', 'min' => 0, 'name' => 'maxectsperyear_' . $type->id,
             'value' => ep_format_ects_input($type->maxectsperyear), 'class' => 'form-control',
         ]),
-        $ectsperdaycell,
+        $ectsrulecell,
         html_writer::tag('textarea', s($type->description), [
             'name' => 'description_' . $type->id, 'rows' => 2, 'class' => 'form-control',
         ]),

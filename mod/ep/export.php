@@ -108,6 +108,7 @@ if ($mode === 'credits') {
         get_string('type', 'mod_ep'),
         get_string('creditname', 'mod_ep'),
         get_string('studyyear', 'mod_ep'),
+        get_string('weeks', 'mod_ep'),
         get_string('claimedects', 'mod_ep'),
         get_string('retainedects', 'mod_ep'),
         get_string('status', 'mod_ep'),
@@ -142,6 +143,9 @@ if ($mode === 'credits') {
             $type ? $type->name : '',
             $credit->name,
             ep_studyyear_label($credit->studyyear),
+            // Vide plutôt que 0 pour les types qui ne se comptent pas à la semaine : une colonne
+            // de zéros laisserait croire à une durée nulle plutôt qu'à une durée sans objet.
+            (float) $credit->weeks > 0 ? format_float((float) $credit->weeks, 2, true, true) : '',
             ep_format_ects($credit->claimedects),
             ep_format_ects($credit->retainedects),
             ep_status_label($credit->status),

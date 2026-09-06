@@ -37,6 +37,8 @@ php admin/cli/upgrade.php
 3. Depuis **Administration → Types d'EP et plafonds** :
    - fixer le **maximum d'ECTS retenus** de chaque type, sur le cursus et/ou
      par année (0 = pas de plafond) ;
+   - choisir, pour chaque type déclaré par l'étudiant, le **calcul des ECTS**
+     d'une déclaration et son barème (voir ci-dessous) ;
    - pour le type **stage**, fixer le **nombre d'ECTS par jour** de stage
      complémentaire validé par la DEVE ;
    - désactiver les types qui ne sont pas utilisés ;
@@ -64,6 +66,31 @@ php admin/cli/upgrade.php
 | Expérience professionnelle | idem | idem |
 | Sport | idem | idem |
 | Académique externe | idem | idem |
+
+### Le calcul des ECTS d'une déclaration
+
+Pour les quatre types que l'étudiant déclare lui-même (engagement, expérience
+professionnelle, sport, académique externe), la DEVE choisit d'où vient le
+nombre d'ECTS demandés :
+
+| Calcul | Ce que l'étudiant saisit | Nombre d'ECTS demandés |
+| --- | --- | --- |
+| Proposés par l'étudiant | Un nombre d'ECTS | Celui qu'il propose |
+| Forfait par déclaration | Rien | Le forfait du type — par exemple 1 ECTS par déclaration de sport |
+| Par semaine déclarée | Un nombre de semaines | Semaines × barème du type |
+
+Le champ inutile disparaît du formulaire de déclaration selon le type choisi :
+sur un forfait, l'étudiant n'a aucun nombre à proposer ; sur un comptage à la
+semaine, il déclare une durée et les ECTS en découlent. La durée est conservée
+avec la demande, pour que le validateur voie d'où vient le nombre.
+
+Dans tous les cas, le validateur reste libre de ne retenir qu'une partie des
+ECTS demandés. Un forfait ou un barème laissé à 0 est signalé à la DEVE sur la
+page des types, et l'étudiant ne peut pas déclarer sur un type ainsi laissé
+incomplet.
+
+Les EP du catalogue ne relèvent pas de ces règles : chacun porte ses propres
+ECTS. Le type stage non plus : il suit son barème par jour de stage retenu.
 
 ### Le circuit d'un EP académique, en trois temps
 

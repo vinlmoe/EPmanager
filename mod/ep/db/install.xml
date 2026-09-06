@@ -49,6 +49,10 @@
             COMMENT="Maximum d'ECTS retenus pour ce type et par année d'étude (0 = pas de plafond annuel)"/>
         <FIELD NAME="ectsperday" TYPE="number" LENGTH="10" DECIMALS="3" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="Type stage uniquement : ECTS attribués par jour de stage complémentaire (EP) retenu par la DEVE"/>
+        <FIELD NAME="ectsmode" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="free" SEQUENCE="false"
+            COMMENT="Types déclarés par l'étudiant uniquement : comment le nombre d'ECTS demandés est établi — free (l'étudiant le propose), flat (forfait par déclaration, voir ectsvalue), weekly (ectsvalue ECTS par semaine déclarée)"/>
+        <FIELD NAME="ectsvalue" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Barème du mode ci-dessus : forfait d'ECTS par déclaration (flat) ou nombre d'ECTS par semaine (weekly)"/>
         <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
@@ -126,7 +130,9 @@
         <FIELD NAME="description" TYPE="text" NOTNULL="false" SEQUENCE="false"
             COMMENT="Description / justification saisie par l'étudiant à l'appui de sa demande"/>
         <FIELD NAME="claimedects" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
-            COMMENT="ECTS demandés (ECTS de l'EP du catalogue, ou nombre proposé par l'étudiant)"/>
+            COMMENT="ECTS demandés : ECTS de l'EP du catalogue, ou nombre établi par la règle du type (proposé par l'étudiant, forfait, ou semaines déclarées x barème — voir ep_type_claimed_ects())"/>
+        <FIELD NAME="weeks" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Nombre de semaines déclarées par l'étudiant, pour les types dont les ECTS se comptent par semaine (0 pour tous les autres)"/>
         <FIELD NAME="retainedects" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="ECTS retenus après validation, avant application des plafonds par type (voir ep_get_student_progress())"/>
         <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"

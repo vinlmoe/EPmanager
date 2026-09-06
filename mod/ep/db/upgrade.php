@@ -80,5 +80,37 @@ function xmldb_ep_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026090600, 'ep');
     }
 
+    if ($oldversion < 2026090601) {
+
+        // Un type déclaré par l'étudiant peut désormais fixer lui-même le nombre d'ECTS d'une
+        // déclaration : un forfait (1 ECTS par déclaration de sport, par exemple) ou un barème par
+        // semaine déclarée. Les types existants gardent la règle d'origine, où l'étudiant propose
+        // lui-même un nombre d'ECTS (ectsmode = 'free').
+        $table = new xmldb_table('ep_type');
+
+        $field = new xmldb_field('ectsmode', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'free',
+            'ectsperday');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $field = new xmldb_field('ectsvalue', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0',
+            'ectsmode');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Les semaines déclarées, pour les types comptés à la semaine : 0 partout ailleurs.
+        $table = new xmldb_table('ep_credit');
+
+        $field = new xmldb_field('weeks', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0',
+            'claimedects');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026090601, 'ep');
+    }
+
     return true;
 }

@@ -42,6 +42,23 @@ define('EP_STATUS_ENROLLED', 2);
 /** Nombre de lignes par page pour les listes paginées (DEVE / enseignants). */
 define('EP_LIST_PERPAGE', 40);
 
+/**
+ * Le nombre d'ECTS demandés est proposé par l'étudiant, au cas par cas : c'est le validateur qui
+ * arrête ce qu'il en retient.
+ */
+define('EP_ECTS_MODE_FREE', 'free');
+/**
+ * Forfait : toute déclaration de ce type vaut le même nombre d'ECTS (ep_type->ectsvalue), quelle
+ * que soit son ampleur — un ECTS par déclaration de sport, par exemple. L'étudiant ne propose
+ * plus de nombre : il n'y a rien à négocier.
+ */
+define('EP_ECTS_MODE_FLAT', 'flat');
+/**
+ * Comptage par semaine : la déclaration vaut ep_type->ectsvalue ECTS par semaine déclarée
+ * (ep_credit->weeks). L'étudiant déclare une durée, pas un nombre d'ECTS.
+ */
+define('EP_ECTS_MODE_WEEKLY', 'weekly');
+
 /** EP académique interne : inscription à un EP du catalogue, validée par son responsable. */
 define('EP_TYPE_ACADEMIC', 'academic');
 /** EP de type stage : attribué automatiquement d'après les stages complémentaires (EP) de mod_stage. */

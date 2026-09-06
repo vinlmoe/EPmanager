@@ -24,8 +24,13 @@ require_once($CFG->dirroot . '/mod/ep/locallib.php');
 /**
  * Déclaration par l'étudiant d'un enseignement personnalisé hors catalogue (engagement étudiant,
  * expérience professionnelle, sport, académique externe) : ce qu'il a fait, l'année d'étude à
- * laquelle le rattacher, les ECTS demandés et les justificatifs à l'appui. La demande est
- * ensuite soumise à son enseignant référent (voir ep_can_validate_credit()).
+ * laquelle le rattacher, ce qu'il demande et les justificatifs à l'appui. La demande est ensuite
+ * soumise à son enseignant référent (voir ep_can_validate_credit()).
+ *
+ * Ce qu'il y a à saisir dépend de la règle du type choisi (voir ep_type_ects_mode()) : un nombre
+ * d'ECTS s'il est laissé à son appréciation, un nombre de semaines si le type se compte à la
+ * semaine, et rien du tout si le type accorde un forfait par déclaration. Les champs inutiles
+ * disparaissent au choix du type plutôt que d'être présentés puis ignorés.
  *
  * @package   mod_ep
  * @copyright 2026 Sébastien Lefebvre
@@ -55,14 +60,23 @@ class credit_form extends \moodleform {
         $mform->addRule('typeid', null, 'required', null, 'client');
         $mform->addHelpButton('typeid', 'type', 'mod_ep');
 
-        // Consigne propre à chaque type, telle que la DEVE l'a rédigée : affichée en bloc plutôt
-        // que type par type, un formulaire qui change de contenu au fil des choix étant plus
-        // déroutant qu'utile pour trois lignes de consigne.
+        // Consigne propre à chaque type, telle que la DEVE l'a rédigée, et rappel de ce que ce
+        // type rapporte : le tout en bloc, pour que l'étudiant compare les types avant d'en
+        // choisir un plutôt que d'avoir à les essayer l'un après l'autre.
         $descriptions = [];
         foreach ($types as $type) {
+            $consigne = [];
             if (trim((string) $type->description) !== '') {
+                $consigne[] = format_text($type->description, FORMAT_PLAIN);
+            }
+            // La règle du type est rappelée ici, et pas seulement dans la liste déroulante : c'est
+            // ce qui explique pourquoi le champ « ECTS demandés » n'est pas là pour ce type.
+            if (ep_type_ects_mode($type) !== EP_ECTS_MODE_FREE) {
+                $consigne[] = \html_writer::span(ep_type_ects_rule_label($type), 'text-muted');
+            }
+            if (!empty($consigne)) {
                 $descriptions[] = \html_writer::tag('dt', format_string($type->name))
-                    . \html_writer::tag('dd', format_text($type->description, FORMAT_PLAIN));
+                    . \html_writer::tag('dd', implode('<br />', $consigne));
             }
         }
         if (!empty($descriptions)) {
@@ -82,13 +96,32 @@ class credit_form extends \moodleform {
 
         $mform->addElement('select', 'studyyear', get_string('studyyear', 'mod_ep'),
             ep_studyyear_selectable_options($ep));
-        $mform->setDefault('studyyear', (int) $ep->currentstudyyear);
+        $mform->setDefault('studyyear', ep_get_current_studyyear($ep));
         $mform->addHelpButton('studyyear', 'studyyear', 'mod_ep');
+
+        // Les types sont groupés par règle : chaque champ n'apparaît que pour ceux qu'il concerne.
+        $bymode = [EP_ECTS_MODE_FREE => [], EP_ECTS_MODE_FLAT => [], EP_ECTS_MODE_WEEKLY => []];
+        foreach ($types as $type) {
+            $bymode[ep_type_ects_mode($type)][] = $type->id;
+        }
 
         $mform->addElement('text', 'claimedects', get_string('claimedects', 'mod_ep'), ['size' => '8']);
         $mform->setType('claimedects', PARAM_FLOAT);
         $mform->setDefault('claimedects', 0);
         $mform->addHelpButton('claimedects', 'claimedects', 'mod_ep');
+        $notfree = array_merge($bymode[EP_ECTS_MODE_FLAT], $bymode[EP_ECTS_MODE_WEEKLY]);
+        if (!empty($notfree)) {
+            $mform->hideIf('claimedects', 'typeid', 'in', $notfree);
+        }
+
+        $mform->addElement('text', 'weeks', get_string('weeks', 'mod_ep'), ['size' => '8']);
+        $mform->setType('weeks', PARAM_FLOAT);
+        $mform->setDefault('weeks', 0);
+        $mform->addHelpButton('weeks', 'weeks', 'mod_ep');
+        $notweekly = array_merge($bymode[EP_ECTS_MODE_FREE], $bymode[EP_ECTS_MODE_FLAT]);
+        if (!empty($notweekly)) {
+            $mform->hideIf('weeks', 'typeid', 'in', $notweekly);
+        }
 
         $mform->addElement('filemanager', 'evidence', get_string('evidencefiles', 'mod_ep'), null, $fileoptions);
         $mform->addHelpButton('evidence', 'evidencefiles', 'mod_ep');
@@ -99,7 +132,8 @@ class credit_form extends \moodleform {
     /**
      * Une demande sans ECTS n'a rien à valider, et un nombre négatif retirerait des ECTS acquis
      * par ailleurs : dans les deux cas la demande est refusée à la saisie plutôt qu'enregistrée
-     * puis rejetée par le validateur.
+     * puis rejetée par le validateur. Ce qui est vérifié dépend de la règle du type — le nombre
+     * proposé, la durée déclarée, ou le forfait que la DEVE a dû régler.
      *
      * @param array $data
      * @param array $files
@@ -107,9 +141,35 @@ class credit_form extends \moodleform {
      */
     public function validation($data, $files) {
         $errors = parent::validation($data, $files);
-        if ((float) $data['claimedects'] <= 0) {
-            $errors['claimedects'] = get_string('errorpositiveects', 'mod_ep');
+
+        $types = $this->_customdata['types'];
+        $type = $types[$data['typeid']] ?? null;
+        if (!$type) {
+            $errors['typeid'] = get_string('errorinvalidtype', 'mod_ep');
+            return $errors;
         }
+
+        switch (ep_type_ects_mode($type)) {
+            case EP_ECTS_MODE_FLAT:
+                // Un forfait à 0 est un type que la DEVE n'a pas fini de régler : le dire à
+                // l'étudiant vaut mieux que d'enregistrer une demande vide.
+                if (!ep_type_ects_rule_is_set($type)) {
+                    $errors['typeid'] = get_string('errortypeectsunset', 'mod_ep');
+                }
+                break;
+            case EP_ECTS_MODE_WEEKLY:
+                if (!ep_type_ects_rule_is_set($type)) {
+                    $errors['typeid'] = get_string('errortypeectsunset', 'mod_ep');
+                } else if ((float) $data['weeks'] <= 0) {
+                    $errors['weeks'] = get_string('errorpositiveweeks', 'mod_ep');
+                }
+                break;
+            default:
+                if ((float) $data['claimedects'] <= 0) {
+                    $errors['claimedects'] = get_string('errorpositiveects', 'mod_ep');
+                }
+        }
+
         return $errors;
     }
 }

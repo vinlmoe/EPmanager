@@ -111,13 +111,30 @@ $string['typeinstruction'] = 'Guidance shown to the student';
 $string['typessaved'] = 'Types saved.';
 $string['managetypes_help'] = 'The six types are fixed: they can be configured and disabled, but not added or '
     . 'removed. A cap of 0 means "no cap". Credits validated beyond a cap remain awarded: they simply stop being '
-    . 'counted, and come back into the count if the cap is raised.';
+    . "counted, and come back into the count if the cap is raised.\n\nThe \"How credits are set\" column says, "
+    . 'for each type the student declares, where the number of credits requested comes from: proposed by the '
+    . 'student case by case, a flat rate (1 credit per sport declaration, say), or counted by the week. The rate '
+    . 'under the rule is that flat amount, or the number of credits per week.';
 $string['managetypes_desc'] = 'Label, guidance, activation, maximum retained credits (per year and over the '
-    . 'programme) and, for the internship type, credits per validated complementary internship day.';
+    . 'programme), how a declaration\'s credits are set (proposed by the student, flat rate, or per week) and, '
+    . 'for the internship type, credits per validated complementary internship day.';
 $string['maxects'] = 'Maximum over the programme';
 $string['maxectsperyear'] = 'Maximum per year';
 $string['maxectsshort'] = 'max. {$a} credits';
 $string['ectsperday'] = 'Credits per internship day';
+$string['ectsrule'] = 'How credits are set';
+$string['ectsvalue'] = 'Rate';
+$string['ectsvalueunset'] = 'rate not set';
+$string['ectsmode_free'] = 'Proposed by the student';
+$string['ectsmode_flat'] = 'Flat rate per declaration';
+$string['ectsmode_weekly'] = 'Per declared week';
+$string['ectsrulefree'] = 'Credits proposed by the student';
+$string['ectsruleflat'] = 'Flat rate of {$a} credits per declaration';
+$string['ectsruleweekly'] = '{$a} credits per declared week';
+$string['ectsrulecatalog'] = 'Each catalogue unit carries its own credits.';
+$string['weeks'] = 'Number of weeks';
+$string['weeks_help'] = 'Number of weeks this personalised learning amounted to. The credits requested follow '
+    . 'from it: this type is counted by the week, so there is no number of credits for you to propose.';
 $string['syncstagecredits'] = 'Resynchronise internship credits';
 $string['syncstagecredits_help'] = 'Immediately recomputes the credits awarded automatically from the '
     . 'complementary internships validated by the academic office. This is done nightly and whenever a page of '
@@ -206,7 +223,8 @@ $string['creditdescription_help'] = 'Describe what you did, when, and in what ca
     . 'will decide on the basis of this description and of your supporting documents.';
 $string['claimedects'] = 'Credits requested';
 $string['claimedects_help'] = 'Number of credits you are requesting for this. The validator may retain only part '
-    . 'of them without rejecting your whole request.';
+    . "of them without rejecting your whole request.\n\nThis field only appears for types that let you propose "
+    . 'a number: the others award a flat rate per declaration, or are counted by the week.';
 $string['evidencefiles'] = 'Supporting documents';
 $string['evidencefiles_help'] = 'Certificates, agreements, diplomas — any document allowing what you declare to '
     . 'be checked.';
@@ -349,6 +367,9 @@ $string['exportcredits_desc'] = "One row per item credited to a student, with it
 
 // Errors.
 $string['errorpositiveects'] = 'The number of credits must be greater than 0.';
+$string['errorpositiveweeks'] = 'The number of weeks must be greater than 0.';
+$string['errortypeectsunset'] = 'The rate for this type has not been set yet: tell the academic office, who must '
+    . 'fill it in before you can declare this type.';
 $string['errornegativeects'] = 'The number of credits cannot be negative.';
 $string['errornegativecapacity'] = 'The number of places cannot be negative.';
 $string['errorstudyyearrange'] = 'The minimum study year cannot be after the maximum one.';
@@ -374,6 +395,7 @@ $string['privacy:metadata:ep_credit'] = 'The personalised learning credited to a
 $string['privacy:metadata:ep_credit:userid'] = 'Student the personalised learning is credited to.';
 $string['privacy:metadata:ep_credit:name'] = 'Title of the personalised learning.';
 $string['privacy:metadata:ep_credit:description'] = 'Description and justification entered by the student.';
+$string['privacy:metadata:ep_credit:weeks'] = 'Number of weeks declared, for types counted by the week.';
 $string['privacy:metadata:ep_credit:claimedects'] = 'Number of credits requested.';
 $string['privacy:metadata:ep_credit:retainedects'] = 'Number of credits retained after validation.';
 $string['privacy:metadata:ep_credit:status'] = 'State of the request (pending, validated, rejected, withdrawn).';
