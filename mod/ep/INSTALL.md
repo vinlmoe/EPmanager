@@ -155,6 +155,27 @@ Le recalcul a lieu :
 - à la demande, depuis le bouton « Resynchroniser les EP de type stage » de la
   page des types.
 
+## Import Excel/CSV par la DEVE
+
+Depuis **Administration → Import**, la DEVE peut importer en masse, depuis un
+fichier CSV (enregistré depuis Excel via « Enregistrer sous > CSV ») :
+
+- **le catalogue** : plusieurs EP propres à cette promotion en une fois
+  (intitulé, type, ECTS, années concernées, places). L'import n'affecte aucun
+  responsable ; il faut encore les désigner depuis la page du catalogue.
+- **des inscriptions et déclarations** : des EP portés au crédit d'étudiants,
+  décidés par ailleurs (reprise d'un dossier papier, régularisation de fin
+  d'année...). Une même colonne accepte soit l'intitulé exact d'un EP du
+  catalogue (inscription), soit le code ou le libellé d'un type déclarable
+  (déclaration hors catalogue), avec le statut à leur donner — en attente,
+  accepté (inscriptions uniquement), validé ou refusé. Les crédits importés
+  sont marqués comme saisis par la DEVE.
+
+Chaque ligne est vérifiée indépendamment des autres : une ligne fautive (email
+inconnu, EP ou type introuvable, doublon avec un dossier déjà ouvert...) est
+signalée sans empêcher l'import du reste du fichier — il suffit de corriger et
+réimporter ce qui a échoué.
+
 ## Capacités
 
 | Capacité | Pour qui |

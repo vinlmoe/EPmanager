@@ -2857,3 +2857,502 @@ function ep_print_student_dashboard(stdClass $ep, $userid, stdClass $cm, stdClas
         echo html_writer::table($table);
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Import Excel/CSV par la DEVE : catalogue des EP et inscriptions/EP portés au crédit.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Colonnes attendues, dans l'ordre, pour l'import du catalogue des EP.
+ *
+ * @return string[]
+ */
+function ep_import_activity_columns() {
+    return ['name', 'type', 'ects', 'minstudyyear', 'maxstudyyear', 'capacity', 'sortorder', 'visible'];
+}
+
+/**
+ * Colonnes attendues, dans l'ordre, pour l'import d'EP portés au crédit des étudiants
+ * (inscriptions au catalogue et déclarations hors catalogue).
+ *
+ * @return string[]
+ */
+function ep_import_credit_columns() {
+    return ['email', 'ep', 'name', 'studyyear', 'claimedects', 'weeks', 'retainedects', 'status', 'comment'];
+}
+
+/**
+ * Lit le contenu d'un fichier CSV (export Excel) et le découpe en lignes associatives selon les
+ * colonnes attendues. Prend uniquement le contenu déjà lu, pas le tableau $_FILES : c'est ce qui
+ * permet de tester cette fonction sans simuler un téléversement HTTP.
+ *
+ * @param string $content Contenu brut du fichier.
+ * @param string[] $columns Noms de colonnes, dans l'ordre des colonnes du fichier (voir
+ *                          ep_import_activity_columns(), ep_import_credit_columns()).
+ * @return stdClass {rows: array, error: string|null} 'rows' : numéro de ligne (1-based, en-tête
+ *                  compris) => tableau associatif colonne => valeur. Lignes vides ignorées.
+ *                  'error' non nul si le fichier n'a pas pu être lu comme un CSV.
+ */
+function ep_parse_import_csv($content, array $columns) {
+    global $CFG;
+    require_once($CFG->libdir . '/csvlib.class.php');
+
+    // Excel francophone exporte en points-virgules ; on accepte aussi la virgule.
+    $delimiter = (strpos($content, ';') !== false) ? 'semicolon' : 'comma';
+
+    $cir = new csv_import_reader(csv_import_reader::get_new_iid('ep'), 'ep');
+    if ($cir->load_csv_content($content, 'UTF-8', $delimiter) === false) {
+        $error = $cir->get_error();
+        $cir->cleanup(true);
+        return (object) ['rows' => [], 'error' => $error];
+    }
+
+    $rows = [];
+    $cir->init();
+    $linenum = 1; // La première ligne est consommée comme en-tête par load_csv_content().
+    while ($csvrow = $cir->next()) {
+        $linenum++;
+        $row = [];
+        foreach ($columns as $index => $key) {
+            $row[$key] = isset($csvrow[$index]) ? trim($csvrow[$index]) : '';
+        }
+        // Ignore les lignes entièrement vides, dont une éventuelle ligne vide en fin de fichier.
+        if (implode('', $row) !== '') {
+            $rows[$linenum] = $row;
+        }
+    }
+    $cir->cleanup(true);
+
+    return (object) ['rows' => $rows, 'error' => null];
+}
+
+/**
+ * EP du catalogue proposé à une instance (propre ou partagé), repéré par son intitulé exact
+ * (insensible à la casse et aux espaces de part et d'autre).
+ *
+ * @param stdClass $ep
+ * @param string $name
+ * @return stdClass|null
+ */
+function ep_get_catalog_activity_by_name(stdClass $ep, $name) {
+    $needle = core_text::strtolower(trim($name));
+    if ($needle === '') {
+        return null;
+    }
+    foreach (ep_get_catalog_activities($ep) as $activity) {
+        if (core_text::strtolower(trim($activity->name)) === $needle) {
+            return $activity;
+        }
+    }
+    return null;
+}
+
+/**
+ * Type déclarable d'une instance, repéré par son code (EP_TYPE_*) ou par son libellé (insensible
+ * à la casse et aux espaces de part et d'autre) : les deux graphies sont admises, une DEVE
+ * remplissant un fichier à la main écrira plus volontiers « Sport » que « sport ».
+ *
+ * @param int $epid
+ * @param string $label
+ * @return stdClass|null
+ */
+function ep_get_declarable_type_by_label($epid, $label) {
+    $needle = core_text::strtolower(trim($label));
+    if ($needle === '') {
+        return null;
+    }
+    foreach (ep_get_declarable_types($epid) as $type) {
+        if (core_text::strtolower($type->code) === $needle
+                || core_text::strtolower(trim($type->name)) === $needle) {
+            return $type;
+        }
+    }
+    return null;
+}
+
+/**
+ * Décode la colonne de statut d'une ligne d'import : les graphies française et anglaise, à
+ * l'orthographe et aux accents près, sont admises. Une valeur vide vaut « en attente », l'état de
+ * toute demande tant que personne ne s'est prononcé.
+ *
+ * @param string $raw
+ * @return int|null Un des EP_STATUS_*, ou null si la valeur n'est pas reconnue.
+ */
+function ep_import_resolve_status($raw) {
+    $normalized = core_text::strtolower(trim($raw));
+    $normalized = str_replace(['é', 'è', 'ê'], 'e', $normalized);
+
+    $map = [
+        '' => EP_STATUS_PENDING,
+        'attente' => EP_STATUS_PENDING,
+        'en attente' => EP_STATUS_PENDING,
+        'pending' => EP_STATUS_PENDING,
+        'accepte' => EP_STATUS_ENROLLED,
+        'accepte l\'inscription' => EP_STATUS_ENROLLED,
+        'enrolled' => EP_STATUS_ENROLLED,
+        'valide' => EP_STATUS_VALIDATED,
+        'validee' => EP_STATUS_VALIDATED,
+        'validated' => EP_STATUS_VALIDATED,
+        'refuse' => EP_STATUS_REJECTED,
+        'refusee' => EP_STATUS_REJECTED,
+        'rejete' => EP_STATUS_REJECTED,
+        'rejected' => EP_STATUS_REJECTED,
+    ];
+
+    return $map[$normalized] ?? null;
+}
+
+/**
+ * Résout une ligne d'import du catalogue, sans rien écrire en base : ep_import_activities()
+ * traite chaque ligne indépendamment des autres, pour qu'une ligne fautive n'empêche pas
+ * d'importer le reste d'un fichier par ailleurs valide.
+ *
+ * @param array $catalogabletypes Voir ep_get_catalogable_types(), la DEVE peut rattacher un EP à
+ *                                n'importe lequel d'entre eux, pas seulement au type académique.
+ * @param int $linenum Numéro de ligne, pour les messages d'erreur.
+ * @param array $row Voir ep_import_activity_columns().
+ * @return stdClass {ok: bool, error: string|null, plan: stdClass|null}
+ *                  'plan' : {name, typeid, ects, minstudyyear, maxstudyyear, capacity, sortorder,
+ *                            visible, namekey}
+ */
+function ep_parse_import_activity_row(array $catalogabletypes, $linenum, array $row) {
+    $name = trim($row['name'] ?? '');
+    if ($name === '') {
+        return (object) ['ok' => false, 'error' => get_string('importerrormissingname', 'mod_ep', $linenum)];
+    }
+
+    $ects = (float) trim($row['ects'] ?? '');
+    if ($ects <= 0) {
+        return (object) ['ok' => false,
+            'error' => get_string('importerrorline', 'mod_ep', (object) [
+                'line' => $linenum, 'error' => get_string('errorpositiveects', 'mod_ep'),
+            ]),
+        ];
+    }
+
+    $typelabel = core_text::strtolower(trim($row['type'] ?? ''));
+    $type = null;
+    foreach ($catalogabletypes as $candidate) {
+        if ($typelabel === '' && $candidate->code === EP_TYPE_ACADEMIC) {
+            $type = $candidate;
+            break;
+        }
+        if ($typelabel !== '' && (core_text::strtolower($candidate->code) === $typelabel
+                || core_text::strtolower(trim($candidate->name)) === $typelabel)) {
+            $type = $candidate;
+            break;
+        }
+    }
+    if (!$type) {
+        return (object) ['ok' => false, 'error' => get_string('importerrorunknowntype', 'mod_ep', (object) [
+            'line' => $linenum, 'type' => $row['type'] ?? '',
+        ])];
+    }
+
+    $minyear = ($row['minstudyyear'] ?? '') !== '' ? (int) $row['minstudyyear'] : 0;
+    $maxyear = ($row['maxstudyyear'] ?? '') !== '' ? (int) $row['maxstudyyear'] : 0;
+    if ($minyear && $maxyear && $minyear > $maxyear) {
+        return (object) ['ok' => false,
+            'error' => get_string('importerrorline', 'mod_ep', (object) [
+                'line' => $linenum, 'error' => get_string('errorstudyyearrange', 'mod_ep'),
+            ]),
+        ];
+    }
+
+    $capacity = max(0, (int) ($row['capacity'] ?? 0));
+    $sortorder = (int) ($row['sortorder'] ?? 0);
+
+    $visibleraw = core_text::strtolower(trim($row['visible'] ?? ''));
+    $visible = !in_array($visibleraw, ['0', 'non', 'no', 'false'], true) ? 1 : 0;
+
+    return (object) ['ok' => true, 'error' => null, 'plan' => (object) [
+        'name' => $name,
+        'typeid' => $type->id,
+        'ects' => round($ects, 2),
+        'minstudyyear' => $minyear,
+        'maxstudyyear' => $maxyear,
+        'capacity' => $capacity,
+        'sortorder' => $sortorder,
+        'visible' => $visible,
+        'namekey' => core_text::strtolower($name),
+    ]];
+}
+
+/**
+ * Importe en masse le catalogue des EP propres à une promotion, depuis les lignes lues par
+ * ep_parse_import_csv() (voir ep_import_activity_columns() pour les colonnes attendues).
+ *
+ * N'affecte aucun responsable : sans lui, une inscription reste en attente indéfiniment, la DEVE
+ * doit encore désigner les responsables de chaque EP importé depuis la page du catalogue.
+ *
+ * @param stdClass $ep
+ * @param array $rows Voir ep_parse_import_csv().
+ * @return stdClass {created: int, errors: string[]}
+ */
+function ep_import_activities(stdClass $ep, array $rows) {
+    global $DB;
+
+    $catalogabletypes = ep_get_catalogable_types($ep->id);
+
+    $existing = [];
+    foreach (ep_get_activities($ep->id) as $activity) {
+        $existing[core_text::strtolower(trim($activity->name))] = true;
+    }
+
+    $errors = [];
+    $plans = [];
+    $seen = [];
+    foreach ($rows as $linenum => $row) {
+        $result = ep_parse_import_activity_row($catalogabletypes, $linenum, $row);
+        if (!$result->ok) {
+            $errors[] = $result->error;
+            continue;
+        }
+        $plan = $result->plan;
+        if (isset($seen[$plan->namekey]) || isset($existing[$plan->namekey])) {
+            $errors[] = get_string('importerroractivityduplicate', 'mod_ep', (object) [
+                'line' => $linenum, 'name' => $plan->name,
+            ]);
+            continue;
+        }
+        $seen[$plan->namekey] = true;
+        $plans[] = $plan;
+    }
+
+    $now = time();
+    $records = [];
+    foreach ($plans as $plan) {
+        $records[] = (object) [
+            'epid' => $ep->id,
+            'synthesiscmid' => 0,
+            'typeid' => $plan->typeid,
+            'name' => $plan->name,
+            'description' => '',
+            'ects' => $plan->ects,
+            'minstudyyear' => $plan->minstudyyear,
+            'maxstudyyear' => $plan->maxstudyyear,
+            'capacity' => $plan->capacity,
+            'visible' => $plan->visible,
+            'sortorder' => $plan->sortorder,
+            'timecreated' => $now,
+            'timemodified' => $now,
+        ];
+    }
+    // Insertion groupée : un import de plusieurs dizaines d'EP ne doit pas déclencher autant de
+    // requêtes individuelles.
+    if ($records) {
+        $DB->insert_records('ep_activity', $records);
+    }
+
+    return (object) ['created' => count($records), 'errors' => $errors];
+}
+
+/**
+ * Résout une ligne d'import de crédit, sans rien écrire en base : la colonne « EP » désigne soit
+ * un EP du catalogue par son intitulé exact (inscription), soit un type déclarable par son code
+ * ou son libellé (déclaration hors catalogue) — c'est ce qui permet d'importer les deux à la même
+ * colonne, sans en faire deux fichiers distincts.
+ *
+ * @param stdClass $ep
+ * @param array $studentsbyemail Étudiants inscrits, indexés par email en minuscules (voir
+ *                               ep_get_enrolled_students()).
+ * @param int $linenum Numéro de ligne, pour les messages d'erreur.
+ * @param array $row Voir ep_import_credit_columns().
+ * @return stdClass {ok: bool, error: string|null, plan: stdClass|null}
+ *                  'plan' : {studentid, activity, type, name, studyyear, claimedects, weeks,
+ *                            retainedects, status, comment, fingerprint}
+ */
+function ep_parse_import_credit_row(stdClass $ep, array $studentsbyemail, $linenum, array $row) {
+    $email = trim($row['email'] ?? '');
+    $targetlabel = trim($row['ep'] ?? '');
+    if ($email === '' || $targetlabel === '') {
+        return (object) ['ok' => false, 'error' => get_string('importerrorincomplete', 'mod_ep', $linenum)];
+    }
+
+    $student = $studentsbyemail[core_text::strtolower($email)] ?? null;
+    if (!$student) {
+        return (object) ['ok' => false, 'error' => get_string('importerrorunknownemail', 'mod_ep', (object) [
+            'line' => $linenum, 'email' => $email,
+        ])];
+    }
+
+    $activity = ep_get_catalog_activity_by_name($ep, $targetlabel);
+    $type = $activity ? ep_get_activity_type($ep, $activity) : ep_get_declarable_type_by_label($ep->id, $targetlabel);
+    if (!$type) {
+        return (object) ['ok' => false, 'error' => get_string('importerrorunknowntarget', 'mod_ep', (object) [
+            'line' => $linenum, 'target' => $targetlabel,
+        ])];
+    }
+
+    $status = ep_import_resolve_status($row['status'] ?? '');
+    if ($status === null) {
+        return (object) ['ok' => false, 'error' => get_string('importerrorunknownstatus', 'mod_ep', (object) [
+            'line' => $linenum, 'status' => $row['status'] ?? '',
+        ])];
+    }
+    // L'acceptation d'une inscription est une étape propre au catalogue : une déclaration hors
+    // catalogue n'en connaît pas, elle passe directement de « en attente » à « validée ».
+    if ($status === EP_STATUS_ENROLLED && !$activity) {
+        return (object) ['ok' => false,
+            'error' => get_string('importerrorenrolledwithoutactivity', 'mod_ep', $linenum),
+        ];
+    }
+
+    $studyyear = ($row['studyyear'] ?? '') !== '' ? (int) $row['studyyear'] : ep_get_current_studyyear($ep);
+
+    if ($activity) {
+        // L'EP porte son propre nombre d'ECTS : ce que la ligne aurait pu indiquer par ailleurs
+        // pour les ECTS demandés ou les semaines n'a pas cours ici.
+        $name = $activity->name;
+        $claimedects = round((float) $activity->ects, 2);
+        $weeks = 0.0;
+    } else {
+        $name = trim($row['name'] ?? '');
+        if ($name === '') {
+            return (object) ['ok' => false, 'error' => get_string('importerrormissingname', 'mod_ep', $linenum)];
+        }
+        if (!ep_type_ects_rule_is_set($type)) {
+            return (object) ['ok' => false,
+                'error' => get_string('importerrorline', 'mod_ep', (object) [
+                    'line' => $linenum, 'error' => get_string('errortypeectsunset', 'mod_ep'),
+                ]),
+            ];
+        }
+        $rawclaimed = ($row['claimedects'] ?? '') !== '' ? (float) $row['claimedects'] : 0;
+        $rawweeks = ($row['weeks'] ?? '') !== '' ? (float) $row['weeks'] : 0;
+        $claimedects = ep_type_claimed_ects($type, $rawclaimed, $rawweeks);
+        $weeks = ep_type_declared_weeks($type, $rawweeks);
+        if ($claimedects <= 0) {
+            return (object) ['ok' => false,
+                'error' => get_string('importerrorline', 'mod_ep', (object) [
+                    'line' => $linenum, 'error' => get_string('errorpositiveects', 'mod_ep'),
+                ]),
+            ];
+        }
+    }
+
+    $retainedects = ($row['retainedects'] ?? '') !== '' ? max(0, (float) $row['retainedects']) : $claimedects;
+
+    $fingerprint = $activity
+        ? 'reg:' . $student->id . ':' . $activity->id
+        : 'dec:' . $student->id . ':' . $type->id . ':' . core_text::strtolower($name) . ':' . $studyyear;
+
+    return (object) ['ok' => true, 'error' => null, 'plan' => (object) [
+        'studentid' => (int) $student->id,
+        'activity' => $activity,
+        'type' => $type,
+        'name' => $name,
+        'studyyear' => $studyyear,
+        'claimedects' => round($claimedects, 2),
+        'weeks' => round($weeks, 2),
+        'retainedects' => round($retainedects, 2),
+        'status' => $status,
+        'comment' => trim($row['comment'] ?? ''),
+        'fingerprint' => $fingerprint,
+    ]];
+}
+
+/**
+ * Applique à un crédit fraîchement créé (toujours en attente à sa création, voir
+ * ep_create_credit()) le statut visé par une ligne d'import.
+ *
+ * @param stdClass $credit
+ * @param int $status
+ * @param float $retainedects
+ * @param int $byuserid
+ * @param string $comment
+ * @return void
+ */
+function ep_import_apply_status(stdClass $credit, $status, $retainedects, $byuserid, $comment) {
+    switch ($status) {
+        case EP_STATUS_ENROLLED:
+            ep_accept_registration($credit, $byuserid, $comment);
+            break;
+        case EP_STATUS_VALIDATED:
+            ep_validate_credit($credit, $byuserid, $retainedects, $comment);
+            break;
+        case EP_STATUS_REJECTED:
+            ep_reject_credit($credit, $byuserid, $comment);
+            break;
+        default:
+            // En attente : c'est déjà l'état dans lequel le crédit vient d'être créé.
+    }
+}
+
+/**
+ * Importe en masse des EP portés au crédit d'étudiants — inscriptions au catalogue et
+ * déclarations hors catalogue confondues —, saisis par la DEVE pour leur compte (source
+ * EP_SOURCE_DEVE) : reprise de dossiers papier, régularisation en fin d'année, etc.
+ *
+ * Chaque ligne est résolue et vérifiée indépendamment des autres, comme pour
+ * ep_import_activities() : une ligne fautive est signalée sans empêcher l'import des lignes
+ * valides du même fichier.
+ *
+ * @param stdClass $ep
+ * @param context $context
+ * @param array $rows Voir ep_parse_import_csv() et ep_import_credit_columns().
+ * @param int $byuserid Utilisateur DEVE à l'origine de l'import, consigné comme validateur des
+ *                      décisions qu'il contient (acceptation, validation, refus).
+ * @return stdClass {created: int, errors: string[]}
+ */
+function ep_import_credits(stdClass $ep, context $context, array $rows, $byuserid) {
+    global $DB;
+
+    $studentsbyemail = [];
+    foreach (ep_get_enrolled_students($context) as $student) {
+        $studentsbyemail[core_text::strtolower(trim($student->email))] = $student;
+    }
+
+    $errors = [];
+    $plans = [];
+    $seen = [];
+    foreach ($rows as $linenum => $row) {
+        $result = ep_parse_import_credit_row($ep, $studentsbyemail, $linenum, $row);
+        if (!$result->ok) {
+            $errors[] = $result->error;
+            continue;
+        }
+        $plan = $result->plan;
+
+        if (isset($seen[$plan->fingerprint])) {
+            $errors[] = get_string('importerrorduplicateinfile', 'mod_ep', $linenum);
+            continue;
+        }
+        // Une inscription active existante sur le même EP bloque l'import de celle-ci, exactement
+        // comme elle bloquerait une inscription en ligne (voir ep_get_active_registration()) :
+        // l'étudiant a déjà un dossier sur cet EP, l'écraser silencieusement le ferait disparaître.
+        if ($plan->activity && ep_get_active_registration($plan->activity->id, $plan->studentid)) {
+            $errors[] = get_string('importerrorexistingregistration', 'mod_ep', (object) [
+                'line' => $linenum, 'ep' => $plan->activity->name,
+            ]);
+            continue;
+        }
+        if (!$plan->activity && $DB->record_exists('ep_credit', [
+                'epid' => $ep->id, 'userid' => $plan->studentid, 'typeid' => $plan->type->id,
+                'name' => $plan->name, 'studyyear' => $plan->studyyear,
+            ])) {
+            $errors[] = get_string('importerrorduplicate', 'mod_ep', $linenum);
+            continue;
+        }
+
+        $seen[$plan->fingerprint] = true;
+        $plans[] = $plan;
+    }
+
+    $created = 0;
+    foreach ($plans as $plan) {
+        $creditid = ep_create_credit($ep, $plan->studentid, $plan->type, [
+            'activityid' => $plan->activity ? $plan->activity->id : null,
+            'name' => $plan->name,
+            'studyyear' => $plan->studyyear,
+            'claimedects' => $plan->claimedects,
+            'weeks' => $plan->weeks,
+            'source' => EP_SOURCE_DEVE,
+        ]);
+        $credit = $DB->get_record('ep_credit', ['id' => $creditid], '*', MUST_EXIST);
+        ep_import_apply_status($credit, $plan->status, $plan->retainedects, $byuserid, $plan->comment);
+        $created++;
+    }
+
+    return (object) ['created' => $created, 'errors' => $errors];
+}

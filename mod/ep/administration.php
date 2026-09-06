@@ -70,6 +70,24 @@ $sections = [
     ]],
 ];
 
+// Chaque entrée d'import a sa propre capacité (voir import.php) : la page elle-même n'exige que
+// mod/ep:manage, l'import de crédits exige en plus mod/ep:validatedeve.
+$importentries = [
+    [
+        get_string('importactivities', 'mod_ep'),
+        get_string('importactivities_desc', 'mod_ep'),
+        new moodle_url('/mod/ep/import.php', ['id' => $cm->id, 'mode' => 'activities']),
+    ],
+];
+if (has_capability('mod/ep:validatedeve', $context)) {
+    $importentries[] = [
+        get_string('importcredits', 'mod_ep'),
+        get_string('importcredits_desc', 'mod_ep'),
+        new moodle_url('/mod/ep/import.php', ['id' => $cm->id, 'mode' => 'credits']),
+    ];
+}
+$sections[] = [get_string('adminsectionimport', 'mod_ep'), $importentries];
+
 if (has_capability('mod/ep:viewall', $context)) {
     $sections[] = [get_string('adminsectionfollowup', 'mod_ep'), [
         [

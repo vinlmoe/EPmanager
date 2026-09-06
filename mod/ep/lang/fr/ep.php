@@ -355,6 +355,7 @@ $string['stagelinknorate'] = "Aucun barème n'est défini pour le type stage : a
 // Administration.
 $string['adminsectionrules'] = 'Règles d\'attribution';
 $string['adminsectioncatalog'] = 'Catalogue';
+$string['adminsectionimport'] = 'Import';
 $string['adminsectionfollowup'] = 'Suivi';
 $string['adminsectionpage'] = 'Page';
 $string['adminsectionpurpose'] = 'À quoi elle sert';
@@ -365,6 +366,76 @@ $string['exportstudents_desc'] = "Une ligne par étudiant : ECTS retenus par typ
 $string['exportcredits'] = 'Détail des EP';
 $string['exportcredits_desc'] = "Une ligne par EP porté au crédit d'un étudiant, avec son statut, sa décision et "
     . "son auteur.";
+
+// Import Excel/CSV.
+$string['importexcel'] = 'Import Excel';
+$string['import'] = 'Importer';
+$string['importactivities'] = 'Import du catalogue';
+$string['importactivities_desc'] = "Créer en une fois plusieurs EP du catalogue propres à cette promotion, depuis "
+    . "un tableau Excel.";
+$string['importactivities_help'] = "Importez un fichier CSV (enregistré depuis Excel via « Enregistrer sous > "
+    . "CSV »), avec les colonnes suivantes, dans cet ordre, séparées par des points-virgules ou des virgules, et "
+    . "une ligne d'en-tête : <code>name;type;ects;minstudyyear;maxstudyyear;capacity;sortorder;visible</code>."
+    . "<ul>"
+    . "<li><em>name</em> : intitulé de l'EP (obligatoire)</li>"
+    . "<li><em>type</em> : code ou libellé du type auquel rattacher l'EP (facultatif, académique interne par "
+    . "défaut)</li>"
+    . "<li><em>ects</em> : nombre d'ECTS que l'EP porte (obligatoire, supérieur à 0)</li>"
+    . "<li><em>minstudyyear</em>, <em>maxstudyyear</em> : années d'étude concernées, en chiffres (facultatif, "
+    . "0 = non précisée)</li>"
+    . "<li><em>capacity</em> : nombre de places (facultatif, 0 = illimité)</li>"
+    . "<li><em>sortorder</em> : ordre d'affichage (facultatif)</li>"
+    . "<li><em>visible</em> : 1 (ou vide) pour ouvert aux inscriptions, 0/non pour masqué</li>"
+    . "</ul>"
+    . "Un EP portant le même intitulé qu'un EP déjà au catalogue de cette promotion est refusé, plutôt que "
+    . "dupliqué. Aucun responsable n'est affecté par l'import : pensez à les désigner ensuite depuis la page du "
+    . "catalogue, sans quoi les inscriptions resteront en attente indéfiniment.";
+$string['importcredits'] = 'Import d\'inscriptions et de déclarations';
+$string['importcredits_desc'] = "Porter en une fois au crédit de plusieurs étudiants une inscription à un EP du "
+    . "catalogue ou une déclaration hors catalogue, décidée par ailleurs (dossier papier, régularisation de fin "
+    . "d'année...).";
+$string['importcredits_help'] = "Importez un fichier CSV (enregistré depuis Excel via « Enregistrer sous > "
+    . "CSV »), avec les colonnes suivantes, dans cet ordre, séparées par des points-virgules ou des virgules, et "
+    . "une ligne d'en-tête : "
+    . "<code>email;ep;name;studyyear;claimedects;weeks;retainedects;status;comment</code>."
+    . "<ul>"
+    . "<li><em>email</em> : adresse de l'étudiant (doit être inscrit au cours)</li>"
+    . "<li><em>ep</em> : intitulé exact d'un EP du catalogue (inscription), ou code/libellé d'un type déclarable "
+    . "— engagement, expérience professionnelle, sport, académique externe (déclaration hors catalogue)</li>"
+    . "<li><em>name</em> : intitulé de la déclaration (ignoré pour une inscription au catalogue, où c'est le nom "
+    . "de l'EP qui est repris)</li>"
+    . "<li><em>studyyear</em> : année d'étude de rattachement, en chiffres (facultatif, année courante de la "
+    . "promotion par défaut)</li>"
+    . "<li><em>claimedects</em> : ECTS demandés (ignoré pour une inscription au catalogue et pour un type à "
+    . "forfait ou compté à la semaine, qui l'établissent eux-mêmes)</li>"
+    . "<li><em>weeks</em> : nombre de semaines déclarées (types comptés à la semaine uniquement)</li>"
+    . "<li><em>retainedects</em> : ECTS à retenir si le statut est « validé » (facultatif, égal aux ECTS "
+    . "demandés par défaut)</li>"
+    . "<li><em>status</em> : attente (par défaut), accepté (inscriptions au catalogue uniquement), validé ou "
+    . "refusé</li>"
+    . "<li><em>comment</em> : commentaire du validateur, s'il y a une décision à consigner</li>"
+    . "</ul>"
+    . "Les crédits importés sont enregistrés comme saisis par la DEVE. Une ligne dont l'étudiant a déjà une "
+    . "inscription active sur le même EP, ou une déclaration identique déjà enregistrée, est refusée plutôt que "
+    . "dupliquée.";
+$string['importresult'] = '{$a} enseignement(s) personnalisé(s) importé(s) avec succès.';
+$string['importerrorupload'] = "Le fichier n'a pas pu être téléversé. Vérifiez sa taille et réessayez.";
+$string['importerrorline'] = 'Ligne {$a->line} : {$a->error}';
+$string['importerrorincomplete'] = 'Ligne {$a} : adresse et EP/type sont tous deux obligatoires.';
+$string['importerrormissingname'] = 'Ligne {$a} : intitulé manquant.';
+$string['importerrorunknownemail'] = 'Ligne {$a->line} : aucun étudiant inscrit avec l\'adresse « {$a->email} ».';
+$string['importerrorunknowntype'] = 'Ligne {$a->line} : type d\'EP « {$a->type} » introuvable.';
+$string['importerrorunknowntarget'] = 'Ligne {$a->line} : ni EP du catalogue ni type déclarable ne correspond à '
+    . '« {$a->target} ».';
+$string['importerrorunknownstatus'] = 'Ligne {$a->line} : statut « {$a->status} » non reconnu (attente, accepté, '
+    . 'validé ou refusé).';
+$string['importerrorenrolledwithoutactivity'] = 'Ligne {$a} : le statut « accepté » n\'existe que pour une '
+    . 'inscription à un EP du catalogue.';
+$string['importerroractivityduplicate'] = 'Ligne {$a->line} : un EP « {$a->name} » existe déjà dans ce catalogue.';
+$string['importerrorexistingregistration'] = 'Ligne {$a->line} : cet étudiant a déjà une inscription active sur '
+    . '« {$a->ep} ».';
+$string['importerrorduplicate'] = 'Ligne {$a} : une déclaration identique existe déjà pour cet étudiant.';
+$string['importerrorduplicateinfile'] = 'Ligne {$a} : doublon avec une ligne précédente du même fichier.';
 
 // Erreurs.
 $string['errorpositiveects'] = 'Le nombre d\'ECTS doit être supérieur à 0.';

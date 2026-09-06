@@ -354,6 +354,7 @@ $string['stagelinknorate'] = 'No rate is set for the internship type: nothing is
 // Administration.
 $string['adminsectionrules'] = 'Award rules';
 $string['adminsectioncatalog'] = 'Catalogue';
+$string['adminsectionimport'] = 'Import';
 $string['adminsectionfollowup'] = 'Follow-up';
 $string['adminsectionpage'] = 'Page';
 $string['adminsectionpurpose'] = 'What it is for';
@@ -364,6 +365,74 @@ $string['exportstudents_desc'] = 'One row per student: credits retained per type
 $string['exportcredits'] = 'Detailed list';
 $string['exportcredits_desc'] = "One row per item credited to a student, with its status, decision and who made "
     . 'it.';
+
+// Excel/CSV import.
+$string['importexcel'] = 'Excel import';
+$string['import'] = 'Import';
+$string['importactivities'] = 'Import the catalogue';
+$string['importactivities_desc'] = 'Create several catalogue units of this cohort at once, from a spreadsheet.';
+$string['importactivities_help'] = 'Import a CSV file (saved from Excel via "Save As > CSV"), with the following '
+    . 'columns in this order, separated by semicolons or commas, with a header row: '
+    . '<code>name;type;ects;minstudyyear;maxstudyyear;capacity;sortorder;visible</code>.'
+    . '<ul>'
+    . '<li><em>name</em>: title of the unit (required)</li>'
+    . '<li><em>type</em>: code or label of the type to attach the unit to (optional, internal academic by '
+    . 'default)</li>'
+    . '<li><em>ects</em>: number of credits the unit carries (required, greater than 0)</li>'
+    . '<li><em>minstudyyear</em>, <em>maxstudyyear</em>: study years concerned, as numbers (optional, 0 = '
+    . 'unspecified)</li>'
+    . '<li><em>capacity</em>: number of places (optional, 0 = unlimited)</li>'
+    . '<li><em>sortorder</em>: display order (optional)</li>'
+    . '<li><em>visible</em>: 1 (or blank) for open to enrolment, 0/no for hidden</li>'
+    . '</ul>'
+    . 'A unit with the same title as one already in this cohort\'s catalogue is rejected rather than '
+    . "duplicated. No one is assigned in charge by the import: remember to name them afterwards from the "
+    . 'catalogue page, or enrolments will stay pending indefinitely.';
+$string['importcredits'] = 'Import enrolments and declarations';
+$string['importcredits_desc'] = "Credit several students at once with an enrolment in a catalogue unit or a "
+    . "declaration outside the catalogue, decided elsewhere (paper record, end-of-year regularisation...).";
+$string['importcredits_help'] = 'Import a CSV file (saved from Excel via "Save As > CSV"), with the following '
+    . 'columns in this order, separated by semicolons or commas, with a header row: '
+    . '<code>email;ep;name;studyyear;claimedects;weeks;retainedects;status;comment</code>.'
+    . '<ul>'
+    . '<li><em>email</em>: the student\'s address (must be enrolled in the course)</li>'
+    . '<li><em>ep</em>: the exact title of a catalogue unit (enrolment), or the code/label of a declarable '
+    . 'type — engagement, professional experience, sport, external academic (declaration outside the '
+    . 'catalogue)</li>'
+    . '<li><em>name</em>: title of the declaration (ignored for a catalogue enrolment, which takes the '
+    . "unit's name)</li>"
+    . '<li><em>studyyear</em>: study year to attach it to, as a number (optional, the cohort\'s current year '
+    . 'by default)</li>'
+    . '<li><em>claimedects</em>: credits requested (ignored for a catalogue enrolment and for a flat-rate or '
+    . 'weekly type, which set it themselves)</li>'
+    . '<li><em>weeks</em>: number of weeks declared (weekly types only)</li>'
+    . '<li><em>retainedects</em>: credits to retain if the status is "validated" (optional, equal to the '
+    . 'credits requested by default)</li>'
+    . '<li><em>status</em>: pending (default), accepted (catalogue enrolments only), validated or rejected</li>'
+    . '<li><em>comment</em>: the validator\'s comment, if there is a decision to record</li>'
+    . '</ul>'
+    . 'Imported credits are recorded as entered by the academic office. A row whose student already has an '
+    . 'active enrolment in the same unit, or an identical declaration already on record, is rejected rather '
+    . 'than duplicated.';
+$string['importresult'] = '{$a} personalised learning item(s) imported successfully.';
+$string['importerrorupload'] = 'The file could not be uploaded. Check its size and try again.';
+$string['importerrorline'] = 'Line {$a->line}: {$a->error}';
+$string['importerrorincomplete'] = 'Line {$a}: both the address and the unit/type are required.';
+$string['importerrormissingname'] = 'Line {$a}: missing title.';
+$string['importerrorunknownemail'] = 'Line {$a->line}: no enrolled student with the address "{$a->email}".';
+$string['importerrorunknowntype'] = 'Line {$a->line}: type "{$a->type}" not found.';
+$string['importerrorunknowntarget'] = 'Line {$a->line}: neither a catalogue unit nor a declarable type matches '
+    . '"{$a->target}".';
+$string['importerrorunknownstatus'] = 'Line {$a->line}: status "{$a->status}" not recognised (pending, accepted, '
+    . 'validated or rejected).';
+$string['importerrorenrolledwithoutactivity'] = 'Line {$a}: the "accepted" status only exists for a catalogue '
+    . 'unit enrolment.';
+$string['importerroractivityduplicate'] = 'Line {$a->line}: a unit named "{$a->name}" already exists in this '
+    . 'catalogue.';
+$string['importerrorexistingregistration'] = 'Line {$a->line}: this student already has an active enrolment in '
+    . '"{$a->ep}".';
+$string['importerrorduplicate'] = 'Line {$a}: an identical declaration already exists for this student.';
+$string['importerrorduplicateinfile'] = 'Line {$a}: duplicate of an earlier line in the same file.';
 
 // Errors.
 $string['errorpositiveects'] = 'The number of credits must be greater than 0.';
