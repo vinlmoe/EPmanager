@@ -213,6 +213,9 @@ $string['registerfullnotice'] = 'All places in this unit are already taken. You 
     . 'charge will decide whether to accept your enrolment.';
 $string['registerfullshort'] = 'Full: enrolment subject to acceptance.';
 $string['notopentoyear'] = 'Not open to your study year';
+$string['motivation'] = 'Motivation';
+$string['motivation_help'] = 'Explain in a few words what motivates your enrolment in this unit (optional). This '
+    . 'is what the person in charge reads to decide, especially if there are more requests than places.';
 $string['catalogprocessnotice'] = 'Enrolling takes up no place and awards no credits: the person in charge of '
     . 'the unit first accepts enrolments, then validates the credits at the end of the unit.';
 

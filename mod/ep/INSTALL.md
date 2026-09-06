@@ -94,7 +94,8 @@ ECTS. Le type stage non plus : il suit son barème par jour de stage retenu.
 
 ### Le circuit d'un EP académique, en trois temps
 
-1. **Inscription** de l'étudiant, depuis le catalogue. Elle n'est pas limitée
+1. **Inscription** de l'étudiant, depuis le catalogue, avec une **motivation**
+   facultative en quelques mots à l'appui de sa demande. Elle n'est pas limitée
    au nombre de places — tout étudiant à qui l'EP est ouvert peut la demander —
    et ne donne aucun ECTS.
 2. **Acceptation de l'inscription** par le responsable de l'EP. C'est là que le

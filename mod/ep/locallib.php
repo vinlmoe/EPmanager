@@ -1072,9 +1072,12 @@ function ep_create_credit(stdClass $ep, $userid, stdClass $type, array $data) {
  * @param stdClass $activity
  * @param int $userid
  * @param int $studyyear
+ * @param string $motivation Ce qui motive l'étudiant à s'inscrire, à l'appui de sa demande
+ *                           (facultatif) : c'est ce que le responsable lit pour arbitrer, surtout
+ *                           s'il y a plus de demandes que de places.
  * @return int Identifiant du crédit créé.
  */
-function ep_register_to_activity(stdClass $ep, stdClass $activity, $userid, $studyyear) {
+function ep_register_to_activity(stdClass $ep, stdClass $activity, $userid, $studyyear, $motivation = '') {
     $type = ep_get_activity_type($ep, $activity);
     if (!$type) {
         throw new moodle_exception('errorinvalidtype', 'mod_ep');
@@ -1084,7 +1087,7 @@ function ep_register_to_activity(stdClass $ep, stdClass $activity, $userid, $stu
         'activityid' => $activity->id,
         'studyyear' => $studyyear,
         'name' => $activity->name,
-        'description' => '',
+        'description' => trim($motivation),
         'claimedects' => $activity->ects,
         'source' => EP_SOURCE_STUDENT,
     ]);
@@ -2463,7 +2466,11 @@ function ep_render_credit_summary(stdClass $credit, $type = null, $student = nul
         $rows[] = [get_string('retainedects', 'mod_ep'), ep_format_ects($credit->retainedects)];
     }
     if ($credit->description !== null && trim($credit->description) !== '') {
-        $rows[] = [get_string('creditdescription', 'mod_ep'), format_text($credit->description, FORMAT_PLAIN)];
+        // Le même champ porte la motivation d'une inscription au catalogue et la description
+        // d'une déclaration hors catalogue : le libellé suit lequel des deux c'est.
+        $descriptionlabel = ep_credit_is_registration($credit)
+            ? get_string('motivation', 'mod_ep') : get_string('creditdescription', 'mod_ep');
+        $rows[] = [$descriptionlabel, format_text($credit->description, FORMAT_PLAIN)];
     }
     if ($credit->validatetime) {
         $decidedby = '-';

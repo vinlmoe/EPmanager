@@ -251,6 +251,34 @@ final class catalog_test extends \advanced_testcase {
     }
 
     /**
+     * L'étudiant peut motiver son inscription : ce texte est conservé sur le crédit, et affiché
+     * sous le libellé « Motivation » plutôt que « Description et justification », qui n'a de sens
+     * que pour une déclaration hors catalogue.
+     */
+    public function test_registration_keeps_the_student_motivation(): void {
+        $creditid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3,
+            'Je souhaite me spécialiser en médecine équine.');
+
+        $credit = $this->credit($creditid);
+        $this->assertSame('Je souhaite me spécialiser en médecine équine.', $credit->description);
+
+        $summary = ep_render_credit_summary($credit);
+        $this->assertStringContainsString(get_string('motivation', 'mod_ep'), $summary);
+        $this->assertStringNotContainsString(get_string('creditdescription', 'mod_ep'), $summary);
+    }
+
+    /**
+     * Une inscription sans motivation ne laisse aucune ligne vide dans le résumé : l'étudiant
+     * n'est pas obligé de la renseigner.
+     */
+    public function test_registration_without_motivation_omits_the_row(): void {
+        $creditid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3);
+
+        $summary = ep_render_credit_summary($this->credit($creditid));
+        $this->assertStringNotContainsString(get_string('motivation', 'mod_ep'), $summary);
+    }
+
+    /**
      * Un EP du catalogue ne peut être rattaché qu'à un type non automatique : sur le type stage,
      * l'inscription elle-même vaudrait attribution, sans que personne n'ait rien validé.
      */

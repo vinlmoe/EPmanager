@@ -85,11 +85,12 @@ if ($action === 'register' && $activityid) {
 
     if ($problem === null && data_submitted() && confirm_sesskey()) {
         $studyyear = optional_param('studyyear', 0, PARAM_INT);
+        $motivation = optional_param('motivation', '', PARAM_TEXT);
         $yearoptions = ep_studyyear_selectable_options($ep);
         if (!array_key_exists($studyyear, $yearoptions)) {
             $studyyear = $currentyear;
         }
-        ep_register_to_activity($ep, $activity, $USER->id, $studyyear);
+        ep_register_to_activity($ep, $activity, $USER->id, $studyyear, $motivation);
         redirect(new moodle_url('/mod/ep/view.php', ['id' => $cm->id]),
             get_string('registered', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
     }
@@ -122,6 +123,10 @@ if ($action === 'register' && $activityid) {
     echo html_writer::tag('label', get_string('studyyear', 'mod_ep'), ['for' => 'studyyear']);
     echo html_writer::select(ep_studyyear_selectable_options($ep), 'studyyear', $currentyear,
         false, ['class' => 'form-control mb-2', 'id' => 'studyyear']);
+    echo html_writer::tag('label', get_string('motivation', 'mod_ep'), ['for' => 'motivation']);
+    echo html_writer::div(get_string('motivation_help', 'mod_ep'), 'text-muted small mb-1');
+    echo html_writer::tag('textarea', '',
+        ['name' => 'motivation', 'id' => 'motivation', 'rows' => 4, 'class' => 'form-control mb-2']);
     echo html_writer::empty_tag('input', [
         'type' => 'submit', 'value' => get_string('confirmregistration', 'mod_ep'), 'class' => 'btn btn-primary',
     ]);

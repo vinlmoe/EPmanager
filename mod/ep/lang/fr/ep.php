@@ -213,6 +213,9 @@ $string['registerfullnotice'] = "Toutes les places de cet EP sont déjà prises.
     . "inscrire : c'est le responsable qui décidera s'il retient votre inscription.";
 $string['registerfullshort'] = 'Complet : inscription soumise à l\'accord du responsable.';
 $string['notopentoyear'] = 'Hors de votre année d\'étude';
+$string['motivation'] = 'Motivation';
+$string['motivation_help'] = "Expliquez en quelques mots ce qui motive votre inscription à cet EP (facultatif). "
+    . "C'est ce que lit le responsable pour arbitrer, surtout s'il y a plus de demandes que de places.";
 $string['catalogprocessnotice'] = "S'inscrire n'occupe pas de place et ne donne aucun ECTS : le responsable de "
     . "l'EP accepte d'abord les inscriptions, puis valide les ECTS à la fin de l'EP.";
 
