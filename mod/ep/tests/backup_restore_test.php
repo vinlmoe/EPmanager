@@ -65,12 +65,11 @@ final class backup_restore_test extends \advanced_testcase {
         $backupid = $bc->get_backupid();
         try {
             $bc->execute_plan();
+        } catch (\Throwable $e) {
+            $this->drop_leftover_temp_tables();
+            throw $e;
         } finally {
             $bc->destroy();
-            // La suppression de backup_ids_temp fait partie du plan : elle ne tourne pas si
-            // celui-ci échoue, et destroy() ne s'en charge pas. La table survivrait alors au
-            // test, faisant échouer tous les suivants du fichier sur une erreur DDL sans rapport.
-            \backup_controller_dbops::drop_backup_ids_temp_table($backupid);
         }
 
         $newcourseid = \restore_dbops::create_new_course(
@@ -89,12 +88,35 @@ final class backup_restore_test extends \advanced_testcase {
         try {
             $rc->execute_precheck();
             $rc->execute_plan();
+        } catch (\Throwable $e) {
+            $this->drop_leftover_temp_tables();
+            throw $e;
         } finally {
             $rc->destroy();
-            \restore_controller_dbops::drop_restore_temp_tables($backupid);
         }
 
         return get_course($newcourseid);
+    }
+
+    /**
+     * Supprime les tables temporaires qu'un plan de sauvegarde ou de restauration interrompu
+     * aurait laissées derrière lui.
+     *
+     * Un plan mené à son terme s'en charge lui-même — d'où le nettoyage sur le seul chemin
+     * d'échec, et l'absence de bruit si les tables ont déjà disparu. Sans cela, le test suivant
+     * du fichier tombe sur une erreur DDL sans rapport, qui masque la vraie cause.
+     */
+    protected function drop_leftover_temp_tables(): void {
+        global $DB;
+
+        $dbman = $DB->get_manager();
+        foreach (['backup_ids_temp', 'backup_files_temp'] as $name) {
+            try {
+                $dbman->drop_table(new \xmldb_table($name));
+            } catch (\moodle_exception $e) {
+                continue;
+            }
+        }
     }
 
     /**
