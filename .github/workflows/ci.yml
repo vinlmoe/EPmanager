@@ -24,7 +24,9 @@ jobs:
       - name: Installe moodlehq/moodle-cs
         run: |
           mkdir -p "$RUNNER_TEMP/cs"
-          composer --working-dir="$RUNNER_TEMP/cs" --no-interaction require moodlehq/moodle-cs
+          # --no-plugins : le greffon Composer de PHP_CodeSniffer est bloqué par défaut sur les
+          # exécuteurs GitHub. On s'en passe, les standards étant enregistrés à la main ci-dessous.
+          composer --working-dir="$RUNNER_TEMP/cs" --no-interaction --no-plugins require moodlehq/moodle-cs
           # Les standards PHPCSExtra dont dépend « moodle » ne sont pas déclarés d'office
           # lorsque le greffon Composer de PHP_CodeSniffer ne tourne pas : on les enregistre.
           "$RUNNER_TEMP/cs/vendor/bin/phpcs" --config-set installed_paths \

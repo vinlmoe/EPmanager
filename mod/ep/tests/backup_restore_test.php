@@ -46,7 +46,13 @@ final class backup_restore_test extends \advanced_testcase {
      * @return \stdClass Le cours restauré.
      */
     protected function backup_and_restore(\stdClass $course): \stdClass {
-        global $USER;
+        global $CFG, $USER;
+
+        // En mode général, le plan compresse la sauvegarde en .mbz puis efface son dossier de
+        // travail, alors que la restauration lit ce dossier. Le conserver évite d'avoir à
+        // réextraire l'archive sous le même identifiant.
+        $CFG->keeptempdirectoriesonbackup = true;
+        $CFG->backup_file_logger_level = \backup::LOG_NONE;
 
         $bc = new \backup_controller(
             \backup::TYPE_1COURSE,
@@ -57,8 +63,13 @@ final class backup_restore_test extends \advanced_testcase {
             $USER->id
         );
         $backupid = $bc->get_backupid();
-        $bc->execute_plan();
-        $bc->destroy();
+        try {
+            $bc->execute_plan();
+        } finally {
+            // Sans cela, une sauvegarde en échec laisse derrière elle la table temporaire
+            // backup_ids_temp, qui fait ensuite échouer tous les tests suivants du fichier.
+            $bc->destroy();
+        }
 
         $newcourseid = \restore_dbops::create_new_course(
             $course->fullname,
@@ -73,9 +84,12 @@ final class backup_restore_test extends \advanced_testcase {
             $USER->id,
             \backup::TARGET_NEW_COURSE
         );
-        $rc->execute_precheck();
-        $rc->execute_plan();
-        $rc->destroy();
+        try {
+            $rc->execute_precheck();
+            $rc->execute_plan();
+        } finally {
+            $rc->destroy();
+        }
 
         return get_course($newcourseid);
     }
