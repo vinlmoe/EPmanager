@@ -30,6 +30,16 @@ le plafond est relevé.
 Des **minimums** sont exigés par année d'étude et sur l'ensemble du cursus ;
 les deux se cumulent.
 
+## Sauvegarde et restauration
+
+Les deux modules fournissent une implémentation `backup/moodle2/` : une
+sauvegarde de cours emporte leur paramétrage et, si les données utilisateur sont
+demandées, les crédits des étudiants et leurs justificatifs. Deux réserves : les
+EP de type stage ne sont pas recopiés mais recalculés depuis `mod_stage` à la
+première consultation de la copie, et les liens d'une synthèse vers une activité
+restée hors de la sauvegarde ne sont conservés que lors d'une restauration sur le
+même site. Détail dans les deux `INSTALL.md`.
+
 ## Prérequis
 
 `mod_stage` (dépôt Moodle-stage) doit être installé : les EP de type stage et

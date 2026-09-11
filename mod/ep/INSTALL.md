@@ -109,11 +109,42 @@ Le recalcul a lieu :
 | `mod/ep:manage` | DEVE : types, catalogue, minimums |
 | `mod/ep:viewall` | DEVE : voir tous les étudiants, exporter |
 
+## Sauvegarde et restauration
+
+Le module fournit une implémentation `backup/moodle2/` : l'activité entre dans
+les sauvegardes et les restaurations de cours, la duplication d'activité et
+l'import depuis un autre cours.
+
+**Toujours sauvegardé** (paramétrage) : les six types et leurs plafonds, le
+catalogue et ses responsables, les minimums annuels.
+
+**Sauvegardé seulement si les données utilisateur sont demandées** : les crédits
+des étudiants et leurs justificatifs.
+
+Deux points à connaître :
+
+- les **EP de type stage ne sont pas sauvegardés**. Ils sont dérivés des stages
+  complémentaires validés dans `mod_stage` : `ep_sync_stage_credits()` les crée
+  et les supprime à partir de ceux-ci, et leur référence d'origine désignerait
+  des saisies du site de départ. La copie restaurée a `timesynced` à zéro et les
+  recalcule à la première consultation ;
+- le réglage **« activité Gestion des stages »** désigne une activité par son
+  identifiant de course-module. À la fin de la restauration il est réorienté vers
+  l'activité `mod_stage` restaurée en même temps ; s'il n'y en a pas, il n'est
+  conservé que sur le même site, et remis à zéro ailleurs — ce qui revient à
+  considérer toutes les activités stage du cours.
+
+Une restauration sur un autre site écarte les lignes dont le compte
+d'utilisateur n'a pas été inclus dans l'archive (responsable d'un EP du
+catalogue, crédit d'un étudiant) plutôt que de les rattacher à un compte
+arbitraire.
+
 ## Tests
 
 ```bash
 vendor/bin/phpunit --testsuite mod_ep_testsuite
 ```
 
-Les tests de `tests/stage_sync_test.php` utilisent le générateur de `mod_stage`
-et supposent donc les deux modules installés.
+Les tests de `tests/stage_sync_test.php` et `tests/backup_restore_test.php`
+utilisent le générateur de `mod_stage` et supposent donc les deux modules
+installés.

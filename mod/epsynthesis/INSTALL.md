@@ -63,3 +63,32 @@ Deux écrans, comme dans `mod_ep` :
 Chaque ligne renvoie vers la page habituelle de l'activité d'origine
 (`mod/ep/validate.php`) : la décision elle-même continue de se prendre dans le
 cours de la promotion concernée.
+
+## Sauvegarde et restauration
+
+Le module fournit une implémentation `backup/moodle2/` : la sauvegarde emporte
+l'instance et la liste des activités liées. N'ayant aucune donnée de suivi
+propre, il n'a rien d'autre à sauvegarder.
+
+Les liens désignent des activités `mod_ep` par leur identifiant de
+course-module, qui change à la restauration. À la fin de la restauration, une
+fois toutes les activités du cours recréées :
+
+- un lien vers une activité **restaurée en même temps** pointe vers sa copie ;
+- un lien vers une activité **absente de la sauvegarde** n'est conservé que si la
+  restauration a lieu sur le même site, où l'identifiant d'origine désigne
+  toujours la bonne activité ; ailleurs il est supprimé, faute de quoi il
+  désignerait une activité sans rapport.
+
+Après une restauration sur un autre site, vérifier donc la liste depuis
+**Gérer les liens**.
+
+## Tests
+
+```bash
+vendor/bin/phpunit --testsuite mod_epsynthesis_testsuite
+```
+
+`tests/backup_restore_test.php` vérifie la restauration des liens : un lien vers
+une activité sauvegardée en même temps suit sa copie, un lien vers une activité
+extérieure reste en l'état sur le même site.
