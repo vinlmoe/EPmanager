@@ -23,8 +23,6 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Restaure l'arbre décrit par backup_ep_activity_structure_step.
  *
@@ -33,7 +31,6 @@ defined('MOODLE_INTERNAL') || die();
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class restore_ep_activity_structure_step extends restore_activity_structure_step {
-
     /**
      * Déclare les chemins à restaurer.
      *
@@ -47,10 +44,14 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
         $paths[] = new restore_path_element('ep', '/activity/ep');
         $paths[] = new restore_path_element('ep_type', '/activity/ep/types/type');
         $paths[] = new restore_path_element('ep_activity', '/activity/ep/activities/activity');
-        $paths[] = new restore_path_element('ep_activity_teacher',
-            '/activity/ep/activities/activity/activityteachers/activityteacher');
-        $paths[] = new restore_path_element('ep_year_requirement',
-            '/activity/ep/yearrequirements/yearrequirement');
+        $paths[] = new restore_path_element(
+            'ep_activity_teacher',
+            '/activity/ep/activities/activity/activityteachers/activityteacher'
+        );
+        $paths[] = new restore_path_element(
+            'ep_year_requirement',
+            '/activity/ep/yearrequirements/yearrequirement'
+        );
 
         if ($userinfo) {
             $paths[] = new restore_path_element('ep_credit', '/activity/ep/credits/credit');
@@ -132,8 +133,12 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
 
         // L'index (activityid, teacherid) est unique : deux comptes distincts de la sauvegarde
         // peuvent se retrouver fusionnés sur un même compte du site cible.
-        if ($DB->record_exists('ep_activity_teacher',
-                ['activityid' => $data->activityid, 'teacherid' => $teacherid])) {
+        if (
+            $DB->record_exists(
+                'ep_activity_teacher',
+                ['activityid' => $data->activityid, 'teacherid' => $teacherid]
+            )
+        ) {
             return;
         }
 

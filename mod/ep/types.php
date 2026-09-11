@@ -155,9 +155,13 @@ echo html_writer::empty_tag('input', [
 echo html_writer::end_tag('form');
 
 echo html_writer::div(
-    html_writer::link(new moodle_url($baseurl, ['action' => 'sync', 'sesskey' => sesskey()]),
-        get_string('syncstagecredits', 'mod_ep'), ['class' => 'btn btn-secondary']),
-    'mt-4');
+    html_writer::link(
+        new moodle_url($baseurl, ['action' => 'sync', 'sesskey' => sesskey()]),
+        get_string('syncstagecredits', 'mod_ep'),
+        ['class' => 'btn btn-secondary']
+    ),
+    'mt-4'
+);
 echo html_writer::tag('p', get_string('syncstagecredits_help', 'mod_ep'), ['class' => 'text-muted']);
 
 echo $OUTPUT->footer();

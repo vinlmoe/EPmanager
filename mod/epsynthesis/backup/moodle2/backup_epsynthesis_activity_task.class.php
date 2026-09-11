@@ -35,7 +35,6 @@ require_once($CFG->dirroot . '/mod/epsynthesis/backup/moodle2/backup_epsynthesis
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class backup_epsynthesis_activity_task extends backup_activity_task {
-
     /**
      * Aucun réglage propre à cette activité.
      */
@@ -47,7 +46,9 @@ class backup_epsynthesis_activity_task extends backup_activity_task {
      */
     protected function define_my_steps() {
         $this->add_step(new backup_epsynthesis_activity_structure_step(
-            'epsynthesis_structure', 'epsynthesis.xml'));
+            'epsynthesis_structure',
+            'epsynthesis.xml'
+        ));
     }
 
     /**

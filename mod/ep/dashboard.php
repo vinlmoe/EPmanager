@@ -105,28 +105,28 @@ $rows = ep_get_pilotage_overview($ep, $context, $restrictuserids);
 
 if ($search !== '') {
     $needle = core_text::strtolower($search);
-    $rows = array_filter($rows, function($row) use ($needle) {
+    $rows = array_filter($rows, function ($row) use ($needle) {
         return core_text::strpos(core_text::strtolower(fullname($row->user)), $needle) !== false;
     });
 }
 
 $sortmap = [
-    'student' => function($row) {
+    'student' => function ($row) {
         return core_text::strtolower(fullname($row->user));
     },
-    'retained' => function($row) {
+    'retained' => function ($row) {
         return $row->progress->totalretained;
     },
-    'years' => function($row) {
+    'years' => function ($row) {
         return $row->progress->yearstotal > 0 ? ($row->progress->yearsdone / $row->progress->yearstotal) : -1;
     },
-    'pending' => function($row) {
+    'pending' => function ($row) {
         return $row->pendingcount;
     },
 ];
 $sortkey = array_key_exists($tsort, $sortmap) ? $tsort : 'student';
 $sortfn = $sortmap[$sortkey];
-usort($rows, function($a, $b) use ($sortfn) {
+usort($rows, function ($a, $b) use ($sortfn) {
     return $sortfn($a) <=> $sortfn($b);
 });
 if (strtoupper($tdir) === 'DESC') {

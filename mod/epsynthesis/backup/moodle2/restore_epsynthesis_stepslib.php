@@ -23,8 +23,6 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Restaure l'arbre décrit par backup_epsynthesis_activity_structure_step.
  *
@@ -33,7 +31,6 @@ defined('MOODLE_INTERNAL') || die();
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class restore_epsynthesis_activity_structure_step extends restore_activity_structure_step {
-
     /**
      * Déclare les chemins à restaurer.
      *
@@ -123,8 +120,12 @@ class restore_epsynthesis_activity_structure_step extends restore_activity_struc
 
             // L'index (synthesisid, epcmid) est unique : si la cible est déjà liée, ce lien ferait
             // doublon.
-            if ($DB->record_exists('epsynthesis_link',
-                    ['synthesisid' => $synthesisid, 'epcmid' => $newcmid])) {
+            if (
+                $DB->record_exists(
+                    'epsynthesis_link',
+                    ['synthesisid' => $synthesisid, 'epcmid' => $newcmid]
+                )
+            ) {
                 $DB->delete_records('epsynthesis_link', ['id' => $link->id]);
                 continue;
             }

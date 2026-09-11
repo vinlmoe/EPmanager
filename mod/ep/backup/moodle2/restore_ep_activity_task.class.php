@@ -36,7 +36,6 @@ require_once($CFG->dirroot . '/mod/ep/backup/moodle2/restore_ep_stepslib.php');
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class restore_ep_activity_task extends restore_activity_task {
-
     /**
      * Aucun réglage propre à cette activité.
      */
@@ -61,8 +60,11 @@ class restore_ep_activity_task extends restore_activity_task {
         $contents[] = new restore_decode_content('ep', ['intro']);
         $contents[] = new restore_decode_content('ep_type', ['description'], 'ep_type');
         $contents[] = new restore_decode_content('ep_activity', ['description'], 'ep_activity');
-        $contents[] = new restore_decode_content('ep_credit',
-            ['description', 'validatorcomment'], 'ep_credit');
+        $contents[] = new restore_decode_content(
+            'ep_credit',
+            ['description', 'validatorcomment'],
+            'ep_credit'
+        );
 
         return $contents;
     }

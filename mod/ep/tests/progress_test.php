@@ -32,7 +32,6 @@ require_once($CFG->dirroot . '/mod/ep/locallib.php');
  * @covers     ::ep_filter_due_years
  */
 final class progress_test extends \advanced_testcase {
-
     /** @var \stdClass Instance de l'activité. */
     protected $ep;
 
@@ -140,8 +139,11 @@ final class progress_test extends \advanced_testcase {
      * son propre maximum, même si le plafond de cursus le permettrait.
      */
     public function test_yearly_cap_applies_before_the_cursus_cap(): void {
-        $this->generator->configure_type($this->ep, EP_TYPE_PROFESSIONAL,
-            ['maxectsperyear' => 2, 'maxects' => 10]);
+        $this->generator->configure_type(
+            $this->ep,
+            EP_TYPE_PROFESSIONAL,
+            ['maxectsperyear' => 2, 'maxects' => 10]
+        );
 
         $this->generator->create_validated_credit($this->ep, $this->student->id, EP_TYPE_PROFESSIONAL, 5, 2);
         $this->generator->create_validated_credit($this->ep, $this->student->id, EP_TYPE_PROFESSIONAL, 5, 3);

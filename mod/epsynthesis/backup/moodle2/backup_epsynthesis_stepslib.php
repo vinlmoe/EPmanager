@@ -23,8 +23,6 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Décrit l'arbre XML (epsynthesis.xml) d'une instance de mod_epsynthesis.
  *
@@ -36,7 +34,6 @@ defined('MOODLE_INTERNAL') || die();
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class backup_epsynthesis_activity_structure_step extends backup_activity_structure_step {
-
     /**
      * Construit la structure sauvegardée.
      *

@@ -31,7 +31,6 @@ namespace mod_epsynthesis\privacy;
  * privacy provider.
  */
 class provider implements \core_privacy\local\metadata\null_provider {
-
     /**
      * Explains why this plugin has no personal data of its own.
      *

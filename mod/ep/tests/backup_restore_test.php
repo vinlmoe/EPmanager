@@ -39,7 +39,6 @@ require_once($CFG->dirroot . '/backup/util/includes/restore_includes.php');
  * @covers     \restore_ep_activity_structure_step
  */
 final class backup_restore_test extends \advanced_testcase {
-
     /**
      * Sauvegarde un cours puis le restaure dans un nouveau cours, données utilisateur comprises.
      *
@@ -49,16 +48,31 @@ final class backup_restore_test extends \advanced_testcase {
     protected function backup_and_restore(\stdClass $course): \stdClass {
         global $USER;
 
-        $bc = new \backup_controller(\backup::TYPE_1COURSE, $course->id, \backup::FORMAT_MOODLE,
-            \backup::INTERACTIVE_NO, \backup::MODE_GENERAL, $USER->id);
+        $bc = new \backup_controller(
+            \backup::TYPE_1COURSE,
+            $course->id,
+            \backup::FORMAT_MOODLE,
+            \backup::INTERACTIVE_NO,
+            \backup::MODE_GENERAL,
+            $USER->id
+        );
         $backupid = $bc->get_backupid();
         $bc->execute_plan();
         $bc->destroy();
 
         $newcourseid = \restore_dbops::create_new_course(
-            $course->fullname, $course->shortname . '_copie', $course->category);
-        $rc = new \restore_controller($backupid, $newcourseid, \backup::INTERACTIVE_NO,
-            \backup::MODE_GENERAL, $USER->id, \backup::TARGET_NEW_COURSE);
+            $course->fullname,
+            $course->shortname . '_copie',
+            $course->category
+        );
+        $rc = new \restore_controller(
+            $backupid,
+            $newcourseid,
+            \backup::INTERACTIVE_NO,
+            \backup::MODE_GENERAL,
+            $USER->id,
+            \backup::TARGET_NEW_COURSE
+        );
         $rc->execute_precheck();
         $rc->execute_plan();
         $rc->destroy();
@@ -149,8 +163,11 @@ final class backup_restore_test extends \advanced_testcase {
         // Instance et minimums.
         $this->assertSame('Enseignement personnalisé A3', $newep->name);
         $this->assertEquals(12, $newep->mincursusects);
-        $this->assertEquals(4, $DB->get_field('ep_year_requirement', 'requiredects',
-            ['epid' => $newep->id, 'studyyear' => 3]));
+        $this->assertEquals(4, $DB->get_field(
+            'ep_year_requirement',
+            'requiredects',
+            ['epid' => $newep->id, 'studyyear' => 3]
+        ));
 
         // Types : ceux de la sauvegarde, sans doublon (la restauration n'appelle pas
         // ep_add_instance(), qui crée les types par défaut).
@@ -164,8 +181,10 @@ final class backup_restore_test extends \advanced_testcase {
         $newactivity = reset($newactivities);
         $this->assertSame('Tutorat', $newactivity->name);
         $this->assertEquals(ep_get_type_by_code($newep->id, EP_TYPE_ACADEMIC)->id, $newactivity->typeid);
-        $this->assertTrue($DB->record_exists('ep_activity_teacher',
-            ['activityid' => $newactivity->id, 'teacherid' => $teacher->id]));
+        $this->assertTrue($DB->record_exists(
+            'ep_activity_teacher',
+            ['activityid' => $newactivity->id, 'teacherid' => $teacher->id]
+        ));
 
         // Crédits : rattachés aux types et au catalogue de la copie.
         $newcredits = $DB->get_records('ep_credit', ['epid' => $newep->id], 'id');
@@ -191,8 +210,14 @@ final class backup_restore_test extends \advanced_testcase {
 
         // Pièce jointe, dans le contexte de la copie.
         $newcontext = \context_module::instance($newcm->id);
-        $this->assertCount(1, $fs->get_area_files($newcontext->id, 'mod_ep', EP_EVIDENCE_FILEAREA,
-            $newdeclared->id, 'itemid', false));
+        $this->assertCount(1, $fs->get_area_files(
+            $newcontext->id,
+            'mod_ep',
+            EP_EVIDENCE_FILEAREA,
+            $newdeclared->id,
+            'itemid',
+            false
+        ));
     }
 
     /**
@@ -222,13 +247,19 @@ final class backup_restore_test extends \advanced_testcase {
         $generator->get_plugin_generator('mod_ep')->configure_type($ep, EP_TYPE_STAGE, ['ectsperday' => 0.25]);
 
         $entry = $generator->get_plugin_generator('mod_stage')->create_entry(
-            $stage, $student->id, $theme, ['declaredduration' => 8, 'studyyear' => 3]);
+            $stage,
+            $student->id,
+            $theme,
+            ['declaredduration' => 8, 'studyyear' => 3]
+        );
         stage_set_entry_stagetype($entry->id, 'complementaire');
         stage_apply_deve_validation($DB->get_record('stage_entry', ['id' => $entry->id], '*', MUST_EXIST), 0, 8);
 
         ep_sync_stage_credits($ep);
-        $this->assertEquals(1, $DB->count_records('ep_credit',
-            ['epid' => $ep->id, 'source' => EP_SOURCE_STAGE]));
+        $this->assertEquals(1, $DB->count_records(
+            'ep_credit',
+            ['epid' => $ep->id, 'source' => EP_SOURCE_STAGE]
+        ));
 
         $newcourse = $this->backup_and_restore($course);
         $newepcm = $this->single_instance($newcourse->id, 'ep');
@@ -238,19 +269,29 @@ final class backup_restore_test extends \advanced_testcase {
         // Le réglage suit l'activité stage restaurée, et rien n'a encore été synchronisé.
         $this->assertEquals($newstagecm->id, $newep->stagecmid);
         $this->assertEquals(0, $newep->timesynced);
-        $this->assertEquals(0, $DB->count_records('ep_credit',
-            ['epid' => $newep->id, 'source' => EP_SOURCE_STAGE]));
+        $this->assertEquals(0, $DB->count_records(
+            'ep_credit',
+            ['epid' => $newep->id, 'source' => EP_SOURCE_STAGE]
+        ));
 
         // La synchronisation les recrée à partir des stages de la copie.
         $result = ep_sync_stage_credits($newep);
         $this->assertSame(1, $result->created);
 
-        $newcredit = $DB->get_record('ep_credit',
-            ['epid' => $newep->id, 'source' => EP_SOURCE_STAGE], '*', MUST_EXIST);
+        $newcredit = $DB->get_record(
+            'ep_credit',
+            ['epid' => $newep->id, 'source' => EP_SOURCE_STAGE],
+            '*',
+            MUST_EXIST
+        );
         $this->assertEquals($student->id, $newcredit->userid);
         $this->assertEquals(2, $newcredit->retainedects); // 8 jours x 0,25.
-        $newstageentry = $DB->get_record('stage_entry',
-            ['stageid' => $newstagecm->instance], '*', MUST_EXIST);
+        $newstageentry = $DB->get_record(
+            'stage_entry',
+            ['stageid' => $newstagecm->instance],
+            '*',
+            MUST_EXIST
+        );
         $this->assertEquals($newstageentry->id, $newcredit->sourceref);
     }
 }

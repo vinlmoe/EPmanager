@@ -80,8 +80,10 @@ if ($studentid) {
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($epsynthesis->name));
-echo html_writer::link(new moodle_url('/mod/epsynthesis/entries.php', ['id' => $cm->id]),
-    get_string('validation', 'mod_ep'));
+echo html_writer::link(
+    new moodle_url('/mod/epsynthesis/entries.php', ['id' => $cm->id]),
+    get_string('validation', 'mod_ep')
+);
 
 if ($epsynthesis->intro) {
     echo $OUTPUT->box(format_module_intro('epsynthesis', $epsynthesis, $cm->id), 'generalbox mod_introbox');
@@ -114,31 +116,31 @@ $rows = epsynthesis_get_pilotage_rows($activelinks);
 
 if ($search !== '') {
     $needle = core_text::strtolower($search);
-    $rows = array_filter($rows, function($row) use ($needle) {
+    $rows = array_filter($rows, function ($row) use ($needle) {
         return core_text::strpos(core_text::strtolower(fullname($row->user)), $needle) !== false;
     });
 }
 
 $sortmap = [
-    'course' => function($row) {
+    'course' => function ($row) {
         return core_text::strtolower($row->coursename);
     },
-    'student' => function($row) {
+    'student' => function ($row) {
         return core_text::strtolower(fullname($row->user));
     },
-    'retained' => function($row) {
+    'retained' => function ($row) {
         return $row->progress->totalretained;
     },
-    'years' => function($row) {
+    'years' => function ($row) {
         return $row->progress->yearstotal > 0 ? ($row->progress->yearsdone / $row->progress->yearstotal) : -1;
     },
-    'pending' => function($row) {
+    'pending' => function ($row) {
         return $row->pendingcount;
     },
 ];
 $sortkey = array_key_exists($tsort, $sortmap) ? $tsort : 'student';
 $sortfn = $sortmap[$sortkey];
-usort($rows, function($a, $b) use ($sortfn) {
+usort($rows, function ($a, $b) use ($sortfn) {
     return $sortfn($a) <=> $sortfn($b);
 });
 if (strtoupper($tdir) === 'DESC') {

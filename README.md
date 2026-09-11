@@ -40,6 +40,32 @@ première consultation de la copie, et les liens d'une synthèse vers une activi
 restée hors de la sauvegarde ne sont conservés que lors d'une restauration sur le
 même site. Détail dans les deux `INSTALL.md`.
 
+## Contrôle continu
+
+Chaque poussée déclenche `.github/workflows/ci.yml`, en deux temps :
+
+- **Style Moodle** — `phpcs` avec le standard `moodle` (`moodlehq/moodle-cs`), sur la
+  configuration `phpcs.xml` du dépôt. Le contrôle échoue au premier écart, avertissements
+  compris. Une seule règle est désactivée, et le fichier dit pourquoi : le sniff qui exige
+  qu'un commentaire commence par `[A-Z0-9]` ne reconnaît pas les capitales accentuées, et
+  s'y conformer imposerait d'écrire « Ecran » pour « Écran ».
+- **Moodle** — `moodle-plugin-ci` installe un Moodle 4.5 avec PostgreSQL et les modules du
+  dépôt, puis enchaîne analyse syntaxique, validation de la structure du module, points de
+  sauvegarde de la mise à jour, gabarits Mustache et tests PHPUnit. Le contrôle des blocs de
+  documentation (`phpdoc`) est présent mais non bloquant : son relevé reste à trier.
+
+Pour rejouer le contrôle de style en local :
+
+```bash
+mkdir -p /tmp/cs && composer --working-dir=/tmp/cs require moodlehq/moodle-cs
+/tmp/cs/vendor/bin/phpcs --config-set installed_paths \
+  /tmp/cs/vendor/moodlehq/moodle-cs/moodle,/tmp/cs/vendor/phpcsstandards/phpcsextra/Universal,\
+/tmp/cs/vendor/phpcsstandards/phpcsextra/NormalizedArrays,/tmp/cs/vendor/phpcsstandards/phpcsextra/Modernize
+/tmp/cs/vendor/bin/phpcs --standard=phpcs.xml -p
+```
+
+`phpcbf` (même chemin, mêmes options) corrige d'office la plus grande part des écarts.
+
 ## Prérequis
 
 `mod_stage` (dépôt Moodle-stage) doit être installé : les EP de type stage et

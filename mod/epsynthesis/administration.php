@@ -79,8 +79,13 @@ $table->head = [get_string('linked', 'mod_epsynthesis'), get_string('course'), g
 
 foreach ($available as $activity) {
     $checked = isset($linked[(int) $activity->epcmid]);
-    $checkbox = html_writer::checkbox('epcmid[]', $activity->epcmid, $checked, '',
-        ['id' => 'epcmid_' . $activity->epcmid]);
+    $checkbox = html_writer::checkbox(
+        'epcmid[]',
+        $activity->epcmid,
+        $checked,
+        '',
+        ['id' => 'epcmid_' . $activity->epcmid]
+    );
 
     $coursename = format_string($activity->coursename);
     if (!$activity->coursevisible) {
@@ -89,8 +94,10 @@ foreach ($available as $activity) {
 
     $activityname = format_string($activity->epname);
     if (!$activity->visible) {
-        $activityname .= ' ' . html_writer::span(get_string('hiddenactivity', 'mod_epsynthesis'),
-            'badge badge-secondary');
+        $activityname .= ' ' . html_writer::span(
+            get_string('hiddenactivity', 'mod_epsynthesis'),
+            'badge badge-secondary'
+        );
     }
 
     $table->data[] = [$checkbox, $coursename, $activityname];

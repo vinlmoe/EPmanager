@@ -54,8 +54,12 @@ if (optional_param('save', 0, PARAM_INT) && confirm_sesskey()) {
     // de valider dans cette activité.
     $selected = array_intersect(optional_param_array('teacherid', [], PARAM_INT), array_keys($potential));
     ep_set_activity_teachers($activity->id, $selected);
-    redirect($returnurl, get_string('activityteacherssaved', 'mod_ep'), null,
-        \core\output\notification::NOTIFY_SUCCESS);
+    redirect(
+        $returnurl,
+        get_string('activityteacherssaved', 'mod_ep'),
+        null,
+        \core\output\notification::NOTIFY_SUCCESS
+    );
 }
 
 $assigned = ep_get_activity_teachers($activity->id);
@@ -79,8 +83,13 @@ $table = new html_table();
 $table->head = [get_string('responsible', 'mod_ep'), get_string('teacher', 'mod_ep'), get_string('email')];
 foreach ($potential as $teacher) {
     $table->data[] = [
-        html_writer::checkbox('teacherid[]', $teacher->id, isset($assigned[$teacher->id]), '',
-            ['id' => 'teacherid_' . $teacher->id]),
+        html_writer::checkbox(
+            'teacherid[]',
+            $teacher->id,
+            isset($assigned[$teacher->id]),
+            '',
+            ['id' => 'teacherid_' . $teacher->id]
+        ),
         fullname($teacher),
         s($teacher->email),
     ];

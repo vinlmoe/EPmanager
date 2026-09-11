@@ -28,7 +28,6 @@ require_once($CFG->dirroot . '/mod/ep/lib.php');
 
 // ---------------------------------------------------------------------------------------------
 // Libellés et formats.
-// ---------------------------------------------------------------------------------------------
 
 /**
  * Retourne le libellé lisible d'un statut de crédit.
@@ -187,7 +186,6 @@ function ep_studyyear_selectable_options(stdClass $ep) {
 
 // ---------------------------------------------------------------------------------------------
 // Types d'enseignement personnalisé.
-// ---------------------------------------------------------------------------------------------
 
 /**
  * Définition des six types d'enseignement personnalisé créés avec chaque instance. Le code est
@@ -287,7 +285,7 @@ function ep_get_type_by_code($epid, $code) {
  * @return array id => stdClass
  */
 function ep_get_declarable_types($epid) {
-    return array_filter(ep_get_types($epid, true), function($type) {
+    return array_filter(ep_get_types($epid, true), function ($type) {
         return empty($type->catalog) && empty($type->autovalidate);
     });
 }
@@ -302,7 +300,7 @@ function ep_get_declarable_types($epid) {
  * @return array id => stdClass
  */
 function ep_get_catalogable_types($epid) {
-    return array_filter(ep_get_types($epid, true), function($type) {
+    return array_filter(ep_get_types($epid, true), function ($type) {
         return empty($type->autovalidate);
     });
 }
@@ -324,7 +322,6 @@ function ep_type_option_label(stdClass $type) {
 
 // ---------------------------------------------------------------------------------------------
 // Catalogue des EP internes et leurs responsables.
-// ---------------------------------------------------------------------------------------------
 
 /**
  * EP du catalogue d'une instance.
@@ -432,8 +429,11 @@ function ep_get_activity_taken_places($activityid) {
     global $DB;
 
     [$insql, $inparams] = $DB->get_in_or_equal([EP_STATUS_PENDING, EP_STATUS_VALIDATED], SQL_PARAMS_NAMED, 'st');
-    return $DB->count_records_select('ep_credit',
-        "activityid = :activityid AND status $insql", ['activityid' => $activityid] + $inparams);
+    return $DB->count_records_select(
+        'ep_credit',
+        "activityid = :activityid AND status $insql",
+        ['activityid' => $activityid] + $inparams
+    );
 }
 
 /**
@@ -484,16 +484,21 @@ function ep_get_active_registration($activityid, $userid) {
     global $DB;
 
     [$insql, $inparams] = $DB->get_in_or_equal([EP_STATUS_PENDING, EP_STATUS_VALIDATED], SQL_PARAMS_NAMED, 'st');
-    $records = $DB->get_records_select('ep_credit',
+    $records = $DB->get_records_select(
+        'ep_credit',
         "activityid = :activityid AND userid = :userid AND status $insql",
-        ['activityid' => $activityid, 'userid' => $userid] + $inparams, 'timecreated DESC', '*', 0, 1);
+        ['activityid' => $activityid, 'userid' => $userid] + $inparams,
+        'timecreated DESC',
+        '*',
+        0,
+        1
+    );
 
     return $records ? reset($records) : false;
 }
 
 // ---------------------------------------------------------------------------------------------
 // Minimums d'ECTS par année d'étude.
-// ---------------------------------------------------------------------------------------------
 
 /**
  * Minimums d'ECTS définis par année d'étude pour une instance.
@@ -523,8 +528,11 @@ function ep_get_year_requirements($epid) {
 function ep_get_year_requirement($epid, $studyyear) {
     global $DB;
 
-    $value = $DB->get_field('ep_year_requirement', 'requiredects',
-        ['epid' => $epid, 'studyyear' => (int) $studyyear]);
+    $value = $DB->get_field(
+        'ep_year_requirement',
+        'requiredects',
+        ['epid' => $epid, 'studyyear' => (int) $studyyear]
+    );
 
     return $value === false ? 0.0 : (float) $value;
 }
@@ -570,7 +578,6 @@ function ep_set_year_requirement($epid, $studyyear, $requiredects) {
 
 // ---------------------------------------------------------------------------------------------
 // Crédits : création, inscription, validation.
-// ---------------------------------------------------------------------------------------------
 
 /**
  * Crédits d'un étudiant dans une instance, du plus récent au plus ancien.
@@ -790,7 +797,6 @@ function ep_get_evidence_files(context $context, $creditid) {
 
 // ---------------------------------------------------------------------------------------------
 // Lien avec mod_stage : enseignants référents et attribution automatique des EP de type stage.
-// ---------------------------------------------------------------------------------------------
 
 /**
  * Activités « Gestion des stages » dont dépend cette instance : celle explicitement désignée dans
@@ -861,8 +867,12 @@ function ep_get_referent_students(stdClass $ep, $teacherid) {
     }
 
     [$insql, $inparams] = $DB->get_in_or_equal($stageids, SQL_PARAMS_NAMED, 'st');
-    $studentids = $DB->get_fieldset_select('stage_entry_teacher', 'DISTINCT studentid',
-        "stageid $insql AND teacherid = :teacherid", $inparams + ['teacherid' => $teacherid]);
+    $studentids = $DB->get_fieldset_select(
+        'stage_entry_teacher',
+        'DISTINCT studentid',
+        "stageid $insql AND teacherid = :teacherid",
+        $inparams + ['teacherid' => $teacherid]
+    );
 
     return array_map('intval', $studentids);
 }
@@ -988,9 +998,11 @@ function ep_sync_stage_credits(stdClass $ep) {
         $credit = $byref[(int) $entry->id] ?? null;
         if ($credit) {
             unset($byref[(int) $entry->id]);
-            if ((float) $credit->retainedects === $ects && (int) $credit->studyyear === (int) $entry->studyyear
+            if (
+                (float) $credit->retainedects === $ects && (int) $credit->studyyear === (int) $entry->studyyear
                     && $credit->name === $name && (int) $credit->status === EP_STATUS_VALIDATED
-                    && (int) $credit->typeid === (int) $type->id) {
+                    && (int) $credit->typeid === (int) $type->id
+            ) {
                 continue;
             }
             $credit->typeid = $type->id;
@@ -1048,7 +1060,6 @@ function ep_sync_stage_credits_if_due(stdClass $ep) {
 
 // ---------------------------------------------------------------------------------------------
 // Décompte des ECTS : plafonds par type, minimums par année et de cursus.
-// ---------------------------------------------------------------------------------------------
 
 /**
  * Calcule le bilan d'ECTS d'un étudiant : ce qui est validé, ce qui est effectivement retenu une
@@ -1176,7 +1187,7 @@ function ep_get_student_progress(stdClass $ep, $userid) {
 
     $mincursus = (float) $ep->mincursusects;
     $dueyears = ep_filter_due_years($ep, $yearrows);
-    $yearsdone = count(array_filter($dueyears, function($row) {
+    $yearsdone = count(array_filter($dueyears, function ($row) {
         return $row->done;
     }));
 
@@ -1210,7 +1221,7 @@ function ep_filter_due_years(stdClass $ep, array $yearrows) {
     if (empty($ep->currentstudyyear)) {
         return $yearrows;
     }
-    return array_filter($yearrows, function($row) use ($ep) {
+    return array_filter($yearrows, function ($row) use ($ep) {
         return $row->studyyear <= $ep->currentstudyyear;
     });
 }
@@ -1227,7 +1238,7 @@ function ep_filter_due_years(stdClass $ep, array $yearrows) {
 function ep_get_pilotage_overview(stdClass $ep, context $context, ?array $restrictuserids = null) {
     $students = ep_get_enrolled_students($context);
     if ($restrictuserids !== null) {
-        $students = array_filter($students, function($student) use ($restrictuserids) {
+        $students = array_filter($students, function ($student) use ($restrictuserids) {
             return in_array((int) $student->id, $restrictuserids, true);
         });
     }
@@ -1275,7 +1286,6 @@ function ep_get_potential_teachers(context $context) {
 
 // ---------------------------------------------------------------------------------------------
 // Listes de crédits : recherche, tri, pagination.
-// ---------------------------------------------------------------------------------------------
 
 /**
  * Clés de tri proposées sur les listes de crédits.
@@ -1307,8 +1317,14 @@ function ep_credit_sort_options() {
  *                                        référent de l'étudiant, cas courant).
  * @return array id => stdClass
  */
-function ep_get_filtered_credits($epid, array $filters = [], $sort = 'timecreated', $dir = 'DESC',
-        ?array $restrictuserids = null, ?array $restrictactivityids = null) {
+function ep_get_filtered_credits(
+    $epid,
+    array $filters = [],
+    $sort = 'timecreated',
+    $dir = 'DESC',
+    ?array $restrictuserids = null,
+    ?array $restrictactivityids = null
+) {
     global $DB;
 
     $params = ['epid' => $epid];
@@ -1489,20 +1505,25 @@ function ep_get_credits_awaiting($ep, stdClass $rights, $sort = 'timecreated', $
         return ep_get_filtered_credits($ep->id, $filters, $sort, $dir);
     }
 
-    $credits = ep_get_filtered_credits($ep->id, $filters, $sort, $dir,
-        $rights->referentids, $rights->responsibleids);
+    $credits = ep_get_filtered_credits(
+        $ep->id,
+        $filters,
+        $sort,
+        $dir,
+        $rights->referentids,
+        $rights->responsibleids
+    );
 
     // Un enseignant référent n'a pas à statuer sur une inscription à un EP du catalogue dont il
     // n'est pas responsable, même s'il est référent de l'étudiant : c'est le responsable de l'EP
     // qui sait si l'étudiant l'a suivi.
-    return array_filter($credits, function($credit) use ($rights) {
+    return array_filter($credits, function ($credit) use ($rights) {
         return ep_rights_can_validate($rights, $credit);
     });
 }
 
 // ---------------------------------------------------------------------------------------------
 // Rendu commun aux vues.
-// ---------------------------------------------------------------------------------------------
 
 /**
  * Rend une série d'actions en petits boutons. Une entrée dont l'URL est nulle est ignorée, ce qui
@@ -1707,13 +1728,23 @@ function ep_render_list_filters(moodle_url $baseurl, array $types, array $values
     // L'année non précisée (0) est une valeur de rattachement à part entière : le « toutes les
     // années » du filtre est donc la chaîne vide, pas 0.
     $yearoptions = ['' => get_string('allyears', 'mod_ep')] + ep_studyyear_options();
-    $out .= html_writer::select($yearoptions, 'studyyear', $values['studyyear'] ?? '', false,
-        ['class' => 'form-control mr-2']);
+    $out .= html_writer::select(
+        $yearoptions,
+        'studyyear',
+        $values['studyyear'] ?? '',
+        false,
+        ['class' => 'form-control mr-2']
+    );
 
     if ($showstatus) {
         $statusoptions = ['' => get_string('allstatuses', 'mod_ep')] + ep_status_options();
-        $out .= html_writer::select($statusoptions, 'status', $values['status'] ?? '', false,
-            ['class' => 'form-control mr-2']);
+        $out .= html_writer::select(
+            $statusoptions,
+            'status',
+            $values['status'] ?? '',
+            false,
+            ['class' => 'form-control mr-2']
+        );
     }
 
     $out .= html_writer::empty_tag('input', [
@@ -1802,8 +1833,10 @@ function ep_render_evidence_files(stdClass $cm, context $context, stdClass $cred
 
     $items = [];
     foreach ($files as $pathnamehash => $file) {
-        $url = new moodle_url('/mod/ep/evidence_file.php',
-            ['id' => $cm->id, 'creditid' => $credit->id, 'pathnamehash' => $pathnamehash]);
+        $url = new moodle_url(
+            '/mod/ep/evidence_file.php',
+            ['id' => $cm->id, 'creditid' => $credit->id, 'pathnamehash' => $pathnamehash]
+        );
         $items[] = html_writer::link($url, s($file->get_filename()));
     }
     return html_writer::alist($items);
@@ -1846,8 +1879,10 @@ function ep_render_credit_actions(stdClass $credit, stdClass $cm, stdClass $righ
             $actions[get_string('edit')] =
                 new moodle_url('/mod/ep/declare.php', ['id' => $cm->id, 'creditid' => $credit->id]);
         }
-        $actions[get_string('cancelrequest', 'mod_ep')] = new moodle_url('/mod/ep/declare.php',
-            ['id' => $cm->id, 'creditid' => $credit->id, 'action' => 'cancel', 'sesskey' => sesskey()]);
+        $actions[get_string('cancelrequest', 'mod_ep')] = new moodle_url(
+            '/mod/ep/declare.php',
+            ['id' => $cm->id, 'creditid' => $credit->id, 'action' => 'cancel', 'sesskey' => sesskey()]
+        );
     }
 
     return ep_render_actions($actions);
@@ -1936,10 +1971,13 @@ function ep_print_student_dashboard(stdClass $ep, $userid, stdClass $cm, stdClas
                 if ($typerow->capped > 0) {
                     $label .= ' ' . html_writer::span(
                         get_string('cappedshort', 'mod_ep', ep_format_ects($typerow->capped)),
-                        'badge badge-secondary');
+                        'badge badge-secondary'
+                    );
                 }
-                $yeartable->data[] = array_merge(['', $label],
-                    ep_render_progress_cells($typerow->retained, 0, true));
+                $yeartable->data[] = array_merge(
+                    ['', $label],
+                    ep_render_progress_cells($typerow->retained, 0, true)
+                );
             }
         }
         echo html_writer::table($yeartable);

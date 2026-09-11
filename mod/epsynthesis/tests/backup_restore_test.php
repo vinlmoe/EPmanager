@@ -37,7 +37,6 @@ require_once($CFG->dirroot . '/backup/util/includes/restore_includes.php');
  * @covers     \restore_epsynthesis_activity_structure_step
  */
 final class backup_restore_test extends \advanced_testcase {
-
     /**
      * Sauvegarde un cours puis le restaure dans un nouveau cours, données utilisateur comprises.
      *
@@ -47,16 +46,31 @@ final class backup_restore_test extends \advanced_testcase {
     protected function backup_and_restore(\stdClass $course): \stdClass {
         global $USER;
 
-        $bc = new \backup_controller(\backup::TYPE_1COURSE, $course->id, \backup::FORMAT_MOODLE,
-            \backup::INTERACTIVE_NO, \backup::MODE_GENERAL, $USER->id);
+        $bc = new \backup_controller(
+            \backup::TYPE_1COURSE,
+            $course->id,
+            \backup::FORMAT_MOODLE,
+            \backup::INTERACTIVE_NO,
+            \backup::MODE_GENERAL,
+            $USER->id
+        );
         $backupid = $bc->get_backupid();
         $bc->execute_plan();
         $bc->destroy();
 
         $newcourseid = \restore_dbops::create_new_course(
-            $course->fullname, $course->shortname . '_copie', $course->category);
-        $rc = new \restore_controller($backupid, $newcourseid, \backup::INTERACTIVE_NO,
-            \backup::MODE_GENERAL, $USER->id, \backup::TARGET_NEW_COURSE);
+            $course->fullname,
+            $course->shortname . '_copie',
+            $course->category
+        );
+        $rc = new \restore_controller(
+            $backupid,
+            $newcourseid,
+            \backup::INTERACTIVE_NO,
+            \backup::MODE_GENERAL,
+            $USER->id,
+            \backup::TARGET_NEW_COURSE
+        );
         $rc->execute_precheck();
         $rc->execute_plan();
         $rc->destroy();
@@ -113,18 +127,26 @@ final class backup_restore_test extends \advanced_testcase {
         $this->assertEquals(2, $DB->count_records('epsynthesis_link', ['synthesisid' => $newsynthesisid]));
 
         // Le lien vers l'activité du cours sauvegardé pointe désormais vers sa copie.
-        $this->assertTrue($DB->record_exists('epsynthesis_link',
-            ['synthesisid' => $newsynthesisid, 'epcmid' => $newepcm->id]));
-        $this->assertFalse($DB->record_exists('epsynthesis_link',
-            ['synthesisid' => $newsynthesisid, 'epcmid' => $epcm->id]));
+        $this->assertTrue($DB->record_exists(
+            'epsynthesis_link',
+            ['synthesisid' => $newsynthesisid, 'epcmid' => $newepcm->id]
+        ));
+        $this->assertFalse($DB->record_exists(
+            'epsynthesis_link',
+            ['synthesisid' => $newsynthesisid, 'epcmid' => $epcm->id]
+        ));
 
         // Celui vers l'activité d'un autre cours, absente de la sauvegarde, est conservé tel quel.
-        $this->assertTrue($DB->record_exists('epsynthesis_link',
-            ['synthesisid' => $newsynthesisid, 'epcmid' => $otherepcm->id]));
+        $this->assertTrue($DB->record_exists(
+            'epsynthesis_link',
+            ['synthesisid' => $newsynthesisid, 'epcmid' => $otherepcm->id]
+        ));
 
         // Les liens de la synthèse d'origine ne sont pas touchés.
         $this->assertEquals(2, $DB->count_records('epsynthesis_link', ['synthesisid' => $synthesis->id]));
-        $this->assertTrue($DB->record_exists('epsynthesis_link',
-            ['synthesisid' => $synthesis->id, 'epcmid' => $epcm->id]));
+        $this->assertTrue($DB->record_exists(
+            'epsynthesis_link',
+            ['synthesisid' => $synthesis->id, 'epcmid' => $epcm->id]
+        ));
     }
 }

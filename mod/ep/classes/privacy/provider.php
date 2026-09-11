@@ -37,10 +37,9 @@ use core_privacy\local\request\writer;
  * a prises et les EP du catalogue dont il est responsable.
  */
 class provider implements
-        \core_privacy\local\metadata\provider,
-        \core_privacy\local\request\core_userlist_provider,
-        \core_privacy\local\request\plugin\provider {
-
+    \core_privacy\local\metadata\provider,
+    \core_privacy\local\request\core_userlist_provider,
+    \core_privacy\local\request\plugin\provider {
     /**
      * Décrit les données personnelles conservées par le plugin.
      *
@@ -185,11 +184,16 @@ class provider implements
 
                 writer::with_context($context)->export_area_files(
                     [get_string('privacy:path:credits', 'mod_ep'), $credit->id],
-                    'mod_ep', EP_EVIDENCE_FILEAREA, $credit->id);
+                    'mod_ep',
+                    EP_EVIDENCE_FILEAREA,
+                    $credit->id
+                );
             }
 
             writer::with_context($context)->export_data(
-                [get_string('privacy:path:credits', 'mod_ep')], (object) ['credits' => $data]);
+                [get_string('privacy:path:credits', 'mod_ep')],
+                (object) ['credits' => $data]
+            );
         }
     }
 
@@ -281,14 +285,22 @@ class provider implements
             get_file_storage()->delete_area_files($context->id, 'mod_ep', EP_EVIDENCE_FILEAREA, $creditid);
         }
         $DB->delete_records_select('ep_credit', "epid = :epid AND userid $insql", $params);
-        $DB->set_field_select('ep_credit', 'validatedby', null,
-            "epid = :epid AND validatedby $insql", $params);
+        $DB->set_field_select(
+            'ep_credit',
+            'validatedby',
+            null,
+            "epid = :epid AND validatedby $insql",
+            $params
+        );
 
         $activityids = $DB->get_fieldset_select('ep_activity', 'id', 'epid = ?', [$cm->instance]);
         if ($activityids) {
             [$actsql, $actparams] = $DB->get_in_or_equal($activityids, SQL_PARAMS_NAMED, 'a');
-            $DB->delete_records_select('ep_activity_teacher',
-                "activityid $actsql AND teacherid $insql", $actparams + $inparams);
+            $DB->delete_records_select(
+                'ep_activity_teacher',
+                "activityid $actsql AND teacherid $insql",
+                $actparams + $inparams
+            );
         }
     }
 }

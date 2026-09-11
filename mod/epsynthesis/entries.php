@@ -54,8 +54,10 @@ $PAGE->set_context($context);
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($epsynthesis->name));
-echo html_writer::link(new moodle_url('/mod/epsynthesis/dashboard.php', ['id' => $cm->id]),
-    get_string('pilotage', 'mod_ep'));
+echo html_writer::link(
+    new moodle_url('/mod/epsynthesis/dashboard.php', ['id' => $cm->id]),
+    get_string('pilotage', 'mod_ep')
+);
 
 if ($epsynthesis->intro) {
     echo $OUTPUT->box(format_module_intro('epsynthesis', $epsynthesis, $cm->id), 'generalbox mod_introbox');
@@ -101,9 +103,11 @@ if (empty($awaiting)) {
             ep_format_ects($credit->claimedects),
             userdate($credit->timecreated, get_string('strftimedatetimeshort')),
             ep_render_actions([
-                get_string('validatecredit', 'mod_ep') => new moodle_url('/mod/ep/validate.php',
+                get_string('validatecredit', 'mod_ep') => new moodle_url(
+                    '/mod/ep/validate.php',
                     ['id' => $credit->cmid, 'creditid' => $credit->id,
-                        'returnurl' => $baseurl->out_as_local_url(false)]),
+                    'returnurl' => $baseurl->out_as_local_url(false)]
+                ),
             ], 'btn btn-sm btn-primary mr-1 mb-1'),
         ];
     }
@@ -169,9 +173,11 @@ foreach ($credits as $credit) {
         (int) $credit->status === EP_STATUS_VALIDATED ? ep_format_ects($credit->retainedects) : '-',
         html_writer::span(ep_status_label($credit->status), 'badge ' . ep_status_badgeclass($credit->status)),
         ep_render_actions([
-            $label => new moodle_url('/mod/ep/validate.php',
+            $label => new moodle_url(
+                '/mod/ep/validate.php',
                 ['id' => $credit->cmid, 'creditid' => $credit->id,
-                    'returnurl' => $listurl->out_as_local_url(false)]),
+                'returnurl' => $listurl->out_as_local_url(false)]
+            ),
         ]),
     ];
 }

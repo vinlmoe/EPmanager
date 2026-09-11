@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  style:
+    name: Style Moodle
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Récupère le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installe PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: Installe moodlehq/moodle-cs
+        run: |
+          mkdir -p "$RUNNER_TEMP/cs"
+          composer --working-dir="$RUNNER_TEMP/cs" --no-interaction require moodlehq/moodle-cs
+          # Les standards PHPCSExtra dont dépend « moodle » ne sont pas déclarés d'office
+          # lorsque le greffon Composer de PHP_CodeSniffer ne tourne pas : on les enregistre.
+          "$RUNNER_TEMP/cs/vendor/bin/phpcs" --config-set installed_paths \
+            "$RUNNER_TEMP/cs/vendor/moodlehq/moodle-cs/moodle,$RUNNER_TEMP/cs/vendor/phpcsstandards/phpcsextra/Universal,$RUNNER_TEMP/cs/vendor/phpcsstandards/phpcsextra/NormalizedArrays,$RUNNER_TEMP/cs/vendor/phpcsstandards/phpcsextra/Modernize"
+
+      - name: Vérifie le style (erreurs et avertissements)
+        run: |
+          "$RUNNER_TEMP/cs/vendor/bin/phpcs" --standard=phpcs.xml -p
+
+  moodle:
+    name: ${{ matrix.plugin }} / ${{ matrix.moodle-branch }}
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: [ep, epsynthesis]
+        moodle-branch: [MOODLE_405_STABLE]
+        php: ['8.2']
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Récupère le dépôt
+        uses: actions/checkout@v4
+        with:
+          path: repo
+
+      - name: Récupère Moodle-stage (dépendance déclarée de mod_ep)
+        uses: actions/checkout@v4
+        with:
+          repository: vinlmoe/Moodle-stage
+          path: moodle-stage
+
+      - name: Installe PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pgsql, zip, gd, intl
+          ini-values: max_input_vars=5000
+          coverage: none
+
+      - name: Installe moodle-plugin-ci
+        run: |
+          composer create-project -n --no-dev --prefer-dist moodlehq/moodle-plugin-ci ci ^4
+          echo $(cd ci/bin; pwd) >> $GITHUB_PATH
+          echo $(cd ci/vendor/bin; pwd) >> $GITHUB_PATH
+          sudo locale-gen en_AU.UTF-8
+
+      - name: Rassemble les autres modules du dépôt
+        # mod_epsynthesis dépend de mod_ep, qui dépend lui-même de mod_stage (autre dépôt) : tous
+        # doivent être présents, ceux qui ne sont pas testés étant fournis en modules supplémentaires.
+        run: |
+          mkdir -p extra
+          for dir in repo/mod/*/; do
+            name=$(basename "$dir")
+            if [ "$name" != "${{ matrix.plugin }}" ]; then
+              cp -r "$dir" "extra/$name"
+            fi
+          done
+          cp -r moodle-stage/mod/stage extra/stage
+
+      - name: Installe Moodle
+        run: moodle-plugin-ci install --plugin repo/mod/${{ matrix.plugin }} --extra-plugins extra --db-host=127.0.0.1
+        env:
+          DB: pgsql
+          MOODLE_BRANCH: ${{ matrix.moodle-branch }}
+          IGNORE_PATHS: thirdparty
+
+      - name: Analyse syntaxique
+        run: moodle-plugin-ci phplint
+
+      - name: Structure du module
+        run: moodle-plugin-ci validate
+
+      - name: Points de sauvegarde de la mise à jour
+        run: moodle-plugin-ci savepoints
+
+      - name: Gabarits Mustache
+        run: moodle-plugin-ci mustache
+
+      - name: Blocs de documentation
+        # Informatif pour l'instant : ce contrôle n'a jamais tourné sur ce code, son relevé
+        # reste à trier. À passer bloquant (retirer continue-on-error) une fois le relevé vidé.
+        continue-on-error: true
+        run: moodle-plugin-ci phpdoc
+
+      - name: Tests PHPUnit
+        run: moodle-plugin-ci phpunit

@@ -22,8 +22,6 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /** Crédit annulé (désinscription de l'étudiant, retrait par la DEVE) : état terminal, conservé. */
 define('EP_STATUS_CANCELLED', -2);
 /** Crédit refusé par le responsable de l'EP ou l'enseignant référent, avec motif. */

@@ -23,8 +23,6 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Décrit l'arbre XML (ep.xml) d'une instance de mod_ep, ses annotations d'identifiants et ses
  * zones de fichiers.
@@ -37,7 +35,6 @@ defined('MOODLE_INTERNAL') || die();
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class backup_ep_activity_structure_step extends backup_activity_structure_step {
-
     /**
      * Construit la structure sauvegardée.
      *
@@ -113,13 +110,15 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
             // mod_stage : ep_sync_stage_credits() les recrée et les supprime à partir de ceux-ci,
             // et leur « sourceref » désignerait des saisies du site d'origine. Les sauvegarder
             // n'apporterait donc rien et prêterait à confusion.
-            $credit->set_source_sql('
+            $credit->set_source_sql(
+                '
                 SELECT *
                   FROM {ep_credit}
                  WHERE epid = ?
                    AND source <> ?
               ORDER BY id',
-                [backup::VAR_PARENTID, backup_helper::is_sqlparam(EP_SOURCE_STAGE)]);
+                [backup::VAR_PARENTID, backup_helper::is_sqlparam(EP_SOURCE_STAGE)]
+            );
         }
 
         // Annotations d'identifiants.

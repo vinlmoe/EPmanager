@@ -34,7 +34,6 @@ require_once($CFG->dirroot . '/mod/ep/locallib.php');
  * @covers     ::ep_validate_credit
  */
 final class catalog_test extends \advanced_testcase {
-
     /** @var \stdClass */
     protected $ep;
 

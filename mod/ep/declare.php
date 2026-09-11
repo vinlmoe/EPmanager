@@ -55,8 +55,12 @@ $PAGE->set_context($context);
 // elle-même, pas après coup.
 $credit = null;
 if ($creditid) {
-    $credit = $DB->get_record('ep_credit',
-        ['id' => $creditid, 'epid' => $ep->id, 'userid' => $USER->id], '*', MUST_EXIST);
+    $credit = $DB->get_record(
+        'ep_credit',
+        ['id' => $creditid, 'epid' => $ep->id, 'userid' => $USER->id],
+        '*',
+        MUST_EXIST
+    );
     if (!ep_student_can_cancel($credit)) {
         throw new moodle_exception('errorcreditdecided', 'mod_ep', $returnurl->out(false));
     }
@@ -100,8 +104,14 @@ $mform = new credit_form(new moodle_url($baseurl, ['creditid' => $creditid]), [
 ]);
 
 $draftitemid = file_get_submitted_draft_itemid('evidence');
-file_prepare_draft_area($draftitemid, $context->id, 'mod_ep', EP_EVIDENCE_FILEAREA,
-    $credit ? $credit->id : null, $fileoptions);
+file_prepare_draft_area(
+    $draftitemid,
+    $context->id,
+    'mod_ep',
+    EP_EVIDENCE_FILEAREA,
+    $credit ? $credit->id : null,
+    $fileoptions
+);
 
 if ($credit) {
     $mform->set_data([
@@ -148,8 +158,14 @@ if ($mform->is_cancelled()) {
         ]);
     }
 
-    file_save_draft_area_files($data->evidence, $context->id, 'mod_ep', EP_EVIDENCE_FILEAREA,
-        $savedid, $fileoptions);
+    file_save_draft_area_files(
+        $data->evidence,
+        $context->id,
+        'mod_ep',
+        EP_EVIDENCE_FILEAREA,
+        $savedid,
+        $fileoptions
+    );
 
     redirect($returnurl, get_string('creditsubmitted', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
@@ -163,7 +179,8 @@ echo $OUTPUT->notification(
     empty($referents)
         ? get_string('declarenoreferent', 'mod_ep')
         : get_string('declarereferent', 'mod_ep', implode(', ', array_map('fullname', $referents))),
-    empty($referents) ? 'warning' : 'info');
+    empty($referents) ? 'warning' : 'info'
+);
 
 $mform->display();
 

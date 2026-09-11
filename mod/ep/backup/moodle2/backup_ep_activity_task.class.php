@@ -36,7 +36,6 @@ require_once($CFG->dirroot . '/mod/ep/backup/moodle2/backup_ep_stepslib.php');
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class backup_ep_activity_task extends backup_activity_task {
-
     /**
      * Aucun réglage propre à cette activité.
      */
