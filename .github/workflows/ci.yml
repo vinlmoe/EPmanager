@@ -69,10 +69,19 @@ jobs:
           path: repo
 
       - name: Récupère Moodle-stage (dépendance déclarée de mod_ep)
-        uses: actions/checkout@v4
-        with:
-          repository: vinlmoe/Moodle-stage
-          path: moodle-stage
+        # Les deux dépôts évoluent de pair : quand une branche du même nom existe dans
+        # Moodle-stage, c'est elle qu'il faut prendre, la branche par défaut ne portant pas
+        # encore le changement correspondant. Sinon, repli sur la branche par défaut.
+        run: |
+          url=https://github.com/vinlmoe/Moodle-stage.git
+          branch="${{ github.head_ref || github.ref_name }}"
+          if git ls-remote --exit-code --heads "$url" "$branch" > /dev/null 2>&1; then
+            echo "Branche « $branch » trouvée dans Moodle-stage."
+          else
+            branch=$(git ls-remote --symref "$url" HEAD | sed -n 's|^ref: refs/heads/\(.*\)\tHEAD$|\1|p')
+            echo "Pas de branche du même nom dans Moodle-stage : repli sur « $branch »."
+          fi
+          git clone --depth 1 --branch "$branch" "$url" moodle-stage
 
       - name: Installe PHP
         uses: shivammathur/setup-php@v2

@@ -54,6 +54,11 @@ Chaque poussée déclenche `.github/workflows/ci.yml`, en deux temps :
   sauvegarde de la mise à jour, gabarits Mustache et tests PHPUnit. Le contrôle des blocs de
   documentation (`phpdoc`) est présent mais non bloquant : son relevé reste à trier.
 
+`mod_stage` étant une dépendance déclarée de `mod_ep`, le dépôt Moodle-stage est récupéré et
+fourni en module supplémentaire. Les deux dépôts évoluant de pair, la CI prend la branche du
+même nom si elle existe là-bas, et la branche par défaut sinon : un changement qui touche les
+deux côtés se teste ainsi d'un bloc, avant même d'être fusionné.
+
 Pour rejouer le contrôle de style en local :
 
 ```bash
