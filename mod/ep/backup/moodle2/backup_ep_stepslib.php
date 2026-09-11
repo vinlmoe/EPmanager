@@ -58,8 +58,11 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
             'maxects', 'maxectsperyear', 'ectsperday', 'sortorder', 'timecreated', 'timemodified',
         ]);
 
-        $activities = new backup_nested_element('activities');
-        $activity = new backup_nested_element('activity', ['id'], [
+        // « activity » est le nom de l'élément racine dans lequel prepare_activity_structure()
+        // enveloppe toute la structure : le réutiliser pour les EP du catalogue ferait échouer la
+        // construction de l'arbre (baseelementexisting).
+        $catalogactivities = new backup_nested_element('catalogactivities');
+        $catalogactivity = new backup_nested_element('catalogactivity', ['id'], [
             'typeid', 'name', 'description', 'ects', 'minstudyyear', 'maxstudyyear',
             'capacity', 'visible', 'sortorder', 'timecreated', 'timemodified',
         ]);
@@ -83,9 +86,9 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         $ep->add_child($types);
         $types->add_child($type);
 
-        $ep->add_child($activities);
-        $activities->add_child($activity);
-        $activity->add_child($activityteachers);
+        $ep->add_child($catalogactivities);
+        $catalogactivities->add_child($catalogactivity);
+        $catalogactivity->add_child($activityteachers);
         $activityteachers->add_child($activityteacher);
 
         $ep->add_child($yearrequirements);
@@ -97,7 +100,7 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         // Sources.
         $ep->set_source_table('ep', ['id' => backup::VAR_ACTIVITYID]);
         $type->set_source_table('ep_type', ['epid' => backup::VAR_PARENTID], 'sortorder, id');
-        $activity->set_source_table('ep_activity', ['epid' => backup::VAR_PARENTID], 'sortorder, id');
+        $catalogactivity->set_source_table('ep_activity', ['epid' => backup::VAR_PARENTID], 'sortorder, id');
         $yearrequirement->set_source_table('ep_year_requirement', ['epid' => backup::VAR_PARENTID], 'studyyear');
 
         // Les responsables d'un EP du catalogue relèvent du paramétrage de l'activité : ils sont

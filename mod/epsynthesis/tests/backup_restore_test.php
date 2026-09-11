@@ -64,9 +64,11 @@ final class backup_restore_test extends \advanced_testcase {
         try {
             $bc->execute_plan();
         } finally {
-            // Sans cela, une sauvegarde en échec laisse derrière elle la table temporaire
-            // backup_ids_temp, qui fait ensuite échouer tous les tests suivants du fichier.
             $bc->destroy();
+            // La suppression de backup_ids_temp fait partie du plan : elle ne tourne pas si
+            // celui-ci échoue, et destroy() ne s'en charge pas. La table survivrait alors au
+            // test, faisant échouer tous les suivants du fichier sur une erreur DDL sans rapport.
+            \backup_controller_dbops::drop_backup_ids_temp_table($backupid);
         }
 
         $newcourseid = \restore_dbops::create_new_course(
@@ -87,6 +89,7 @@ final class backup_restore_test extends \advanced_testcase {
             $rc->execute_plan();
         } finally {
             $rc->destroy();
+            \restore_controller_dbops::drop_restore_temp_tables($backupid);
         }
 
         return get_course($newcourseid);

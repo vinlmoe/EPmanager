@@ -43,10 +43,10 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
 
         $paths[] = new restore_path_element('ep', '/activity/ep');
         $paths[] = new restore_path_element('ep_type', '/activity/ep/types/type');
-        $paths[] = new restore_path_element('ep_activity', '/activity/ep/activities/activity');
+        $paths[] = new restore_path_element('ep_activity', '/activity/ep/catalogactivities/catalogactivity');
         $paths[] = new restore_path_element(
             'ep_activity_teacher',
-            '/activity/ep/activities/activity/activityteachers/activityteacher'
+            '/activity/ep/catalogactivities/catalogactivity/activityteachers/activityteacher'
         );
         $paths[] = new restore_path_element(
             'ep_year_requirement',
