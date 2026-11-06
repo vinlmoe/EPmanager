@@ -204,7 +204,7 @@ final class concurrency_regression_test extends \advanced_testcase {
         $DB->set_field('ep_activity', 'minstudyyear', 4, ['id' => $activity->id]);
         $this->assertSame('errorwrongyear', ep_register_to_activity($ep, $activity, $student->id, 3)->problem);
 
-        $DB->set_field('ep_activity', 'visible', 0, ['id' => $activity->id]);
+        $DB->set_field('ep_activity', 'state', EP_ACTIVITY_CLOSED, ['id' => $activity->id]);
         $this->assertSame('errorregisterclosed', ep_register_to_activity($ep, $activity, $student->id, 4)->problem);
         $this->assertSame(0, ep_get_activity_taken_places($activity->id));
     }

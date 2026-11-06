@@ -37,7 +37,6 @@ class credit_cancelled extends credit_event_base {
      * @return string
      */
     public function get_description() {
-        $role = ($this->other['role'] ?? '') === 'student' ? "en tant qu'étudiant" : 'en tant que DEVE';
-        return $this->describe("annulé, {$role},");
+        return $this->describe('annulé, ' . self::role_phrase($this->other['role'] ?? '') . ',');
     }
 }

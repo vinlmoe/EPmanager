@@ -66,11 +66,16 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         $activities = new backup_nested_element('epactivities');
         $activity = new backup_nested_element('epactivity', ['id'], [
             'typeid', 'name', 'description', 'ects', 'minstudyyear', 'maxstudyyear', 'capacity',
-            'visible', 'sortorder', 'timecreated', 'timemodified',
+            'code', 'state', 'registrationstart', 'registrationend', 'datestart', 'dateend',
+            'grading', 'grademax', 'gradepass', 'minects', 'prereqblocking',
+            'sortorder', 'timecreated', 'timemodified',
         ]);
 
         $activityteachers = new backup_nested_element('activityteachers');
         $activityteacher = new backup_nested_element('activityteacher', ['id'], ['teacherid', 'timecreated']);
+
+        $prereqs = new backup_nested_element('prereqs');
+        $prereq = new backup_nested_element('prereq', ['id'], ['requiredid', 'timecreated']);
 
         $yearrequirements = new backup_nested_element('yearrequirements');
         $yearrequirement = new backup_nested_element('yearrequirement', ['id'], [
@@ -81,7 +86,7 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         $credit = new backup_nested_element('credit', ['id'], [
             'userid', 'typeid', 'activityid', 'studyyear', 'name', 'description',
             'claimedects', 'retainedects', 'status', 'step', 'pendingrole', 'grade', 'source', 'sourceref',
-            'validatedby', 'validatetime', 'validatorcomment', 'timecreated', 'timemodified',
+            'validatedby', 'addedby', 'validatetime', 'validatorcomment', 'timecreated', 'timemodified',
         ]);
 
         $decisions = new backup_nested_element('decisions');
@@ -98,6 +103,8 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         $activities->add_child($activity);
         $activity->add_child($activityteachers);
         $activityteachers->add_child($activityteacher);
+        $activity->add_child($prereqs);
+        $prereqs->add_child($prereq);
 
         $ep->add_child($yearrequirements);
         $yearrequirements->add_child($yearrequirement);
@@ -118,6 +125,7 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         // données d'un étudiant : ils sont sauvegardés dans tous les cas, et la restauration
         // ignore ceux dont le compte n'est pas présent dans l'archive.
         $activityteacher->set_source_table('ep_activity_teacher', ['activityid' => backup::VAR_PARENTID], 'id');
+        $prereq->set_source_table('ep_activity_prereq', ['activityid' => backup::VAR_PARENTID], 'id');
 
         if ($userinfo) {
             $credit->set_source_table('ep_credit', ['epid' => backup::VAR_PARENTID], 'id');
@@ -128,6 +136,7 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         $activityteacher->annotate_ids('user', 'teacherid');
         $credit->annotate_ids('user', 'userid');
         $credit->annotate_ids('user', 'validatedby');
+        $credit->annotate_ids('user', 'addedby');
         $decision->annotate_ids('user', 'userid');
 
         // Zones de fichiers. Les justificatifs : un ou plusieurs fichiers par crédit, itemid = id

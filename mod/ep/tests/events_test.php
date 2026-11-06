@@ -191,8 +191,20 @@ final class events_test extends \advanced_testcase {
         );
 
         $this->assertStringContainsString(
-            'en tant que enseignant',
+            "en tant qu'enseignant",
             $describe(event\credit_rejected::class, ['role' => 'teacher'])
+        );
+        $this->assertStringContainsString(
+            "en tant que responsable de l'EP",
+            $describe(event\credit_rejected::class, ['role' => 'owner'])
+        );
+        $this->assertStringContainsString(
+            "en tant qu'enseignant référent",
+            $describe(event\credit_validated::class, ['role' => 'referent', 'final' => false, 'retainedects' => 1.0])
+        );
+        $this->assertStringContainsString(
+            "inscrit, depuis la liste des participants",
+            $describe(event\credit_created::class, ['origin' => 'added'])
         );
         $this->assertStringContainsString(
             'en tant que DEVE',
@@ -206,6 +218,10 @@ final class events_test extends \advanced_testcase {
         $this->assertStringContainsString(
             'en tant que DEVE',
             $describe(event\credit_cancelled::class, ['role' => 'deve'])
+        );
+        $this->assertStringContainsString(
+            "en tant que responsable de l'EP",
+            $describe(event\credit_cancelled::class, ['role' => 'owner'])
         );
 
         $this->assertStringContainsString(

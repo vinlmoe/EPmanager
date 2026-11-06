@@ -40,6 +40,9 @@ class credit_validated extends credit_event_base {
     public function get_description() {
         $ects = isset($this->other['retainedects']) ? (float) $this->other['retainedects'] : 0.0;
         $label = rtrim(rtrim(number_format($ects, 2, ',', ''), '0'), ',');
+        if (array_key_exists('final', $this->other) && empty($this->other['final'])) {
+            return $this->describe('validé une étape, ' . self::role_phrase($this->other['role'] ?? '') . ',');
+        }
         return $this->describe("validé, pour {$label} ECTS retenu(s),");
     }
 }

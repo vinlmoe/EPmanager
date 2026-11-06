@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/ep/db" VERSION="20261107" COMMENT="XMLDB file for module mod_ep"
+<XMLDB PATH="mod/ep/db" VERSION="20261108" COMMENT="XMLDB file for module mod_ep"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
@@ -91,8 +91,26 @@
         <FIELD NAME="maxstudyyear" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="capacity" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="Nombre de places (0 = illimité) : les inscriptions en attente comptent, pour ne pas ouvrir plus de places que ce que le responsable pourra valider"/>
-        <FIELD NAME="visible" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"
-            COMMENT="Proposé au catalogue : un EP masqué n'accepte plus de nouvelle inscription mais conserve celles déjà prises"/>
+        <FIELD NAME="code" TYPE="char" LENGTH="30" NOTNULL="true" DEFAULT="" SEQUENCE="false"
+            COMMENT="Code de l'EP, unique dans l'instance s'il est renseigné : identifie l'EP dans les imports et les exports"/>
+        <FIELD NAME="state" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="published" SEQUENCE="false"
+            COMMENT="draft (brouillon d'une proposition), proposed (soumis à la DEVE), published (au catalogue, inscriptions ouvertes selon la période), closed (au catalogue, inscriptions closes), archived (retiré du catalogue, inscriptions conservées)"/>
+        <FIELD NAME="registrationstart" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Ouverture des inscriptions (0 = dès la publication)"/>
+        <FIELD NAME="registrationend" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Fermeture des inscriptions (0 = jusqu'à la clôture de l'EP)"/>
+        <FIELD NAME="datestart" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Début du déroulement de l'EP (information)"/>
+        <FIELD NAME="dateend" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Fin du déroulement de l'EP (information)"/>
+        <FIELD NAME="grading" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="" SEQUENCE="false"
+            COMMENT="Évaluation propre à l'EP : vide = celle de son type, none = sans note, grade = avec note (grademax, gradepass)"/>
+        <FIELD NAME="grademax" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="20" SEQUENCE="false"/>
+        <FIELD NAME="gradepass" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="10" SEQUENCE="false"/>
+        <FIELD NAME="minects" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Prérequis : ECTS d'EP déjà retenus au moment de l'inscription (0 = aucun)"/>
+        <FIELD NAME="prereqblocking" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"
+            COMMENT="1 : un prérequis manquant empêche l'inscription ; 0 : il est seulement signalé à l'étudiant et au responsable"/>
         <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
@@ -102,6 +120,27 @@
         <KEY NAME="epid" TYPE="foreign" FIELDS="epid" REFTABLE="ep" REFFIELDS="id"/>
         <KEY NAME="typeid" TYPE="foreign" FIELDS="typeid" REFTABLE="ep_type" REFFIELDS="id"/>
       </KEYS>
+      <INDEXES>
+        <INDEX NAME="epid-state" UNIQUE="false" FIELDS="epid, state"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="ep_activity_prereq" COMMENT="EP du catalogue à avoir validé avant de s'inscrire à un autre EP du catalogue">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="activityid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="requiredid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"
+            COMMENT="EP du catalogue de la même instance dont une inscription validée est exigée"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="activityid" TYPE="foreign" FIELDS="activityid" REFTABLE="ep_activity" REFFIELDS="id"/>
+        <KEY NAME="requiredid" TYPE="foreign" FIELDS="requiredid" REFTABLE="ep_activity" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="activityid-requiredid" UNIQUE="true" FIELDS="activityid, requiredid"/>
+      </INDEXES>
     </TABLE>
 
     <TABLE NAME="ep_activity_teacher" COMMENT="Responsable d'un EP du catalogue : valide les inscriptions des étudiants à cet EP et à lui seul">
@@ -153,6 +192,8 @@
             COMMENT="Identifiant de l'objet d'origine pour les attributions automatiques : id de la saisie mod_stage pour source = stage"/>
         <FIELD NAME="validatedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"
             COMMENT="Utilisateur ayant validé ou refusé (vide pour une attribution automatique)"/>
+        <FIELD NAME="addedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"
+            COMMENT="Responsable de l'EP ou DEVE ayant inscrit l'étudiant depuis la liste des participants (vide si l'étudiant s'est inscrit lui-même)"/>
         <FIELD NAME="validatetime" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="validatorcomment" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
@@ -165,6 +206,7 @@
         <KEY NAME="typeid" TYPE="foreign" FIELDS="typeid" REFTABLE="ep_type" REFFIELDS="id"/>
         <KEY NAME="activityid" TYPE="foreign" FIELDS="activityid" REFTABLE="ep_activity" REFFIELDS="id"/>
         <KEY NAME="validatedby" TYPE="foreign" FIELDS="validatedby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="addedby" TYPE="foreign" FIELDS="addedby" REFTABLE="user" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
         <INDEX NAME="epid-userid" UNIQUE="false" FIELDS="epid, userid"/>

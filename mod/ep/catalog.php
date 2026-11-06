@@ -126,10 +126,11 @@ echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('catalog', 'mod_ep'));
 echo html_writer::link(new moodle_url('/mod/ep/view.php', ['id' => $cm->id]), get_string('back'));
 
-// Les EP masqués n'apparaissent qu'à ceux qui gèrent le catalogue : pour eux, la page sert aussi
-// de contrôle de ce que voient les étudiants.
+// Les EP archivés, en brouillon ou proposés n'apparaissent qu'à ceux qui gèrent le catalogue :
+// pour eux, la page sert aussi de contrôle de ce que voient les étudiants.
 $canmanage = has_capability('mod/ep:manage', $context);
 $activities = ep_get_activities($ep->id, !$canmanage);
+$rights = ep_get_user_rights($ep, $context);
 
 // Places prises, responsables et inscriptions de l'étudiant : une requête chacun pour tout le
 // catalogue, et non une par EP.
@@ -158,11 +159,28 @@ foreach ($activities as $activity) {
     $type = $types[$activity->typeid] ?? null;
 
     $name = format_string($activity->name);
-    if (!$activity->visible) {
-        $name .= ' ' . html_writer::span(get_string('hidden', 'mod_ep'), 'badge badge-secondary');
+    if ($activity->code !== '') {
+        $name .= ' ' . html_writer::span(s($activity->code), 'text-muted small');
+    }
+    if ($activity->state !== EP_ACTIVITY_PUBLISHED) {
+        $name .= ' ' . html_writer::span(ep_activity_state_options()[$activity->state] ?? '', 'badge badge-secondary');
     }
     if (trim((string) $activity->description) !== '') {
         $name .= html_writer::div(format_text($activity->description, FORMAT_PLAIN), 'text-muted small');
+    }
+    $period = ep_activity_registration_label($activity);
+    if ($period !== '') {
+        $name .= html_writer::div($period, 'text-muted small');
+    }
+    // Prérequis : rappelés à l'étudiant (ce qui lui manque) et à ceux qui gèrent le catalogue.
+    if ($cansubmit && empty($myregistrations[$activity->id])) {
+        $missing = ep_get_missing_prerequisites($ep, $activity, $USER->id);
+        if ($missing) {
+            $name .= html_writer::div(
+                get_string('prereqmissing', 'mod_ep', implode(' ; ', $missing)),
+                $activity->prereqblocking ? 'text-danger small' : 'text-warning small'
+            );
+        }
     }
 
     $remaining = empty($activity->capacity)
@@ -182,23 +200,29 @@ foreach ($activities as $activity) {
         $registration = $myregistrations[$activity->id] ?? null;
         if ($registration) {
             $actioncell = ep_render_credit_status($registration->status);
-        } else if (!$activity->visible || !$type || empty($type->enabled)) {
-            $actioncell = html_writer::span(get_string('registerclosed', 'mod_ep'), 'text-muted');
+        } else if (!ep_activity_registration_open($activity) || !$type || empty($type->enabled)) {
+            $actioncell = html_writer::span(get_string('registrationnotopen', 'mod_ep'), 'text-muted');
         } else if ($remaining !== null && $remaining <= 0) {
             $actioncell = html_writer::span(get_string('nofreeplace', 'mod_ep'), 'text-muted');
         } else if (!ep_activity_open_to_year($activity, (int) $ep->currentstudyyear)) {
             $actioncell = html_writer::span(get_string('notopentoyear', 'mod_ep'), 'text-muted');
+        } else if ($activity->prereqblocking && ep_get_missing_prerequisites($ep, $activity, $USER->id)) {
+            $actioncell = html_writer::span(get_string('errorprerequisites', 'mod_ep'), 'text-muted');
         } else {
             $actioncell = ep_render_actions([
                 get_string('register', 'mod_ep') =>
                     new moodle_url($baseurl, ['action' => 'register', 'activityid' => $activity->id]),
             ], 'btn btn-sm btn-primary mr-1 mb-1');
         }
-    } else if ($canmanage) {
+    } else {
+        // Ceux qui gèrent le catalogue ou les participants de cet EP y accèdent d'ici.
         $actioncell = ep_render_actions([
-            get_string('edit') =>
-                new moodle_url('/mod/ep/activities.php', ['id' => $cm->id, 'action' => 'edit',
-                    'activityid' => $activity->id]),
+            get_string('edit') => $canmanage
+                ? new moodle_url('/mod/ep/activities.php', ['id' => $cm->id, 'action' => 'edit', 'activityid' => $activity->id])
+                : null,
+            get_string('participants', 'mod_ep') => ep_rights_can_manage_participants($rights, $activity)
+                ? new moodle_url('/mod/ep/participants.php', ['id' => $cm->id, 'activityid' => $activity->id])
+                : null,
         ]);
     }
 

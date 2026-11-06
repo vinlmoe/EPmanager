@@ -77,9 +77,68 @@ class activity_form extends \moodleform {
         $mform->setType('sortorder', PARAM_INT);
         $mform->setDefault('sortorder', 0);
 
-        $mform->addElement('advcheckbox', 'visible', get_string('visible'));
-        $mform->setDefault('visible', 1);
-        $mform->addHelpButton('visible', 'catalogactivityvisible', 'mod_ep');
+        $mform->addElement('text', 'code', get_string('activitycode', 'mod_ep'), ['size' => '20']);
+        $mform->setType('code', PARAM_TEXT);
+        $mform->addRule('code', get_string('maximumchars', '', 30), 'maxlength', 30, 'client');
+        $mform->addHelpButton('code', 'activitycode', 'mod_ep');
+
+        $mform->addElement('select', 'state', get_string('activitystate', 'mod_ep'), ep_activity_state_options());
+        $mform->setDefault('state', EP_ACTIVITY_PUBLISHED);
+        $mform->addHelpButton('state', 'activitystate', 'mod_ep');
+
+        // Période d'inscription et déroulement : facultatifs, chacun peut rester sans borne.
+        $mform->addElement(
+            'date_time_selector',
+            'registrationstart',
+            get_string('registrationstart', 'mod_ep'),
+            ['optional' => true]
+        );
+        $mform->addElement(
+            'date_time_selector',
+            'registrationend',
+            get_string('registrationend', 'mod_ep'),
+            ['optional' => true]
+        );
+        $mform->addElement('date_selector', 'datestart', get_string('activitydatestart', 'mod_ep'), ['optional' => true]);
+        $mform->addElement('date_selector', 'dateend', get_string('activitydateend', 'mod_ep'), ['optional' => true]);
+
+        // Évaluation : celle du type par défaut, ou une évaluation propre à cet EP.
+        $mform->addElement('header', 'gradinghdr', get_string('activitygrading', 'mod_ep'));
+        $mform->addElement('select', 'grading', get_string('activitygrading', 'mod_ep'), [
+            '' => get_string('activitygrading_type', 'mod_ep', get_string('type', 'mod_ep')),
+            EP_GRADING_NONE => get_string('grading_none', 'mod_ep'),
+            EP_GRADING_GRADE => get_string('grading_grade', 'mod_ep'),
+        ]);
+        $mform->addHelpButton('grading', 'activitygrading', 'mod_ep');
+        $mform->addElement('text', 'grademax', get_string('grademax', 'mod_ep'), ['size' => '8']);
+        $mform->setType('grademax', PARAM_FLOAT);
+        $mform->setDefault('grademax', 20);
+        $mform->hideIf('grademax', 'grading', 'neq', EP_GRADING_GRADE);
+        $mform->addElement('text', 'gradepass', get_string('gradepass', 'mod_ep'), ['size' => '8']);
+        $mform->setType('gradepass', PARAM_FLOAT);
+        $mform->setDefault('gradepass', 10);
+        $mform->hideIf('gradepass', 'grading', 'neq', EP_GRADING_GRADE);
+
+        // Prérequis : EP du catalogue à avoir validés, ECTS déjà retenus.
+        $mform->addElement('header', 'prereqhdr', get_string('prerequisites', 'mod_ep'));
+        $others = [];
+        foreach ($this->_customdata['otheractivities'] ?? [] as $other) {
+            $others[$other->id] = format_string($other->name) . ($other->code !== '' ? ' (' . s($other->code) . ')' : '');
+        }
+        $mform->addElement(
+            'autocomplete',
+            'prerequisites',
+            get_string('prereqactivities', 'mod_ep'),
+            $others,
+            ['multiple' => true]
+        );
+        $mform->addHelpButton('prerequisites', 'prereqactivities', 'mod_ep');
+        $mform->addElement('text', 'minects', get_string('prereqminects', 'mod_ep'), ['size' => '8']);
+        $mform->setType('minects', PARAM_FLOAT);
+        $mform->setDefault('minects', 0);
+        $mform->addElement('advcheckbox', 'prereqblocking', get_string('prereqblocking', 'mod_ep'));
+        $mform->setDefault('prereqblocking', 1);
+        $mform->addHelpButton('prereqblocking', 'prereqblocking', 'mod_ep');
 
         $this->add_action_buttons();
     }
@@ -106,6 +165,25 @@ class activity_form extends \moodleform {
         }
         if ((int) $data['capacity'] < 0) {
             $errors['capacity'] = get_string('errornegativecapacity', 'mod_ep');
+        }
+        if (
+            !empty($data['registrationstart']) && !empty($data['registrationend'])
+                && $data['registrationend'] <= $data['registrationstart']
+        ) {
+            $errors['registrationend'] = get_string('errorregistrationperiod', 'mod_ep');
+        }
+        if (($data['grading'] ?? '') === EP_GRADING_GRADE && (float) $data['gradepass'] > (float) $data['grademax']) {
+            $errors['gradepass'] = get_string('errorgradepass', 'mod_ep');
+        }
+        if ((float) ($data['minects'] ?? 0) < 0) {
+            $errors['minects'] = get_string('errornegativeects', 'mod_ep');
+        }
+        $code = trim((string) ($data['code'] ?? ''));
+        if (
+            $code !== '' && !empty($this->_customdata['epid'])
+                && ep_activity_code_used($this->_customdata['epid'], $code, (int) ($data['activityid'] ?? 0))
+        ) {
+            $errors['code'] = get_string('erroractivitycodeused', 'mod_ep');
         }
 
         return $errors;

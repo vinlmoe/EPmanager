@@ -31,6 +31,9 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class restore_ep_activity_structure_step extends restore_activity_structure_step {
+    /** @var array Prérequis des EP du catalogue, appliqués une fois tous les EP restaurés. */
+    protected $prereqs = [];
+
     /**
      * Déclare les chemins à restaurer.
      *
@@ -47,6 +50,10 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
         $paths[] = new restore_path_element(
             'ep_activity_teacher',
             '/activity/ep/epactivities/epactivity/activityteachers/activityteacher'
+        );
+        $paths[] = new restore_path_element(
+            'ep_activity_prereq',
+            '/activity/ep/epactivities/epactivity/prereqs/prereq'
         );
         $paths[] = new restore_path_element(
             'ep_year_requirement',
@@ -135,8 +142,29 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
         $data->epid = $this->get_new_parentid('ep');
         $data->typeid = $typeid;
 
+        // Sauvegarde antérieure aux états : un EP masqué n'était plus montré aux étudiants.
+        if (!isset($data->state)) {
+            $data->state = empty($data->visible) ? EP_ACTIVITY_ARCHIVED : EP_ACTIVITY_PUBLISHED;
+        }
+        unset($data->visible);
+
         $newitemid = $DB->insert_record('ep_activity', $data);
         $this->set_mapping('ep_activity', $oldid, $newitemid);
+    }
+
+    /**
+     * Met de côté un prérequis d'EP du catalogue : l'EP exigé peut n'être restauré qu'après celui-ci,
+     * la correspondance est donc appliquée dans after_execute().
+     *
+     * @param array $data
+     */
+    protected function process_ep_activity_prereq($data) {
+        $data = (object) $data;
+        $this->prereqs[] = [
+            'activityid' => $this->get_new_parentid('ep_activity'),
+            'requiredid' => (int) $data->requiredid,
+            'timecreated' => (int) ($data->timecreated ?? time()),
+        ];
     }
 
     /**
@@ -212,6 +240,8 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
             : ($this->get_mappingid('ep_activity', $data->activityid) ?: null);
         $data->validatedby = empty($data->validatedby) ? null
             : ($this->get_mappingid('user', $data->validatedby) ?: null);
+        $data->addedby = empty($data->addedby) ? null
+            : ($this->get_mappingid('user', $data->addedby) ?: null);
 
         // Sauvegarde antérieure aux circuits à étapes : une demande en attente attend le
         // responsable (inscription) ou le référent (déclaration).
@@ -247,6 +277,18 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
      * Rattache les fichiers une fois toutes les correspondances établies.
      */
     protected function after_execute() {
+        global $DB;
+
+        // Prérequis, une fois tous les EP du catalogue restaurés ; un EP exigé absent de la
+        // sauvegarde est écarté.
+        foreach ($this->prereqs as $prereq) {
+            $requiredid = $this->get_mappingid('ep_activity', $prereq['requiredid']);
+            if ($requiredid && $prereq['activityid']) {
+                $prereq['requiredid'] = $requiredid;
+                $DB->insert_record('ep_activity_prereq', (object) $prereq);
+            }
+        }
+
         // Zone sans itemid, rattachée au contexte du module.
         $this->add_related_files('mod_ep', 'intro', null);
 

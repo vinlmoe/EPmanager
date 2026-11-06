@@ -176,5 +176,62 @@ function xmldb_ep_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026110700, 'ep');
     }
 
+    if ($oldversion < 2026110800) {
+        // Catalogue : état et périodes de l'EP, barème propre, prérequis. L'ancien drapeau
+        // « visible » devient l'état : un EP masqué n'était plus montré aux étudiants, il est
+        // archivé (ses inscriptions restent au dossier).
+        $table = new xmldb_table('ep_activity');
+        $fields = [
+            new xmldb_field('code', XMLDB_TYPE_CHAR, '30', null, XMLDB_NOTNULL, null, '', 'capacity'),
+            new xmldb_field('state', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'published', 'code'),
+            new xmldb_field('registrationstart', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'state'),
+            new xmldb_field('registrationend', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'registrationstart'),
+            new xmldb_field('datestart', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'registrationend'),
+            new xmldb_field('dateend', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'datestart'),
+            new xmldb_field('grading', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, '', 'dateend'),
+            new xmldb_field('grademax', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '20', 'grading'),
+            new xmldb_field('gradepass', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '10', 'grademax'),
+            new xmldb_field('minects', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0', 'gradepass'),
+            new xmldb_field('prereqblocking', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'minects'),
+        ];
+        foreach ($fields as $field) {
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+        $visible = new xmldb_field('visible');
+        if ($dbman->field_exists($table, $visible)) {
+            $DB->execute("UPDATE {ep_activity} SET state = 'archived' WHERE visible = 0");
+            $dbman->drop_field($table, $visible);
+        }
+        $index = new xmldb_index('epid-state', XMLDB_INDEX_NOTUNIQUE, ['epid', 'state']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+
+        $table = new xmldb_table('ep_activity_prereq');
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('activityid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('requiredid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('activityid', XMLDB_KEY_FOREIGN, ['activityid'], 'ep_activity', ['id']);
+        $table->add_key('requiredid', XMLDB_KEY_FOREIGN, ['requiredid'], 'ep_activity', ['id']);
+        $table->add_index('activityid-requiredid', XMLDB_INDEX_UNIQUE, ['activityid', 'requiredid']);
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        $table = new xmldb_table('ep_credit');
+        $field = new xmldb_field('addedby', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'validatedby');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $key = new xmldb_key('addedby', XMLDB_KEY_FOREIGN, ['addedby'], 'user', ['id']);
+        $dbman->add_key($table, $key);
+
+        upgrade_mod_savepoint(true, 2026110800, 'ep');
+    }
+
     return true;
 }

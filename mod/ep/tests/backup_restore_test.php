@@ -178,7 +178,11 @@ final class backup_restore_test extends \advanced_testcase {
         $oldtypeids = array_keys(ep_get_types($ep->id));
         $this->assertCount(6, $oldtypeids);
 
-        $activity = $epgen->create_activity($ep, ['name' => 'Atelier chirurgie', 'ects' => 3, 'capacity' => 12]);
+        $activity = $epgen->create_activity($ep, ['name' => 'Atelier chirurgie', 'ects' => 3, 'capacity' => 12,
+            'code' => 'EP-CHIR', 'grading' => EP_GRADING_GRADE, 'gradepass' => 12, 'prereqblocking' => 0]);
+        // Un second EP, archivé, exigé par le premier : le prérequis doit suivre la copie.
+        $required = $epgen->create_activity($ep, ['name' => 'Anatomie', 'state' => EP_ACTIVITY_ARCHIVED]);
+        ep_set_activity_prerequisites($activity, [$required->id]);
         ep_set_activity_teachers($activity->id, [$teacher->id]);
         ep_set_year_requirement($ep->id, 3, 6);
 
@@ -204,6 +208,9 @@ final class backup_restore_test extends \advanced_testcase {
             'filearea' => EP_EVIDENCE_FILEAREA, 'itemid' => $declaredid,
             'filepath' => '/', 'filename' => 'attestation.pdf',
         ], 'attestation');
+
+        // L'EP est clos après les inscriptions : l'état doit suivre la copie.
+        $DB->set_field('ep_activity', 'state', EP_ACTIVITY_CLOSED, ['id' => $activity->id]);
 
         $newcourse = $this->backup_and_restore($course);
         $newcm = $this->single_instance($newcourse->id, 'ep');
@@ -245,11 +252,20 @@ final class backup_restore_test extends \advanced_testcase {
         $this->assertEquals(0.25, $newstagetype->ectsperday);
 
         // Catalogue : rattaché au type de la copie, avec son responsable.
-        $newactivities = $DB->get_records('ep_activity', ['epid' => $newep->id]);
-        $this->assertCount(1, $newactivities);
+        $newactivities = $DB->get_records('ep_activity', ['epid' => $newep->id], 'id');
+        $this->assertCount(2, $newactivities);
         $newactivity = reset($newactivities);
+        $newrequired = end($newactivities);
         $this->assertNotEquals($activity->id, $newactivity->id);
         $this->assertSame('Atelier chirurgie', $newactivity->name);
+        $this->assertSame('EP-CHIR', $newactivity->code);
+        $this->assertSame(EP_ACTIVITY_CLOSED, $newactivity->state);
+        $this->assertSame(EP_GRADING_GRADE, $newactivity->grading);
+        $this->assertEquals(12, $newactivity->gradepass);
+        $this->assertSame(EP_ACTIVITY_ARCHIVED, $newrequired->state);
+        // Le prérequis désigne l'EP de la copie, pas celui d'origine.
+        $this->assertSame([(int) $newrequired->id], ep_get_activity_prerequisites($newactivity->id));
+        $this->assertEquals(0, $newactivity->prereqblocking);
         $this->assertEquals(3, $newactivity->ects);
         $this->assertEquals(12, $newactivity->capacity);
         $this->assertEquals($newacademic->id, $newactivity->typeid);

@@ -52,6 +52,17 @@ define('EP_ROLE_DEVE', 'deve');
 /** Auteur d'un retrait : l'étudiant lui-même. */
 define('EP_ROLE_STUDENT', 'student');
 
+/** EP du catalogue en brouillon : proposition d'un enseignant, pas encore soumise. */
+define('EP_ACTIVITY_DRAFT', 'draft');
+/** EP du catalogue proposé par un enseignant, en attente de la DEVE. */
+define('EP_ACTIVITY_PROPOSED', 'proposed');
+/** EP du catalogue publié : inscriptions ouvertes, selon sa période d'inscription. */
+define('EP_ACTIVITY_PUBLISHED', 'published');
+/** EP du catalogue clos : toujours au catalogue, inscriptions closes, notes encore saisissables. */
+define('EP_ACTIVITY_CLOSED', 'closed');
+/** EP du catalogue archivé : retiré du catalogue, inscriptions conservées au dossier. */
+define('EP_ACTIVITY_ARCHIVED', 'archived');
+
 /** Évaluation sans note : validé ou non validé. */
 define('EP_GRADING_NONE', 'none');
 /** Évaluation par une note, comparée au seuil du type ou de l'EP. */
@@ -178,10 +189,12 @@ function ep_delete_instance($id) {
         return false;
     }
 
+    // Suppressions par paquets : une liste IN sans limite dépasse celles de MSSQL et d'Oracle.
     $activityids = $DB->get_fieldset_select('ep_activity', 'id', 'epid = ?', [$id]);
-    if ($activityids) {
-        [$insql, $inparams] = $DB->get_in_or_equal($activityids);
+    foreach (array_chunk($activityids, 500) as $chunk) {
+        [$insql, $inparams] = $DB->get_in_or_equal($chunk);
         $DB->delete_records_select('ep_activity_teacher', "activityid $insql", $inparams);
+        $DB->delete_records_select('ep_activity_prereq', "activityid $insql", $inparams);
     }
     $creditids = $DB->get_fieldset_select('ep_credit', 'id', 'epid = ?', [$id]);
     foreach (array_chunk($creditids, 500) as $chunk) {

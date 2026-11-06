@@ -45,6 +45,8 @@ class credit_created extends credit_event_base {
                 return $this->describe("demandé, par déclaration hors catalogue,");
             case 'deve':
                 return $this->describe("saisi, en tant que DEVE,");
+            case 'added':
+                return $this->describe("inscrit, depuis la liste des participants de l'EP,");
             case 'stage':
                 return $this->describe("attribué automatiquement, d'après un stage complémentaire validé,");
             default:

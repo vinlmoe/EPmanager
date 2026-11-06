@@ -37,7 +37,6 @@ class credit_rejected extends credit_event_base {
      * @return string
      */
     public function get_description() {
-        $role = ($this->other['role'] ?? '') === 'teacher' ? 'enseignant' : 'DEVE';
-        return $this->describe("refusé, en tant que {$role},");
+        return $this->describe('refusé, ' . self::role_phrase($this->other['role'] ?? '') . ',');
     }
 }

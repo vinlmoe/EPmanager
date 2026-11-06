@@ -286,6 +286,26 @@ function ep_get_activities_taken_places($epid) {
 }
 
 /**
+ * Nombre d'inscriptions de chaque EP du catalogue d'une instance, par statut, en une requête.
+ *
+ * @param int $epid
+ * @return array activityid => [status => int]
+ */
+function ep_get_activities_status_counts($epid) {
+    global $DB;
+
+    $sql = "SELECT " . $DB->sql_concat('c.activityid', "'-'", 'c.status') . " AS k, c.activityid, c.status, COUNT(c.id) AS n
+              FROM {ep_credit} c
+             WHERE c.epid = :epid AND c.activityid IS NOT NULL
+          GROUP BY c.activityid, c.status";
+    $counts = [];
+    foreach ($DB->get_records_sql($sql, ['epid' => $epid]) as $row) {
+        $counts[(int) $row->activityid][(int) $row->status] = (int) $row->n;
+    }
+    return $counts;
+}
+
+/**
  * Responsables de tous les EP du catalogue d'une instance, en une requête.
  *
  * @param int $epid
@@ -392,17 +412,94 @@ function ep_type_option_label(stdClass $type) {
  * EP du catalogue d'une instance.
  *
  * @param int $epid
- * @param bool $onlyvisible
+ * @param bool $onlylisted Seulement ceux qui figurent au catalogue des étudiants (publiés ou clos).
  * @return array id => stdClass
  */
-function ep_get_activities($epid, $onlyvisible = false) {
+function ep_get_activities($epid, $onlylisted = false) {
     global $DB;
 
-    $conditions = ['epid' => $epid];
-    if ($onlyvisible) {
-        $conditions['visible'] = 1;
+    if (!$onlylisted) {
+        return $DB->get_records('ep_activity', ['epid' => $epid], 'sortorder ASC, name ASC');
     }
-    return $DB->get_records('ep_activity', $conditions, 'sortorder ASC, name ASC');
+    [$insql, $params] = $DB->get_in_or_equal([EP_ACTIVITY_PUBLISHED, EP_ACTIVITY_CLOSED], SQL_PARAMS_NAMED, 'st');
+    return $DB->get_records_select(
+        'ep_activity',
+        "epid = :epid AND state $insql",
+        $params + ['epid' => $epid],
+        'sortorder ASC, name ASC'
+    );
+}
+
+/**
+ * Indique si un code d'EP du catalogue est déjà pris dans une instance, par un autre EP que
+ * celui donné.
+ *
+ * @param int $epid
+ * @param string $code
+ * @param int $excludeid
+ * @return bool
+ */
+function ep_activity_code_used($epid, $code, $excludeid = 0) {
+    global $DB;
+
+    return $DB->record_exists_select(
+        'ep_activity',
+        'epid = :epid AND code = :code AND id <> :excludeid',
+        ['epid' => $epid, 'code' => trim($code), 'excludeid' => (int) $excludeid]
+    );
+}
+
+/**
+ * Enregistre un EP du catalogue (création ou modification) avec ses prérequis, à partir des
+ * données d'un formulaire ou d'un import. Les champs absents gardent leur valeur (modification)
+ * ou prennent leur valeur par défaut (création).
+ *
+ * @param stdClass $ep
+ * @param stdClass $data Champs de ep_activity, plus 'prerequisites' (identifiants d'EP) ; id
+ *                       présent et non nul pour une modification.
+ * @return int Identifiant de l'EP.
+ */
+function ep_save_activity(stdClass $ep, stdClass $data) {
+    global $DB;
+
+    $existing = !empty($data->id) ? $DB->get_record('ep_activity', ['id' => $data->id, 'epid' => $ep->id], '*', MUST_EXIST) : null;
+    $now = time();
+    $defaults = [
+        'epid' => $ep->id, 'typeid' => 0, 'name' => '', 'description' => '', 'ects' => 0,
+        'minstudyyear' => 0, 'maxstudyyear' => 0, 'capacity' => 0, 'code' => '', 'state' => EP_ACTIVITY_PUBLISHED,
+        'registrationstart' => 0, 'registrationend' => 0, 'datestart' => 0, 'dateend' => 0,
+        'grading' => '', 'grademax' => 20, 'gradepass' => 10, 'minects' => 0, 'prereqblocking' => 1,
+        'sortorder' => 0, 'timecreated' => $now,
+    ];
+    $record = (object) array_merge($defaults, $existing ? (array) $existing : [], array_intersect_key((array) $data, $defaults));
+    $record->epid = $ep->id;
+    $record->name = trim((string) $record->name);
+    $record->code = core_text::substr(trim((string) $record->code), 0, 30);
+    $record->ects = round((float) $record->ects, 2);
+    $record->capacity = max(0, (int) $record->capacity);
+    $record->state = array_key_exists($record->state, ep_activity_state_options()) ? $record->state : EP_ACTIVITY_PUBLISHED;
+    $intfields = ['registrationstart', 'registrationend', 'datestart', 'dateend', 'minstudyyear', 'maxstudyyear', 'sortorder'];
+    foreach ($intfields as $field) {
+        $record->$field = (int) $record->$field;
+    }
+    $record->grading = in_array($record->grading, [EP_GRADING_NONE, EP_GRADING_GRADE], true) ? $record->grading : '';
+    $record->grademax = max(1, round((float) $record->grademax, 2));
+    $record->gradepass = min($record->grademax, max(0, round((float) $record->gradepass, 2)));
+    $record->minects = max(0, round((float) $record->minects, 2));
+    $record->prereqblocking = empty($record->prereqblocking) ? 0 : 1;
+    $record->timemodified = $now;
+
+    if ($existing) {
+        $record->id = $existing->id;
+        $DB->update_record('ep_activity', $record);
+    } else {
+        unset($record->id);
+        $record->id = $DB->insert_record('ep_activity', $record);
+    }
+    if (property_exists($data, 'prerequisites')) {
+        ep_set_activity_prerequisites($record, (array) $data->prerequisites);
+    }
+    return (int) $record->id;
 }
 
 /**
@@ -704,6 +801,7 @@ function ep_create_credit(stdClass $ep, $userid, stdClass $type, array $data) {
         'source' => $source,
         'sourceref' => (int) ($data['sourceref'] ?? 0),
         'validatedby' => $auto && !empty($data['validatedby']) ? (int) $data['validatedby'] : null,
+        'addedby' => !empty($data['addedby']) ? (int) $data['addedby'] : null,
         'validatetime' => $auto ? $now : null,
         'validatorcomment' => null,
         'timecreated' => $now,
@@ -749,7 +847,7 @@ function ep_register_to_activity(stdClass $ep, stdClass $activity, $userid, $stu
         // places pendant que l'étudiant confirmait.
         $activity = $DB->get_record('ep_activity', ['id' => $activity->id, 'epid' => $ep->id], '*', MUST_EXIST);
         $type = $DB->get_record('ep_type', ['id' => $activity->typeid], '*', MUST_EXIST);
-        $result->problem = ep_registration_problem($activity, $type, $userid, $studyyear);
+        $result->problem = ep_registration_problem($activity, $type, $userid, $studyyear, $ep);
         if ($result->problem === null) {
             $result->creditid = ep_create_credit($ep, $userid, $type, [
                 'activityid' => $activity->id,
@@ -902,14 +1000,14 @@ function ep_reject_credit(stdClass $credit, $byuserid, $comment, $role = null, $
  * retrait par la DEVE. La ligne est conservée (état terminal) plutôt que supprimée, pour garder
  * la trace de ce qui a été demandé, et sa place sur l'EP du catalogue est libérée.
  *
- * L'étudiant ne peut retirer qu'une demande encore en attente ; la DEVE peut retirer tout crédit
- * qui n'est pas déjà annulé. Dans les deux cas, un crédit attribué automatiquement est hors de
- * portée : il suit son stage d'origine.
+ * L'étudiant (ou le responsable de l'EP, pour un participant) ne peut retirer qu'une demande
+ * encore en attente ; la DEVE peut retirer tout crédit qui n'est pas déjà annulé. Dans les deux
+ * cas, un crédit attribué automatiquement est hors de portée : il suit son stage d'origine.
  *
  * @param stdClass $credit
  * @param int $byuserid
  * @param string $comment
- * @param string $role 'student' ou 'deve'.
+ * @param string $role 'student', 'owner' ou 'deve'.
  * @return bool False si le crédit n'était plus dans l'état attendu : rien n'a été écrit.
  */
 function ep_cancel_credit(stdClass $credit, $byuserid, $comment = '', $role = EP_ROLE_DEVE) {
@@ -921,7 +1019,9 @@ function ep_cancel_credit(stdClass $credit, $byuserid, $comment = '', $role = EP
     $credit->validatorcomment = $comment;
     $credit->timemodified = time();
 
-    if ($role === EP_ROLE_STUDENT) {
+    if ($role === EP_ROLE_STUDENT || $role === EP_ROLE_OWNER) {
+        // L'étudiant retire sa demande, le responsable retire un participant de son EP : tant que
+        // rien n'est tranché. Revenir sur une décision appartient à la DEVE.
         $where = 'status = :pending AND source <> :stage';
         $params = ['pending' => EP_STATUS_PENDING, 'stage' => EP_SOURCE_STAGE];
     } else {
@@ -1057,19 +1157,21 @@ function ep_update_credit_if(stdClass $credit, array $fields, $where, array $whe
 }
 
 /**
- * Ce qui empêche un étudiant de s'inscrire à un EP du catalogue, ou null s'il le peut : EP fermé
- * ou type désactivé, inscription déjà en cours, plus de place, année d'étude hors de la plage.
- * Chaque condition est revérifiée à l'inscription elle-même, sous le verrou de l'activité (voir
- * ep_register_to_activity()) : la page a pu être affichée avant qu'une place ne soit prise.
+ * Ce qui empêche un étudiant de s'inscrire lui-même à un EP du catalogue, ou null s'il le peut :
+ * EP non publié ou hors période, type désactivé, inscription déjà en cours, plus de place, année
+ * d'étude hors de la plage, prérequis bloquants non remplis. Chaque condition est revérifiée à
+ * l'inscription elle-même, sous le verrou de l'activité (voir ep_register_to_activity()) : la
+ * page a pu être affichée avant qu'une place ne soit prise.
  *
  * @param stdClass $activity
  * @param stdClass|null $type Type de l'EP.
  * @param int $userid
  * @param int|null $studyyear Année de rattachement choisie ; null pour ne pas la contrôler.
+ * @param stdClass|null $ep Instance, pour contrôler les prérequis ; null pour ne pas les contrôler.
  * @return string|null Clé du message d'erreur, ou null.
  */
-function ep_registration_problem(stdClass $activity, $type, $userid, $studyyear = null) {
-    if (!$activity->visible || !$type || empty($type->enabled)) {
+function ep_registration_problem(stdClass $activity, $type, $userid, $studyyear = null, $ep = null) {
+    if (!ep_activity_registration_open($activity) || !$type || empty($type->enabled)) {
         return 'errorregisterclosed';
     }
     if (ep_get_active_registration($activity->id, $userid)) {
@@ -1081,6 +1183,9 @@ function ep_registration_problem(stdClass $activity, $type, $userid, $studyyear 
     }
     if ($studyyear !== null && !ep_activity_open_to_year($activity, $studyyear)) {
         return 'errorwrongyear';
+    }
+    if ($ep && !empty($activity->prereqblocking) && ep_get_missing_prerequisites($ep, $activity, $userid)) {
+        return 'errorprerequisites';
     }
     return null;
 }
@@ -1135,20 +1240,17 @@ function ep_credit_grading(stdClass $credit, $type = null) {
     global $DB;
 
     $type = $type ?: ep_get_credit_type($credit);
-    $grading = (object) [
+    if (!empty($credit->activityid)) {
+        $activity = $DB->get_record('ep_activity', ['id' => $credit->activityid]);
+        if ($activity) {
+            return ep_activity_grading($activity, $type ?: null);
+        }
+    }
+    return (object) [
         'grading' => $type ? $type->grading : EP_GRADING_NONE,
         'grademax' => $type ? (float) $type->grademax : 20.0,
         'gradepass' => $type ? (float) $type->gradepass : 10.0,
     ];
-    if (!empty($credit->activityid)) {
-        $activity = $DB->get_record('ep_activity', ['id' => $credit->activityid]);
-        if ($activity && isset($activity->grading) && $activity->grading !== '' && $activity->grading !== 'type') {
-            $grading->grading = $activity->grading;
-            $grading->grademax = (float) $activity->grademax;
-            $grading->gradepass = (float) $activity->gradepass;
-        }
-    }
-    return $grading;
 }
 
 /**
@@ -3300,4 +3402,451 @@ function ep_move_type(stdClass $type, $direction) {
     foreach ($types as $i => $candidate) {
         $DB->set_field('ep_type', 'sortorder', ($i + 1) * 10, ['id' => $candidate->id]);
     }
+}
+
+/**
+ * États d'un EP du catalogue, dans l'ordre de son cycle de vie.
+ *
+ * @return array état => libellé
+ */
+function ep_activity_state_options() {
+    $options = [];
+    foreach ([EP_ACTIVITY_DRAFT, EP_ACTIVITY_PROPOSED, EP_ACTIVITY_PUBLISHED, EP_ACTIVITY_CLOSED, EP_ACTIVITY_ARCHIVED] as $state) {
+        $options[$state] = get_string('activitystate_' . $state, 'mod_ep');
+    }
+    return $options;
+}
+
+/**
+ * Indique si un EP figure au catalogue des étudiants : publié ou clos.
+ *
+ * @param stdClass $activity
+ * @return bool
+ */
+function ep_activity_is_listed(stdClass $activity) {
+    return in_array($activity->state, [EP_ACTIVITY_PUBLISHED, EP_ACTIVITY_CLOSED], true);
+}
+
+/**
+ * Indique si un EP accepte des inscriptions à un instant donné : publié, et dans sa période
+ * d'inscription si elle est fixée.
+ *
+ * @param stdClass $activity
+ * @param int|null $now
+ * @return bool
+ */
+function ep_activity_registration_open(stdClass $activity, $now = null) {
+    $now = $now ?? time();
+    if ($activity->state !== EP_ACTIVITY_PUBLISHED) {
+        return false;
+    }
+    if (!empty($activity->registrationstart) && $now < (int) $activity->registrationstart) {
+        return false;
+    }
+    if (!empty($activity->registrationend) && $now > (int) $activity->registrationend) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Libellé de la période d'inscription d'un EP, ou chaîne vide si elle n'est pas fixée.
+ *
+ * @param stdClass $activity
+ * @return string
+ */
+function ep_activity_registration_label(stdClass $activity) {
+    $format = get_string('strftimedatetimeshort');
+    $start = empty($activity->registrationstart) ? null : userdate($activity->registrationstart, $format);
+    $end = empty($activity->registrationend) ? null : userdate($activity->registrationend, $format);
+    if ($start && $end) {
+        return get_string('registrationperiod', 'mod_ep', (object) ['start' => $start, 'end' => $end]);
+    }
+    if ($start) {
+        return get_string('registrationfrom', 'mod_ep', $start);
+    }
+    if ($end) {
+        return get_string('registrationuntil', 'mod_ep', $end);
+    }
+    return '';
+}
+
+/**
+ * Barème applicable aux inscriptions d'un EP du catalogue : le sien s'il en fixe un, sinon celui
+ * de son type.
+ *
+ * @param stdClass $activity
+ * @param stdClass|null $type Type de l'EP (lu si absent).
+ * @return stdClass {grading, grademax, gradepass}
+ */
+function ep_activity_grading(stdClass $activity, $type = null) {
+    global $DB;
+
+    if (!empty($activity->grading)) {
+        return (object) [
+            'grading' => $activity->grading === EP_GRADING_GRADE ? EP_GRADING_GRADE : EP_GRADING_NONE,
+            'grademax' => (float) $activity->grademax,
+            'gradepass' => (float) $activity->gradepass,
+        ];
+    }
+    $type = $type ?: $DB->get_record('ep_type', ['id' => $activity->typeid]);
+    return (object) [
+        'grading' => $type ? $type->grading : EP_GRADING_NONE,
+        'grademax' => $type ? (float) $type->grademax : 20.0,
+        'gradepass' => $type ? (float) $type->gradepass : 10.0,
+    ];
+}
+
+/**
+ * EP du catalogue exigés avant de s'inscrire à un EP.
+ *
+ * @param int $activityid
+ * @return int[] Identifiants des EP exigés.
+ */
+function ep_get_activity_prerequisites($activityid) {
+    global $DB;
+
+    return array_map('intval', $DB->get_fieldset_select('ep_activity_prereq', 'requiredid', 'activityid = ?', [$activityid]));
+}
+
+/**
+ * Remplace la liste des EP exigés avant de s'inscrire à un EP. Seuls les EP de la même instance
+ * sont retenus, et jamais l'EP lui-même.
+ *
+ * @param stdClass $activity
+ * @param int[] $requiredids
+ * @return void
+ */
+function ep_set_activity_prerequisites(stdClass $activity, array $requiredids) {
+    global $DB;
+
+    $requiredids = array_values(array_diff(array_unique(array_map('intval', $requiredids)), [(int) $activity->id, 0]));
+    if ($requiredids) {
+        [$insql, $params] = $DB->get_in_or_equal($requiredids, SQL_PARAMS_NAMED, 'r');
+        $requiredids = array_map('intval', $DB->get_fieldset_select(
+            'ep_activity',
+            'id',
+            "epid = :epid AND id $insql",
+            $params + ['epid' => $activity->epid]
+        ));
+    }
+    $existing = ep_get_activity_prerequisites($activity->id);
+    foreach (array_diff($existing, $requiredids) as $removed) {
+        $DB->delete_records('ep_activity_prereq', ['activityid' => $activity->id, 'requiredid' => $removed]);
+    }
+    foreach (array_diff($requiredids, $existing) as $added) {
+        $DB->insert_record('ep_activity_prereq', (object) [
+            'activityid' => $activity->id,
+            'requiredid' => $added,
+            'timecreated' => time(),
+        ]);
+    }
+}
+
+/**
+ * Prérequis qu'un étudiant ne remplit pas pour un EP : EP exigés sans inscription validée,
+ * minimum d'ECTS déjà retenus non atteint.
+ *
+ * @param stdClass $ep
+ * @param stdClass $activity
+ * @param int $userid
+ * @return string[] Libellés des prérequis manquants (vide : tout est rempli).
+ */
+function ep_get_missing_prerequisites(stdClass $ep, stdClass $activity, $userid) {
+    global $DB;
+
+    $missing = [];
+    $requiredids = ep_get_activity_prerequisites($activity->id);
+    if ($requiredids) {
+        [$insql, $params] = $DB->get_in_or_equal($requiredids, SQL_PARAMS_NAMED, 'r');
+        $validated = array_map('intval', $DB->get_fieldset_select(
+            'ep_credit',
+            'DISTINCT activityid',
+            "userid = :userid AND status = :validated AND activityid $insql",
+            $params + ['userid' => $userid, 'validated' => EP_STATUS_VALIDATED]
+        ));
+        $names = $DB->get_records_list('ep_activity', 'id', array_diff($requiredids, $validated), 'name', 'id, name');
+        foreach ($names as $required) {
+            $missing[] = get_string('prereqmissingactivity', 'mod_ep', format_string($required->name));
+        }
+    }
+    if ($activity->minects > 0) {
+        $retained = ep_get_student_progress($ep, $userid)->totalretained;
+        if ($retained < (float) $activity->minects) {
+            $missing[] = get_string('prereqmissingects', 'mod_ep', (object) [
+                'required' => ep_format_ects($activity->minects),
+                'retained' => ep_format_ects($retained),
+            ]);
+        }
+    }
+    return $missing;
+}
+
+/**
+ * Indique si un utilisateur gère les participants d'un EP du catalogue : la DEVE, ou un
+ * responsable de cet EP (avec la capacité de valider).
+ *
+ * @param stdClass $rights Voir ep_get_user_rights().
+ * @param stdClass $activity
+ * @return bool
+ */
+function ep_rights_can_manage_participants(stdClass $rights, stdClass $activity) {
+    if ($rights->validatedeve) {
+        return true;
+    }
+    return $rights->evaluateteacher && in_array((int) $activity->id, $rights->responsibleids, true);
+}
+
+/**
+ * Inscriptions à un EP du catalogue (tous statuts, ou ceux demandés), triées par nom d'étudiant.
+ *
+ * @param stdClass $activity
+ * @param int[]|null $statuses
+ * @return array id => stdClass crédit
+ */
+function ep_get_participants(stdClass $activity, ?array $statuses = null) {
+    global $DB;
+
+    $params = ['activityid' => $activity->id];
+    $where = 'c.activityid = :activityid';
+    if ($statuses !== null) {
+        if (empty($statuses)) {
+            return [];
+        }
+        [$insql, $inparams] = $DB->get_in_or_equal($statuses, SQL_PARAMS_NAMED, 'st');
+        $where .= " AND c.status $insql";
+        $params += $inparams;
+    }
+    return $DB->get_records_sql(
+        "SELECT c.*
+           FROM {ep_credit} c
+           JOIN {user} u ON u.id = c.userid
+          WHERE $where
+       ORDER BY u.lastname ASC, u.firstname ASC, c.timecreated DESC, c.id DESC",
+        $params
+    );
+}
+
+/**
+ * Inscrit des étudiants à un EP du catalogue depuis la liste des participants, après la période
+ * d'inscription ou à la place de l'étudiant. Sous le verrou de l'activité, chaque étudiant est
+ * inscrit s'il n'a pas déjà d'inscription en cours et, sauf si $force est vrai, s'il reste une
+ * place. Seule la DEVE peut dépasser le nombre de places. Les prérequis ne bloquent pas un ajout :
+ * ils sont signalés dans l'interface, la décision appartient à celui qui inscrit.
+ *
+ * @param stdClass $ep
+ * @param stdClass $activity
+ * @param int[] $userids
+ * @param int $byuserid
+ * @param bool $force Dépasser le nombre de places (DEVE seulement : l'appelant le vérifie).
+ * @return stdClass {added: int[] userid => creditid, skipped: array userid => clé du motif}
+ */
+function ep_add_participants(stdClass $ep, stdClass $activity, array $userids, $byuserid, $force = false) {
+    global $DB;
+
+    $result = (object) ['added' => [], 'skipped' => []];
+    $lock = ep_get_activity_lock($ep->id);
+    try {
+        $activity = $DB->get_record('ep_activity', ['id' => $activity->id, 'epid' => $ep->id], '*', MUST_EXIST);
+        $type = $DB->get_record('ep_type', ['id' => $activity->typeid], '*', MUST_EXIST);
+        $taken = ep_get_activity_taken_places($activity->id);
+        foreach (array_unique(array_map('intval', $userids)) as $userid) {
+            if (ep_get_active_registration($activity->id, $userid)) {
+                $result->skipped[$userid] = 'erroralreadyregistered';
+                continue;
+            }
+            if (!$force && !empty($activity->capacity) && $taken >= (int) $activity->capacity) {
+                $result->skipped[$userid] = 'errornoplaceleft';
+                continue;
+            }
+            $result->added[$userid] = ep_create_credit($ep, $userid, $type, [
+                'activityid' => $activity->id,
+                'studyyear' => (int) $ep->currentstudyyear,
+                'name' => $activity->name,
+                'claimedects' => $activity->ects,
+                'source' => EP_SOURCE_STUDENT,
+                'addedby' => $byuserid,
+            ]);
+            $taken++;
+        }
+    } finally {
+        $lock->release();
+    }
+    return $result;
+}
+
+/**
+ * Corrige la note d'un crédit déjà tranché (DEVE seulement) : la note décide de nouveau de la
+ * validation, selon le barème applicable. La correction est tracée dans l'historique.
+ *
+ * @param stdClass $credit
+ * @param int $byuserid
+ * @param float $grade
+ * @param string $comment
+ * @return bool False si le crédit n'est plus tranché, n'est pas noté, ou si la note est hors barème.
+ */
+function ep_correct_grade(stdClass $credit, $byuserid, $grade, $comment = '') {
+    $grading = ep_credit_grading($credit);
+    $grade = round((float) $grade, 2);
+    if ($grading->grading !== EP_GRADING_GRADE || $grade < 0 || $grade > $grading->grademax) {
+        return false;
+    }
+    $passed = $grade >= $grading->gradepass;
+    $credit->grade = $grade;
+    $credit->status = $passed ? EP_STATUS_VALIDATED : EP_STATUS_REJECTED;
+    $credit->retainedects = $passed ? (float) $credit->claimedects : 0;
+    $credit->validatedby = $byuserid;
+    $credit->validatetime = time();
+    $credit->validatorcomment = $comment;
+    $credit->timemodified = time();
+
+    [$insql, $params] = [
+        'status IN (:validated, :rejected) AND source <> :stage',
+        ['validated' => EP_STATUS_VALIDATED, 'rejected' => EP_STATUS_REJECTED, 'stage' => EP_SOURCE_STAGE],
+    ];
+    $applied = ep_update_credit_if(
+        $credit,
+        ['grade', 'status', 'retainedects', 'validatedby', 'validatetime', 'validatorcomment', 'timemodified'],
+        $insql,
+        $params
+    );
+    if ($applied) {
+        ep_add_credit_decision($credit, EP_ROLE_DEVE, 'corrected', $byuserid, $grade, $credit->retainedects, $comment);
+        $eventclass = $passed ? \mod_ep\event\credit_validated::class : \mod_ep\event\credit_rejected::class;
+        ep_trigger_credit_event($eventclass, $credit, [
+            'role' => EP_ROLE_DEVE,
+            'retainedects' => (float) $credit->retainedects,
+            'corrected' => true,
+        ]);
+    }
+    return $applied;
+}
+
+/**
+ * Enregistre en une fois les décisions saisies sur la liste des participants d'un EP : notes,
+ * validations, refus et, pour la DEVE, corrections de notes. Le tout se fait sous le verrou de
+ * l'activité et dans une transaction ; chaque écriture reste conditionnée à l'état du crédit,
+ * si bien qu'une décision prise entre-temps par un autre intervenant n'est pas écrasée et est
+ * comptée à part.
+ *
+ * @param stdClass $ep
+ * @param stdClass $activity
+ * @param array $entries creditid => ['grade' => float|null, 'decision' => 'validate'|'reject'|'',
+ *                       'comment' => string]
+ * @param stdClass $rights Droits de l'auteur (voir ep_get_user_rights()).
+ * @return stdClass {validated, rejected, corrected, changed, ignored}
+ */
+function ep_apply_participant_decisions(stdClass $ep, stdClass $activity, array $entries, stdClass $rights) {
+    global $DB;
+
+    $result = (object) ['validated' => 0, 'rejected' => 0, 'corrected' => 0, 'changed' => 0, 'ignored' => 0];
+    $grading = ep_activity_grading($activity);
+    $lock = ep_get_activity_lock($ep->id);
+    try {
+        $transaction = $DB->start_delegated_transaction();
+        foreach ($entries as $creditid => $entry) {
+            $credit = $DB->get_record('ep_credit', ['id' => (int) $creditid, 'activityid' => $activity->id]);
+            $grade = isset($entry['grade']) && $entry['grade'] !== '' && $entry['grade'] !== null ? (float) $entry['grade'] : null;
+            $decision = $entry['decision'] ?? '';
+            $comment = (string) ($entry['comment'] ?? '');
+            if (!$credit || ($grade === null && $decision === '')) {
+                $result->ignored++;
+                continue;
+            }
+            $status = (int) $credit->status;
+
+            // Correction d'une note déjà tranchée : la DEVE seule.
+            if ($status === EP_STATUS_VALIDATED || $status === EP_STATUS_REJECTED) {
+                if (
+                    $rights->validatedeve && $grade !== null && $grading->grading === EP_GRADING_GRADE
+                        && ($credit->grade === null || (float) $credit->grade !== $grade)
+                ) {
+                    if (ep_correct_grade($credit, $rights->userid, $grade, $comment)) {
+                        $result->corrected++;
+                    } else {
+                        $result->changed++;
+                    }
+                } else {
+                    $result->ignored++;
+                }
+                continue;
+            }
+            if ($status !== EP_STATUS_PENDING || !ep_rights_can_validate($rights, $credit)) {
+                $result->ignored++;
+                continue;
+            }
+
+            $role = ep_rights_deciding_role($rights, $credit);
+            if ($grading->grading === EP_GRADING_GRADE && $grade !== null) {
+                if ($grade < 0 || $grade > $grading->grademax) {
+                    $result->ignored++;
+                    continue;
+                }
+                $passed = $grade >= $grading->gradepass;
+                $applied = ep_grade_credit($credit, $rights->userid, $grade, $comment, $role);
+            } else if ($decision === 'validate' && $grading->grading !== EP_GRADING_GRADE) {
+                $passed = true;
+                $applied = ep_validate_credit($credit, $rights->userid, $credit->claimedects, $comment, $role);
+            } else if ($decision === 'reject') {
+                $passed = false;
+                $applied = ep_reject_credit($credit, $rights->userid, $comment, $role);
+            } else {
+                $result->ignored++;
+                continue;
+            }
+            if (!$applied) {
+                $result->changed++;
+            } else if ($passed) {
+                $result->validated++;
+            } else {
+                $result->rejected++;
+            }
+        }
+        $transaction->allow_commit();
+    } finally {
+        $lock->release();
+    }
+    return $result;
+}
+
+/**
+ * Clôt un EP du catalogue : il n'accepte plus d'inscription, reste au catalogue, et ses notes
+ * restent saisissables. Les inscriptions encore en attente sont, au choix, laissées en attente,
+ * validées d'office (EP sans note seulement : une note ne s'invente pas) ou non validées, dans
+ * la limite de ce sur quoi l'auteur peut statuer.
+ *
+ * @param stdClass $ep
+ * @param stdClass $activity
+ * @param stdClass $rights
+ * @param string $pendingaction 'keep', 'validate' ou 'reject'.
+ * @return stdClass {validated, rejected, kept}
+ */
+function ep_close_activity(stdClass $ep, stdClass $activity, stdClass $rights, $pendingaction = 'keep') {
+    global $DB;
+
+    $DB->set_field('ep_activity', 'state', EP_ACTIVITY_CLOSED, ['id' => $activity->id]);
+    $DB->set_field('ep_activity', 'timemodified', time(), ['id' => $activity->id]);
+    $activity->state = EP_ACTIVITY_CLOSED;
+
+    $grading = ep_activity_grading($activity);
+    if ($pendingaction === 'validate' && $grading->grading === EP_GRADING_GRADE) {
+        $pendingaction = 'keep';
+    }
+    $entries = [];
+    $pending = ep_get_participants($activity, [EP_STATUS_PENDING]);
+    if ($pendingaction !== 'keep') {
+        foreach ($pending as $credit) {
+            $entries[$credit->id] = [
+                'decision' => $pendingaction,
+                'comment' => get_string('closedactivitycomment', 'mod_ep'),
+            ];
+        }
+    }
+    $applied = $entries ? ep_apply_participant_decisions($ep, $activity, $entries, $rights)
+        : (object) ['validated' => 0, 'rejected' => 0];
+    return (object) [
+        'validated' => $applied->validated,
+        'rejected' => $applied->rejected,
+        'kept' => count($pending) - $applied->validated - $applied->rejected,
+    ];
 }

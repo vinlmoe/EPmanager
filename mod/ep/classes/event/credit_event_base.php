@@ -127,4 +127,26 @@ abstract class credit_event_base extends \core\event\base {
         return "L'utilisateur #{$this->userid} a {$action} l'enseignement personnalisé #{$this->objectid}"
             . " de l'étudiant #{$this->relateduserid}.";
     }
+
+    /**
+     * Complément de description indiquant le rôle sous lequel l'utilisateur a agi.
+     *
+     * @param string $role owner, referent, deve, student (ou teacher, dans les journaux antérieurs
+     *                     aux circuits à étapes).
+     * @return string
+     */
+    protected static function role_phrase($role) {
+        switch ($role) {
+            case 'owner':
+                return "en tant que responsable de l'EP";
+            case 'referent':
+                return "en tant qu'enseignant référent";
+            case 'student':
+                return "en tant qu'étudiant";
+            case 'teacher':
+                return 'en tant qu\'enseignant';
+            default:
+                return 'en tant que DEVE';
+        }
+    }
 }

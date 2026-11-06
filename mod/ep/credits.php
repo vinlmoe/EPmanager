@@ -62,6 +62,40 @@ echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('validation', 'mod_ep'));
 echo ep_render_navlinks($ep, $cm, $context, $rights);
 
+// 0. Les EP du catalogue dont l'utilisateur est responsable (tous, pour la DEVE qui n'en a
+// aucun en propre) : c'est d'ici qu'il ouvre leur liste de participants, pour inscrire, retirer
+// et saisir les notes.
+$responsible = $rights->responsibleids
+    ? array_intersect_key(ep_get_activities($ep->id), array_flip($rights->responsibleids))
+    : [];
+if ($responsible) {
+    $counts = ep_get_activities_status_counts($ep->id);
+    echo $OUTPUT->heading(get_string('myresponsibleactivities', 'mod_ep'), 4);
+    $rows = [];
+    foreach ($responsible as $activity) {
+        $bystatus = $counts[$activity->id] ?? [];
+        $active = ($bystatus[EP_STATUS_PENDING] ?? 0) + ($bystatus[EP_STATUS_VALIDATED] ?? 0);
+        $rows[] = [
+            format_string($activity->name),
+            ep_activity_state_options()[$activity->state] ?? '-',
+            get_string('participantscount', 'mod_ep', $active)
+                . (empty($activity->capacity) ? '' : ' / ' . (int) $activity->capacity),
+            $bystatus[EP_STATUS_PENDING] ?? 0,
+            ep_render_actions([
+                get_string('participants', 'mod_ep') =>
+                    new moodle_url('/mod/ep/participants.php', ['id' => $cm->id, 'activityid' => $activity->id]),
+            ], 'btn btn-sm btn-primary mr-1 mb-1'),
+        ];
+    }
+    echo ep_render_paged_table([
+        get_string('catalogactivity', 'mod_ep'),
+        get_string('activitystate', 'mod_ep'),
+        get_string('participants', 'mod_ep'),
+        get_string('pendingregistrations', 'mod_ep'),
+        get_string('actions', 'mod_ep'),
+    ], $rows);
+}
+
 // 1. Ce qui attend une décision de l'utilisateur : c'est pour cela qu'il ouvre cette page.
 $awaiting = ep_get_credits_awaiting($ep, $rights, 'timecreated', 'ASC');
 echo $OUTPUT->heading(get_string('awaitingmydecision', 'mod_ep'), 4);

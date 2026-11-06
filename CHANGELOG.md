@@ -3,6 +3,43 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## 0.4.0 — mod_ep 2026110800 (8 novembre 2026)
+
+Lot 3 : catalogue, participants, notes.
+
+### mod_ep
+- **États d'un EP du catalogue** : brouillon, proposé, publié, clos, archivé. Un EP publié accepte
+  les inscriptions pendant sa période d'inscription (ouverture et fermeture facultatives) ; un EP
+  clos reste au catalogue sans inscription, ses notes restant saisissables ; un EP archivé sort du
+  catalogue, ses inscriptions restant au dossier. L'ancien drapeau « visible » est converti : un EP
+  masqué devient archivé.
+- Un EP reçoit un **code** (unique dans l'activité, pour les imports et exports), des dates de
+  déroulement et, s'il le faut, une **évaluation propre** (sans note, ou note maximale et seuil),
+  qui prime sur celle de son type.
+- **Prérequis** : EP du catalogue à avoir validés et nombre d'ECTS déjà retenus ; bloquants ou
+  seulement signalés, au choix. Le catalogue montre à l'étudiant ce qui lui manque ; l'inscription
+  les revérifie sous le verrou.
+- **Page Participants** d'un EP, ouverte à ses responsables et à la DEVE (`participants.php`) :
+  inscrire des étudiants après la période d'inscription (la DEVE seule peut dépasser les places),
+  retirer un participant en attente (motif conservé, place libérée), saisir les notes ou les
+  validations de toute la liste en une fois, sous le verrou et dans une transaction, chaque écriture
+  restant conditionnée à l'état du crédit ; correction d'une note déjà tranchée par la DEVE, tracée
+  dans l'historique ; clôture de l'EP avec sort des inscriptions en attente (laissées, validées
+  d'office pour un EP sans note, non validées) ; export CSV de la liste et feuille d'émargement PDF.
+- **Import des notes** depuis un CSV (`grades_import.php`) avec prévisualisation : colonnes
+  reconnues par leur intitulé en français ou en anglais, adresse ou numéro d'identification,
+  virgule décimale, décision en clair pour un EP sans note, fichier Excel en Windows-1252 ;
+  chaque ligne fautive est signalée. La liste exportée sert de modèle.
+- L'écran de validation montre aux enseignants les **EP dont ils sont responsables**, avec le
+  nombre de participants et d'inscriptions en attente, et l'accès à leur liste.
+- La gestion du catalogue passe d'un état à l'autre depuis la liste (publier, clore, archiver).
+- Journaux : inscription par le responsable ou la DEVE, retrait par le responsable, validation
+  d'une étape intermédiaire, correction de note.
+- Sauvegarde : états, périodes, barème propre, prérequis (remappés vers les EP de la copie),
+  auteur d'un ajout.
+- Tests : états et périodes, prérequis, enregistrement d'un EP, ajout et retrait de participants,
+  notes et décisions en lot, correction, clôture, droits, import de notes (91 tests).
+
 ## 0.3.0 — mod_ep 2026110700 (7 novembre 2026)
 
 Lot 2 : types d'EP définis par la DEVE, sans programmation.

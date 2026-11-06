@@ -73,7 +73,9 @@ class mod_ep_generator extends testing_module_generator {
      * Crée un EP du catalogue.
      *
      * @param stdClass|int $ep
-     * @param array $record name, typeid (ou code), ects, capacity, minstudyyear, maxstudyyear, visible.
+     * @param array $record name, typeid (ou typecode), code, ects, capacity, minstudyyear, maxstudyyear, state,
+     *                      registrationstart, registrationend, grading, grademax, gradepass, minects,
+     *                      prereqblocking, prerequisites (identifiants d'EP).
      * @return stdClass L'EP créé.
      */
     public function create_activity($ep, array $record = []) {
@@ -81,11 +83,14 @@ class mod_ep_generator extends testing_module_generator {
 
         $epid = is_object($ep) ? $ep->id : $ep;
 
+        // « typecode » désigne le type par son code ; « code » est le code de l'EP lui-même.
         if (!isset($record['typeid'])) {
-            $type = ep_get_type_by_code($epid, $record['code'] ?? EP_TYPE_ACADEMIC);
+            $type = ep_get_type_by_code($epid, $record['typecode'] ?? EP_TYPE_ACADEMIC);
             $record['typeid'] = $type->id;
         }
-        unset($record['code']);
+        unset($record['typecode']);
+        $prerequisites = $record['prerequisites'] ?? null;
+        unset($record['prerequisites']);
 
         $record = array_merge([
             'epid' => $epid,
@@ -95,14 +100,18 @@ class mod_ep_generator extends testing_module_generator {
             'minstudyyear' => 0,
             'maxstudyyear' => 0,
             'capacity' => 0,
-            'visible' => 1,
+            'state' => EP_ACTIVITY_PUBLISHED,
             'sortorder' => 0,
             'timecreated' => time(),
             'timemodified' => time(),
         ], $record);
 
         $id = $DB->insert_record('ep_activity', (object) $record);
-        return $DB->get_record('ep_activity', ['id' => $id], '*', MUST_EXIST);
+        $activity = $DB->get_record('ep_activity', ['id' => $id], '*', MUST_EXIST);
+        if ($prerequisites !== null) {
+            ep_set_activity_prerequisites($activity, $prerequisites);
+        }
+        return $activity;
     }
 
     /**
