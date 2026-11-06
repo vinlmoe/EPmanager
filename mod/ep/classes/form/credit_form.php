@@ -32,7 +32,6 @@ require_once($CFG->dirroot . '/mod/ep/locallib.php');
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class credit_form extends \moodleform {
-
     /**
      * Defines the form fields.
      */
@@ -66,8 +65,12 @@ class credit_form extends \moodleform {
             }
         }
         if (!empty($descriptions)) {
-            $mform->addElement('static', 'typedescriptions', '',
-                \html_writer::tag('dl', implode('', $descriptions)));
+            $mform->addElement(
+                'static',
+                'typedescriptions',
+                '',
+                \html_writer::tag('dl', implode('', $descriptions))
+            );
         }
 
         $mform->addElement('text', 'name', get_string('creditname', 'mod_ep'), ['size' => '64']);
@@ -75,13 +78,21 @@ class credit_form extends \moodleform {
         $mform->addRule('name', null, 'required', null, 'client');
         $mform->addRule('name', get_string('maximumchars', '', 255), 'maxlength', 255, 'client');
 
-        $mform->addElement('textarea', 'description', get_string('creditdescription', 'mod_ep'),
-            ['rows' => 6, 'cols' => 60]);
+        $mform->addElement(
+            'textarea',
+            'description',
+            get_string('creditdescription', 'mod_ep'),
+            ['rows' => 6, 'cols' => 60]
+        );
         $mform->setType('description', PARAM_TEXT);
         $mform->addHelpButton('description', 'creditdescription', 'mod_ep');
 
-        $mform->addElement('select', 'studyyear', get_string('studyyear', 'mod_ep'),
-            ep_studyyear_selectable_options($ep));
+        $mform->addElement(
+            'select',
+            'studyyear',
+            get_string('studyyear', 'mod_ep'),
+            ep_studyyear_selectable_options($ep)
+        );
         $mform->setDefault('studyyear', (int) $ep->currentstudyyear);
         $mform->addHelpButton('studyyear', 'studyyear', 'mod_ep');
 

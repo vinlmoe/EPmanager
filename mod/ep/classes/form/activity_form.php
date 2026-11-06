@@ -30,7 +30,6 @@ require_once($CFG->dirroot . '/mod/ep/locallib.php');
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class activity_form extends \moodleform {
-
     /**
      * Defines the form fields.
      */
@@ -96,8 +95,10 @@ class activity_form extends \moodleform {
     public function validation($data, $files) {
         $errors = parent::validation($data, $files);
 
-        if (!empty($data['minstudyyear']) && !empty($data['maxstudyyear'])
-                && $data['minstudyyear'] > $data['maxstudyyear']) {
+        if (
+            !empty($data['minstudyyear']) && !empty($data['maxstudyyear'])
+                && $data['minstudyyear'] > $data['maxstudyyear']
+        ) {
             $errors['maxstudyyear'] = get_string('errorstudyyearrange', 'mod_ep');
         }
         if ((float) $data['ects'] <= 0) {

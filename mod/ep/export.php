@@ -163,13 +163,19 @@ echo html_writer::link(new moodle_url('/mod/ep/dashboard.php', ['id' => $cm->id]
 $table = new html_table();
 $table->head = [get_string('adminsectionpage', 'mod_ep'), get_string('adminsectionpurpose', 'mod_ep')];
 $table->data[] = [
-    html_writer::link(new moodle_url($baseurl, ['mode' => 'students']),
-        get_string('exportstudents', 'mod_ep'), ['class' => 'btn btn-secondary']),
+    html_writer::link(
+        new moodle_url($baseurl, ['mode' => 'students']),
+        get_string('exportstudents', 'mod_ep'),
+        ['class' => 'btn btn-secondary']
+    ),
     get_string('exportstudents_desc', 'mod_ep'),
 ];
 $table->data[] = [
-    html_writer::link(new moodle_url($baseurl, ['mode' => 'credits']),
-        get_string('exportcredits', 'mod_ep'), ['class' => 'btn btn-secondary']),
+    html_writer::link(
+        new moodle_url($baseurl, ['mode' => 'credits']),
+        get_string('exportcredits', 'mod_ep'),
+        ['class' => 'btn btn-secondary']
+    ),
     get_string('exportcredits_desc', 'mod_ep'),
 ];
 echo html_writer::table($table);

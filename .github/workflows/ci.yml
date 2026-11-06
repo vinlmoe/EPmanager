@@ -1,0 +1,220 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  style:
+    name: Style Moodle
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          tools: composer
+          coverage: none
+
+      - name: Install Moodle coding standard
+        run: |
+          composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+          composer global require --no-interaction moodlehq/moodle-cs
+          echo "$(composer global config bin-dir --absolute)" >> "$GITHUB_PATH"
+
+      - name: Run phpcs
+        run: phpcs --standard=phpcs.xml -p
+
+  moodle:
+    name: Moodle ${{ matrix.moodle }} / PHP ${{ matrix.php }} / ${{ matrix.database }}
+    runs-on: ubuntu-24.04
+
+    # Les deux bornes de la plage annoncée par version.php (Moodle 4.3+) et par le README
+    # (PHP 8.0+) : la plus basse garantit la compatibilité promise, la plus récente suit
+    # la version de Moodle déployée. La couverture de code n'est mesurée que sur cette
+    # dernière : une seule mesure suffit, et pcov ralentit la suite. Les scénarios Behat ne
+    # tournent que là aussi : la combinaison basse reste un contrôle de compatibilité rapide.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - moodle: MOODLE_403_STABLE
+            php: "8.0"
+            database: pgsql
+            coverage: none
+            behat: "no"
+          - moodle: MOODLE_405_STABLE
+            php: "8.2"
+            database: pgsql
+            coverage: pcov
+            behat: "yes"
+          # Le module écrit à la main une partie de son SQL (pagination, sous-requêtes, mises à
+          # jour conditionnelles, regroupements) : la suite PHPUnit tourne aussi sur MariaDB, dont
+          # la syntaxe et le comportement (tri des NULL, collation, limites) diffèrent de ceux de
+          # PostgreSQL. MSSQL et Oracle ne sont pas proposés par moodle-plugin-ci.
+          - moodle: MOODLE_405_STABLE
+            php: "8.2"
+            database: mariadb
+            coverage: none
+            behat: "no"
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "1"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pgsql, pdo_pgsql, mysqli, gd, intl, mbstring, soap, zip
+          # JIT désactivé : son avertissement au démarrage (« JIT is incompatible with third party
+          # extensions ») est sur la sortie d'erreur, que moodle-plugin-ci traite comme un échec.
+          ini-values: max_input_vars=5000, opcache.enable_cli=1, opcache.jit=disable
+          tools: composer
+          coverage: ${{ matrix.coverage }}
+
+      - name: Install moodle-plugin-ci
+        run: |
+          composer create-project --no-interaction --no-dev --prefer-dist moodlehq/moodle-plugin-ci ci ^4
+          echo "${GITHUB_WORKSPACE}/ci/bin" >> "$GITHUB_PATH"
+          echo "${GITHUB_WORKSPACE}/ci/vendor/bin" >> "$GITHUB_PATH"
+          echo "NVM_DIR=${HOME}/.nvm" >> "$GITHUB_ENV"
+          sudo locale-gen en_AU.UTF-8
+
+      - name: Install Moodle
+        id: moodle_install
+        run: |
+          mkdir -p ci-extra-plugins
+          cp -R mod/epsynthesis ci-extra-plugins/epsynthesis
+          # mod_ep dépend de mod_stage (dépôt StageCompagnon) : ses deux modules sont installés en
+          # plugins supplémentaires, depuis leur branche principale.
+          git clone --depth 1 https://github.com/vinlmoe/StageCompagnon.git ci-stagecompagnon
+          cp -R ci-stagecompagnon/mod/stage ci-extra-plugins/stage
+          cp -R ci-stagecompagnon/mod/stagesynthesis ci-extra-plugins/stagesynthesis
+          moodle-plugin-ci install \
+            --moodle=moodle \
+            --branch=${{ matrix.moodle }} \
+            --db-type=${{ matrix.database }} \
+            --db-host=127.0.0.1 \
+            --db-name=moodle \
+            --db-user=${{ matrix.database == 'pgsql' && 'postgres' || 'root' }} \
+            --plugin=mod/ep \
+            --extra-plugins=ci-extra-plugins
+
+      - name: PHP lint
+        if: ${{ !cancelled() && steps.moodle_install.outcome == 'success' }}
+        run: |
+          check_status=0
+          moodle-plugin-ci phplint mod/ep || check_status=1
+          moodle-plugin-ci phplint mod/epsynthesis || check_status=1
+          exit "$check_status"
+
+      - name: Plugin validation
+        if: ${{ !cancelled() && steps.moodle_install.outcome == 'success' }}
+        run: |
+          check_status=0
+          moodle-plugin-ci validate mod/ep || check_status=1
+          moodle-plugin-ci validate mod/epsynthesis || check_status=1
+          exit "$check_status"
+
+      - name: Upgrade savepoints
+        if: ${{ !cancelled() && steps.moodle_install.outcome == 'success' }}
+        run: |
+          check_status=0
+          moodle-plugin-ci savepoints mod/ep || check_status=1
+          moodle-plugin-ci savepoints mod/epsynthesis || check_status=1
+          exit "$check_status"
+
+      - name: PHPDoc
+        if: ${{ !cancelled() && steps.moodle_install.outcome == 'success' }}
+        run: |
+          check_status=0
+          moodle-plugin-ci phpdoc --max-warnings=0 mod/ep || check_status=1
+          moodle-plugin-ci phpdoc --max-warnings=0 mod/epsynthesis || check_status=1
+          exit "$check_status"
+
+      - name: Mustache templates
+        if: ${{ !cancelled() && steps.moodle_install.outcome == 'success' }}
+        run: |
+          check_status=0
+          # Le vérificateur de gabarits de Moodle refuse les fichiers hors de son dossier : il
+          # reçoit donc les copies installées dans moodle/, pas les originaux du dépôt.
+          moodle-plugin-ci mustache moodle/mod/ep || check_status=1
+          moodle-plugin-ci mustache moodle/mod/epsynthesis || check_status=1
+          exit "$check_status"
+
+      - name: PHPUnit
+        if: ${{ !cancelled() && steps.moodle_install.outcome == 'success' }}
+        run: |
+          check_status=0
+          coverage=""
+          if [ "${{ matrix.coverage }}" = "pcov" ]; then
+            coverage="--coverage-text --coverage-clover --coverage-pcov"
+          fi
+          # moodle-plugin-ci écrit le rapport Clover dans ./coverage.xml : il est renommé après
+          # chaque module pour que le second ne recouvre pas le premier.
+          moodle-plugin-ci phpunit $coverage mod/ep || check_status=1
+          [ -f coverage.xml ] && mv coverage.xml coverage-mod_ep.xml
+          moodle-plugin-ci phpunit $coverage mod/epsynthesis || check_status=1
+          [ -f coverage.xml ] && mv coverage.xml coverage-mod_epsynthesis.xml
+          exit "$check_status"
+
+      - name: Behat features
+        if: ${{ !cancelled() && matrix.behat == 'yes' && steps.moodle_install.outcome == 'success' }}
+        env:
+          # Les scénarios n'utilisent pas JavaScript : seul le serveur PHP est nécessaire, pas
+          # Selenium, que moodle-plugin-ci démarrerait sinon dans Docker.
+          MOODLE_START_BEHAT_SERVERS: "NO"
+        run: |
+          php -S localhost:8000 -t moodle > php-server.log 2>&1 &
+          sleep 2
+          moodle-plugin-ci behat --profile default --dump mod/ep
+
+      - name: Coverage report (Clover)
+        if: ${{ !cancelled() && matrix.coverage == 'pcov' && steps.moodle_install.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-clover
+          path: coverage-*.xml
+          if-no-files-found: warn
+          retention-days: 30

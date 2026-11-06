@@ -60,8 +60,12 @@ if ($action === 'delete' && $activityid) {
     require_sesskey();
     $activity = $DB->get_record('ep_activity', ['id' => $activityid, 'epid' => $ep->id], '*', MUST_EXIST);
     if ($DB->record_exists('ep_credit', ['activityid' => $activity->id])) {
-        redirect($baseurl, get_string('erroractivityinuse', 'mod_ep'), null,
-            \core\output\notification::NOTIFY_ERROR);
+        redirect(
+            $baseurl,
+            get_string('erroractivityinuse', 'mod_ep'),
+            null,
+            \core\output\notification::NOTIFY_ERROR
+        );
     }
     $DB->delete_records('ep_activity_teacher', ['activityid' => $activity->id]);
     $DB->delete_records('ep_activity', ['id' => $activity->id]);
@@ -80,8 +84,12 @@ if ($action === 'togglevisible' && $activityid) {
 
 if ($action === 'edit') {
     if (empty($types)) {
-        redirect(new moodle_url('/mod/ep/types.php', ['id' => $cm->id]),
-            get_string('errornotypes', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+        redirect(
+            new moodle_url('/mod/ep/types.php', ['id' => $cm->id]),
+            get_string('errornotypes', 'mod_ep'),
+            null,
+            \core\output\notification::NOTIFY_ERROR
+        );
     }
 
     $formurl = new moodle_url($baseurl, ['action' => 'edit', 'activityid' => $activityid]);
@@ -152,8 +160,12 @@ if ($action === 'edit') {
         // Un EP du catalogue sans responsable n'a personne pour valider ses inscriptions :
         // l'écran d'affectation suit immédiatement la création, plutôt que d'attendre que
         // quelqu'un s'aperçoive que des demandes stagnent.
-        redirect(new moodle_url('/mod/ep/activity_teachers.php', ['id' => $cm->id, 'activityid' => $savedid]),
-            get_string('activitysaved', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
+        redirect(
+            new moodle_url('/mod/ep/activity_teachers.php', ['id' => $cm->id, 'activityid' => $savedid]),
+            get_string('activitysaved', 'mod_ep'),
+            null,
+            \core\output\notification::NOTIFY_SUCCESS
+        );
     }
 
     echo $OUTPUT->header();
@@ -166,8 +178,11 @@ if ($action === 'edit') {
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('managecatalog', 'mod_ep'));
 echo html_writer::link(new moodle_url('/mod/ep/administration.php', ['id' => $cm->id]), get_string('back'));
-echo html_writer::link(new moodle_url($baseurl, ['action' => 'edit']), get_string('addactivity', 'mod_ep'),
-    ['class' => 'btn btn-primary d-block mt-2 mb-3', 'style' => 'width:fit-content']);
+echo html_writer::link(
+    new moodle_url($baseurl, ['action' => 'edit']),
+    get_string('addactivity', 'mod_ep'),
+    ['class' => 'btn btn-primary d-block mt-2 mb-3', 'style' => 'width:fit-content']
+);
 
 $activities = ep_get_activities($ep->id);
 
@@ -194,25 +209,35 @@ foreach ($activities as $activity) {
     $type = $alltypes[$activity->typeid] ?? null;
     $remaining = ep_get_activity_remaining_places($activity);
 
-    $togglevisibleurl = new moodle_url($baseurl,
-        ['action' => 'togglevisible', 'activityid' => $activity->id, 'sesskey' => sesskey()]);
-    $visible = html_writer::link($togglevisibleurl,
+    $togglevisibleurl = new moodle_url(
+        $baseurl,
+        ['action' => 'togglevisible', 'activityid' => $activity->id, 'sesskey' => sesskey()]
+    );
+    $visible = html_writer::link(
+        $togglevisibleurl,
         $activity->visible ? get_string('yes') : get_string('no'),
-        ['class' => $activity->visible ? 'badge badge-success' : 'badge badge-secondary']);
+        ['class' => $activity->visible ? 'badge badge-success' : 'badge badge-secondary']
+    );
 
-    $teachersurl = new moodle_url('/mod/ep/activity_teachers.php',
-        ['id' => $cm->id, 'activityid' => $activity->id]);
+    $teachersurl = new moodle_url(
+        '/mod/ep/activity_teachers.php',
+        ['id' => $cm->id, 'activityid' => $activity->id]
+    );
     $teachercount = count(ep_get_activity_teachers($activity->id));
-    $teacherscell = html_writer::link($teachersurl,
-        get_string('activityteacherscount', 'mod_ep', $teachercount));
+    $teacherscell = html_writer::link(
+        $teachersurl,
+        get_string('activityteacherscount', 'mod_ep', $teachercount)
+    );
     if ($teachercount === 0) {
         // Sans responsable, les inscriptions restent en attente indéfiniment : le signaler ici
         // est le seul endroit où la DEVE le verra avant que des étudiants ne s'en plaignent.
         $teacherscell .= ' ' . html_writer::span(get_string('noteacherwarning', 'mod_ep'), 'badge badge-warning');
     }
 
-    $deleteurl = new moodle_url($baseurl,
-        ['action' => 'delete', 'activityid' => $activity->id, 'sesskey' => sesskey()]);
+    $deleteurl = new moodle_url(
+        $baseurl,
+        ['action' => 'delete', 'activityid' => $activity->id, 'sesskey' => sesskey()]
+    );
     $actions = ep_render_actions([
         get_string('edit') => new moodle_url($baseurl, ['action' => 'edit', 'activityid' => $activity->id]),
         get_string('activityteachers', 'mod_ep') => $teachersurl,

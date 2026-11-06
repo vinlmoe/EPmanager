@@ -82,12 +82,20 @@ if ($action === 'register' && $activityid) {
             $studyyear = (int) $ep->currentstudyyear;
         }
         if (!ep_activity_open_to_year($activity, $studyyear)) {
-            redirect($baseurl, get_string('errorwrongyear', 'mod_ep'), null,
-                \core\output\notification::NOTIFY_ERROR);
+            redirect(
+                $baseurl,
+                get_string('errorwrongyear', 'mod_ep'),
+                null,
+                \core\output\notification::NOTIFY_ERROR
+            );
         }
         ep_register_to_activity($ep, $activity, $USER->id, $studyyear);
-        redirect(new moodle_url('/mod/ep/view.php', ['id' => $cm->id]),
-            get_string('registered', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
+        redirect(
+            new moodle_url('/mod/ep/view.php', ['id' => $cm->id]),
+            get_string('registered', 'mod_ep'),
+            null,
+            \core\output\notification::NOTIFY_SUCCESS
+        );
     }
 
     echo $OUTPUT->header();
@@ -109,8 +117,13 @@ if ($action === 'register' && $activityid) {
     echo html_writer::start_tag('form', ['method' => 'post', 'action' => $registerurl->out(false)]);
     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
     echo html_writer::tag('label', get_string('studyyear', 'mod_ep'), ['for' => 'studyyear']);
-    echo html_writer::select(ep_studyyear_selectable_options($ep), 'studyyear', (int) $ep->currentstudyyear,
-        false, ['class' => 'form-control mb-2', 'id' => 'studyyear']);
+    echo html_writer::select(
+        ep_studyyear_selectable_options($ep),
+        'studyyear',
+        (int) $ep->currentstudyyear,
+        false,
+        ['class' => 'form-control mb-2', 'id' => 'studyyear']
+    );
     echo html_writer::empty_tag('input', [
         'type' => 'submit', 'value' => get_string('confirmregistration', 'mod_ep'), 'class' => 'btn btn-primary',
     ]);
@@ -171,8 +184,10 @@ foreach ($activities as $activity) {
     if ($cansubmit) {
         $registration = ep_get_active_registration($activity->id, $USER->id);
         if ($registration) {
-            $actioncell = html_writer::span(ep_status_label($registration->status),
-                'badge ' . ep_status_badgeclass($registration->status));
+            $actioncell = html_writer::span(
+                ep_status_label($registration->status),
+                'badge ' . ep_status_badgeclass($registration->status)
+            );
         } else if (!$activity->visible || !$type || empty($type->enabled)) {
             $actioncell = html_writer::span(get_string('registerclosed', 'mod_ep'), 'text-muted');
         } else if ($remaining !== null && $remaining <= 0) {

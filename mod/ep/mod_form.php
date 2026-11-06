@@ -31,7 +31,6 @@ require_once($CFG->dirroot . '/mod/ep/locallib.php');
  * Module instance settings form for mod_ep.
  */
 class mod_ep_mod_form extends moodleform_mod {
-
     /**
      * Defines the form fields.
      */
@@ -47,8 +46,12 @@ class mod_ep_mod_form extends moodleform_mod {
 
         $this->standard_intro_elements();
 
-        $mform->addElement('select', 'currentstudyyear', get_string('currentstudyyear', 'mod_ep'),
-            ep_studyyear_options());
+        $mform->addElement(
+            'select',
+            'currentstudyyear',
+            get_string('currentstudyyear', 'mod_ep'),
+            ep_studyyear_options()
+        );
         $mform->addHelpButton('currentstudyyear', 'currentstudyyear', 'mod_ep');
         $mform->setDefault('currentstudyyear', 0);
 

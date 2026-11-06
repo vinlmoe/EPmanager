@@ -29,7 +29,6 @@ namespace mod_ep\task;
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class sync_stage_credits extends \core\task\scheduled_task {
-
     /**
      * Nom de la tâche, tel qu'affiché dans l'administration des tâches planifiées.
      *

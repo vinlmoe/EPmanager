@@ -35,7 +35,6 @@ require_once($CFG->dirroot . '/mod/stage/locallib.php');
  * @covers     ::ep_get_referent_students
  */
 final class stage_sync_test extends \advanced_testcase {
-
     /** @var \stdClass */
     protected $course;
 
@@ -87,8 +86,11 @@ final class stage_sync_test extends \advanced_testcase {
         global $DB;
 
         $entry = $this->getDataGenerator()->get_plugin_generator('mod_stage')->create_entry(
-            $this->stage, $this->student->id, $this->theme,
-            ['declaredduration' => $days, 'studyyear' => $studyyear]);
+            $this->stage,
+            $this->student->id,
+            $this->theme,
+            ['declaredduration' => $days, 'studyyear' => $studyyear]
+        );
 
         stage_set_entry_stagetype($entry->id, $stagetype);
         if ($validated) {
@@ -110,8 +112,12 @@ final class stage_sync_test extends \advanced_testcase {
 
         $this->assertSame(1, $result->created);
 
-        $credit = $DB->get_record('ep_credit',
-            ['epid' => $this->ep->id, 'source' => EP_SOURCE_STAGE, 'sourceref' => $entry->id], '*', MUST_EXIST);
+        $credit = $DB->get_record(
+            'ep_credit',
+            ['epid' => $this->ep->id, 'source' => EP_SOURCE_STAGE, 'sourceref' => $entry->id],
+            '*',
+            MUST_EXIST
+        );
         $this->assertEquals(EP_STATUS_VALIDATED, $credit->status);
         $this->assertEquals(2, $credit->retainedects); // 8 jours x 0,25.
         $this->assertEquals(3, $credit->studyyear);
@@ -128,8 +134,10 @@ final class stage_sync_test extends \advanced_testcase {
         $this->create_stage_entry('obligatoire', true, 8);
         ep_sync_stage_credits($this->ep);
 
-        $this->assertSame(0, $DB->count_records('ep_credit',
-            ['epid' => $this->ep->id, 'source' => EP_SOURCE_STAGE]));
+        $this->assertSame(0, $DB->count_records(
+            'ep_credit',
+            ['epid' => $this->ep->id, 'source' => EP_SOURCE_STAGE]
+        ));
     }
 
     /**
@@ -142,8 +150,10 @@ final class stage_sync_test extends \advanced_testcase {
         $this->create_stage_entry('complementaire', false, 8);
         ep_sync_stage_credits($this->ep);
 
-        $this->assertSame(0, $DB->count_records('ep_credit',
-            ['epid' => $this->ep->id, 'source' => EP_SOURCE_STAGE]));
+        $this->assertSame(0, $DB->count_records(
+            'ep_credit',
+            ['epid' => $this->ep->id, 'source' => EP_SOURCE_STAGE]
+        ));
     }
 
     /**
@@ -161,8 +171,12 @@ final class stage_sync_test extends \advanced_testcase {
         $result = ep_sync_stage_credits($this->ep);
 
         $this->assertSame(1, $result->updated);
-        $credit = $DB->get_record('ep_credit',
-            ['epid' => $this->ep->id, 'sourceref' => $entry->id], '*', MUST_EXIST);
+        $credit = $DB->get_record(
+            'ep_credit',
+            ['epid' => $this->ep->id, 'sourceref' => $entry->id],
+            '*',
+            MUST_EXIST
+        );
         $this->assertEquals(3, $credit->retainedects);
     }
 

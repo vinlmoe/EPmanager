@@ -52,8 +52,10 @@ if (!$isowner && !$rights->viewall && !$canvalidate) {
 // Écran de retour : la liste d'où l'on vient (validation, pilotage, tableau de bord étudiant) si
 // elle a été transmise, sinon la page d'accueil de l'activité.
 $backurl = $returnurlparam !== '' ? new moodle_url($returnurlparam) : new moodle_url('/mod/ep/view.php', ['id' => $cm->id]);
-$pageurl = new moodle_url('/mod/ep/validate.php',
-    ['id' => $cm->id, 'creditid' => $credit->id, 'returnurl' => $returnurlparam]);
+$pageurl = new moodle_url(
+    '/mod/ep/validate.php',
+    ['id' => $cm->id, 'creditid' => $credit->id, 'returnurl' => $returnurlparam]
+);
 
 $PAGE->set_url($pageurl);
 $PAGE->set_title(format_string($ep->name) . ' - ' . get_string('creditdetail', 'mod_ep'));
@@ -68,8 +70,10 @@ $activity = !empty($credit->activityid) ? $DB->get_record('ep_activity', ['id' =
 // (une pièce justificative peut se révéler fausse après coup). Les crédits attribués
 // automatiquement en sont exclus : ils seraient recréés à la synchronisation suivante, c'est le
 // stage d'origine qu'il faut alors reprendre dans mod_stage.
-if ($rights->validatedeve && $credit->source !== EP_SOURCE_STAGE
-        && optional_param('cancelcredit', 0, PARAM_INT) && confirm_sesskey()) {
+if (
+    $rights->validatedeve && $credit->source !== EP_SOURCE_STAGE
+        && optional_param('cancelcredit', 0, PARAM_INT) && confirm_sesskey()
+) {
     ep_cancel_credit($credit, $USER->id, optional_param('validatorcomment', '', PARAM_TEXT));
     redirect($backurl, get_string('creditcancelled', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
@@ -99,7 +103,9 @@ if ($activity) {
         get_string('fromcatalogactivity', 'mod_ep', (object) [
             'name' => format_string($activity->name),
             'teachers' => empty($teachers) ? '-' : implode(', ', array_map('fullname', $teachers)),
-        ]), 'text-muted mb-3');
+        ]),
+        'text-muted mb-3'
+    );
 }
 
 echo $OUTPUT->heading(get_string('evidencefiles', 'mod_ep'), 4);
@@ -126,8 +132,11 @@ if ($canvalidate && (int) $credit->status === EP_STATUS_PENDING) {
         'value' => ep_format_ects_input($credit->claimedects), 'class' => 'form-control',
     ]);
     echo html_writer::tag('label', get_string('validatorcomment', 'mod_ep'), ['for' => 'validatorcomment']);
-    echo html_writer::tag('textarea', '',
-        ['name' => 'validatorcomment', 'id' => 'validatorcomment', 'rows' => 4, 'class' => 'form-control']);
+    echo html_writer::tag(
+        'textarea',
+        '',
+        ['name' => 'validatorcomment', 'id' => 'validatorcomment', 'rows' => 4, 'class' => 'form-control']
+    );
     echo html_writer::empty_tag('input', [
         'type' => 'submit', 'name' => 'validatecredit', 'value' => get_string('validate', 'mod_ep'),
         'class' => 'btn btn-primary mt-2 mr-2',
@@ -148,8 +157,11 @@ if ($rights->validatedeve && (int) $credit->status !== EP_STATUS_CANCELLED) {
     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'cancelcredit', 'value' => 1]);
     echo html_writer::tag('label', get_string('cancelreason', 'mod_ep'), ['for' => 'cancelcomment']);
-    echo html_writer::tag('textarea', '',
-        ['name' => 'validatorcomment', 'id' => 'cancelcomment', 'rows' => 2, 'class' => 'form-control']);
+    echo html_writer::tag(
+        'textarea',
+        '',
+        ['name' => 'validatorcomment', 'id' => 'cancelcomment', 'rows' => 2, 'class' => 'form-control']
+    );
     echo html_writer::empty_tag('input', [
         'type' => 'submit', 'value' => get_string('cancelcredit', 'mod_ep'),
         'class' => 'btn btn-outline-danger mt-2',

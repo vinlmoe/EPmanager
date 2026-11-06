@@ -42,8 +42,10 @@ $context = context_module::instance($cm->id);
 $credit = $DB->get_record('ep_credit', ['id' => $creditid, 'epid' => $ep->id], '*', MUST_EXIST);
 
 $isowner = (int) $credit->userid === (int) $USER->id;
-if (!$isowner && !has_capability('mod/ep:viewall', $context)
-        && !ep_can_validate_credit($ep, $credit, $context)) {
+if (
+    !$isowner && !has_capability('mod/ep:viewall', $context)
+        && !ep_can_validate_credit($ep, $credit, $context)
+) {
     throw new moodle_exception('nopermissions', 'error', '', get_string('evidencefiles', 'mod_ep'));
 }
 

@@ -46,8 +46,10 @@ function epsynthesis_render_managelinks_notice(stdClass $epsynthesis, stdClass $
     $links = epsynthesis_get_links($epsynthesis->id);
     return html_writer::div(
         get_string('linkedcount', 'mod_epsynthesis', count($links)) . ' ' .
-        html_writer::link(new moodle_url('/mod/epsynthesis/administration.php', ['id' => $cm->id]),
-            get_string('managelinks', 'mod_epsynthesis')),
+        html_writer::link(
+            new moodle_url('/mod/epsynthesis/administration.php', ['id' => $cm->id]),
+            get_string('managelinks', 'mod_epsynthesis')
+        ),
         'mb-3'
     );
 }
@@ -258,8 +260,10 @@ function epsynthesis_render_list_filters(moodle_url $baseurl, array $typeoptions
     $formurl = new moodle_url($baseurl);
     $formurl->remove_params('search', 'typekey', 'status', 'studyyear', 'tsort', 'tdir', 'page');
 
-    $out = html_writer::start_tag('form',
-        ['method' => 'get', 'action' => $formurl, 'class' => 'form-inline ep-filters mb-3']);
+    $out = html_writer::start_tag(
+        'form',
+        ['method' => 'get', 'action' => $formurl, 'class' => 'form-inline ep-filters mb-3']
+    );
     foreach ($formurl->params() as $key => $value) {
         $out .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => $key, 'value' => $value]);
     }
@@ -268,16 +272,31 @@ function epsynthesis_render_list_filters(moodle_url $baseurl, array $typeoptions
         'placeholder' => get_string('searchstudent', 'mod_ep'), 'class' => 'form-control mr-2',
     ]);
 
-    $out .= html_writer::select(['' => get_string('alltypes', 'mod_ep')] + $typeoptions, 'typekey',
-        $values['typekey'] ?? '', false, ['class' => 'form-control mr-2']);
+    $out .= html_writer::select(
+        ['' => get_string('alltypes', 'mod_ep')] + $typeoptions,
+        'typekey',
+        $values['typekey'] ?? '',
+        false,
+        ['class' => 'form-control mr-2']
+    );
 
     $yearoptions = ['' => get_string('allyears', 'mod_ep')] + ep_studyyear_options();
-    $out .= html_writer::select($yearoptions, 'studyyear', $values['studyyear'] ?? '', false,
-        ['class' => 'form-control mr-2']);
+    $out .= html_writer::select(
+        $yearoptions,
+        'studyyear',
+        $values['studyyear'] ?? '',
+        false,
+        ['class' => 'form-control mr-2']
+    );
 
     $statusoptions = ['' => get_string('allstatuses', 'mod_ep')] + ep_status_options();
-    $out .= html_writer::select($statusoptions, 'status', $values['status'] ?? '', false,
-        ['class' => 'form-control mr-2']);
+    $out .= html_writer::select(
+        $statusoptions,
+        'status',
+        $values['status'] ?? '',
+        false,
+        ['class' => 'form-control mr-2']
+    );
 
     $out .= html_writer::empty_tag('input', [
         'type' => 'submit', 'value' => get_string('search'), 'class' => 'btn btn-secondary mr-2',
@@ -329,7 +348,7 @@ function epsynthesis_get_credits_awaiting(array $activelinks) {
         }
     }
 
-    usort($rows, function($a, $b) {
+    usort($rows, function ($a, $b) {
         return $a->timecreated <=> $b->timecreated;
     });
 
@@ -367,8 +386,14 @@ function epsynthesis_get_filtered_credits(array $activelinks, array $filters, $s
             $creditfilters['typeid'] = $typefilter[1];
         }
 
-        $credits = ep_get_filtered_credits($link->ep->id, $creditfilters, $sort, $dir,
-            $link->rights->referentids, $link->rights->responsibleids);
+        $credits = ep_get_filtered_credits(
+            $link->ep->id,
+            $creditfilters,
+            $sort,
+            $dir,
+            $link->rights->referentids,
+            $link->rights->responsibleids
+        );
         if (empty($credits)) {
             continue;
         }
@@ -391,7 +416,7 @@ function epsynthesis_get_filtered_credits(array $activelinks, array $filters, $s
     $sortfield = $sortmap[$sort] ?? $sortmap['timecreated'];
     $reverse = strtoupper($dir) !== 'ASC';
 
-    usort($rows, function($a, $b) use ($sortfield, $reverse) {
+    usort($rows, function ($a, $b) use ($sortfield, $reverse) {
         $result = $a->$sortfield <=> $b->$sortfield;
         return $reverse ? -$result : $result;
     });
