@@ -1,0 +1,652 @@
+% Plan de mise à niveau d'EP Manager (mod_ep + mod_epsynthesis) au niveau de StageCompagnon.
+% Compilation : latexmk -pdf plan-mise-a-niveau.tex
+\documentclass[11pt,a4paper]{article}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype,booktabs,tabularx,longtable,xcolor,enumitem,hyperref}
+\usepackage[margin=2.2cm]{geometry}
+\hypersetup{colorlinks=true, linkcolor=blue!50!black, urlcolor=blue!50!black}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\lot}[1]{\textbf{Lot~#1}}
+\setlist[itemize]{nosep}
+\setlist[enumerate]{nosep}
+
+\title{EP Manager : plan de mise à niveau\\
+  \large Enseignement personnalisé sous Moodle, au niveau de StageCompagnon}
+\author{Sébastien Lefebvre}
+\date{6 novembre 2026 -- version 1 du plan, soumise à validation}
+
+\begin{document}
+\maketitle
+
+\section{Objet}
+
+Ce document fixe ce que la mise à niveau d'EP Manager doit apporter, dans quel ordre et
+avec quelles vérifications, avant toute ligne de code. Il part de l'état actuel des deux
+dépôts (\code{EPmanager}, version \code{0.1.0} de \code{mod_ep} et
+\code{mod_epsynthesis}~; \code{StageCompagnon}, modules \code{mod_stage} et
+\code{mod_stagesynthesis}), de la demande du 6~novembre~2026 et des références publiques
+sur le supplément au diplôme et la description des unités d'enseignement.
+
+Les attendus de la demande sont repris un par un en section~\ref{sec:cible}. La
+section~\ref{sec:lots} les découpe en lots livrables séparément, chacun avec ses tests. La
+section~\ref{sec:questions} liste les hypothèses prises pour avancer sans attendre et les
+quelques points qui méritent une décision.
+
+Principe retenu partout : tout ce qui relève de l'administration se fait depuis le panneau
+\textbf{Administration} de l'activité \code{mod_ep}, par la DEVE (capacité
+\code{mod/ep:manage}). Rien ne demande un rôle d'administrateur du site ni un passage par
+\emph{Administration du site}, en dehors de l'installation du plugin et de la création
+des rôles standard déjà décrite dans StageCompagnon.
+
+\section{État des lieux}
+
+\subsection{EP Manager aujourd'hui}
+
+\code{mod_ep} (environ 7\,000 lignes de PHP, dont 2\,100 dans \code{locallib.php}) gère~:
+six types d'EP fixes (académique interne, stage, engagement étudiant, expérience
+professionnelle, sport, académique externe), un catalogue d'EP internes avec places,
+plage d'années et responsables, l'inscription de l'étudiant au catalogue, la déclaration
+hors catalogue avec justificatifs, la validation par le responsable de l'EP ou par
+l'enseignant référent (lu dans \code{mod_stage}) ou la DEVE, l'attribution automatique
+depuis les stages complémentaires validés, les plafonds par type (cursus, année), les
+minimums par année et de cursus, un tableau de pilotage, deux exports CSV. Quatre
+fichiers de tests PHPUnit (842 lignes) couvrent le décompte, le catalogue et la
+synchronisation des stages. \code{mod_epsynthesis} (1\,200 lignes) agrège la validation et le
+pilotage pour un enseignant, toutes promotions confondues.
+
+\subsection{Ce que StageCompagnon a et qu'EP Manager n'a pas}
+
+\begin{longtable}{p{4.2cm}p{5.3cm}p{5.3cm}}
+\toprule
+\textbf{Sujet} & \textbf{StageCompagnon} & \textbf{EP Manager} \\
+\midrule
+\endhead
+Sauvegarde Moodle & \code{backup/moodle2/} complet, données utilisateur et fichiers, tests de
+  restauration & \code{FEATURE_BACKUP_MOODLE2} annoncé mais \textbf{aucune implémentation}~:
+  une sauvegarde de cours perd tout \\
+Journaux & Un événement Moodle par transition du circuit & Aucun événement \\
+Gabarits & Mustache et classes \code{output} pour les listes & Tout en \code{html_writer} \\
+Imports & CSV générique, StageVet, historique, mobilités, restauration d'export global,
+  import depuis une autre activité, prévisualisation, verrou, transaction & Aucun import \\
+Exports & Excel multi-feuilles (bilan, détail, réponses), PDF de bilan, services web & Deux CSV \\
+Concurrence & Verrou par activité, écritures conditionnées à l'état lu, audit documenté &
+  Aucune protection (voir §\ref{sec:perf}) \\
+Charge & Pagination SQL, cache de bilan de promotion, chargements groupés, banc de charge &
+  Pagination en PHP après chargement complet, N requêtes par étudiant \\
+Tests & 45 fichiers PHPUnit, Behat, CI sur trois combinaisons, couverture & 4 fichiers, pas de
+  CI, pas de Behat \\
+Documentation & README, INSTALL détaillé, CHANGELOG, trois guides LaTeX avec captures,
+  rapports d'audit & README et INSTALL courts \\
+Moodle minimal & 4.3, PHP 8.0, justifié & 4.0 annoncé, non vérifié \\
+\bottomrule
+\end{longtable}
+
+\subsection{Défauts repérés à la lecture}\label{sec:defauts}
+
+Ces points sont corrigés dans les lots, mais sont listés ici parce qu'ils existent déjà en
+production potentielle~:
+\begin{enumerate}
+  \item \textbf{Places du catalogue sous concurrence.} Le contrôle « reste-t-il une place »
+    puis l'insertion ne sont pas atomiques~: deux étudiants qui confirment ensemble sur la
+    dernière place sont tous deux inscrits.
+  \item \textbf{Synchronisation des stages en double.} \code{ep_sync_stage_credits_if_due()}
+    est appelée à l'affichage de chaque page~; deux pages ouvertes en même temps après
+    cinq minutes lancent deux synchronisations qui créent chacune les crédits manquants (pas
+    d'index unique sur \code{epid, source, sourceref}).
+  \item \textbf{Décisions écrasées.} Validation, refus et annulation réécrivent la ligne sans
+    condition sur l'état lu~: un responsable et la DEVE qui statuent ensemble se recouvrent,
+    comme StageCompagnon l'a constaté sur les conventions avant correction.
+  \item \textbf{Sauvegarde absente} (ci-dessus)~: une duplication de cours ou une
+    restauration produit une activité sans types, sans catalogue, sans crédits.
+  \item \textbf{Pilotage non paginé en base}~: \code{ep_get_pilotage_overview()} calcule le
+    bilan de chaque étudiant inscrit (3 à 4 requêtes par étudiant) avant de filtrer, trier et
+    découper en PHP~; l'export CSV refait de même. Les places restantes et les responsables
+    du catalogue sont lus en une requête par EP.
+  \item \textbf{Confirmation JavaScript non échappée}~: \code{onclick="return
+    confirm('...')"} reçoit une chaîne de langue brute~; une apostrophe dans la traduction
+    casse la page. À remplacer par les confirmations Moodle (\code{confirm_action} ou page de
+    confirmation).
+  \item \textbf{Type d'EP d'un crédit à l'édition}~: l'étudiant qui modifie une déclaration
+    peut la basculer sur n'importe quel type déclarable, y compris après que la DEVE a
+    rédigé une consigne spécifique~; acceptable, mais à journaliser.
+\end{enumerate}
+
+\section{Références externes}
+
+\subsection{Supplément au diplôme}
+
+Le supplément au diplôme est l'annexe descriptive prévue par le décret du 8~avril~2002
+(code de l'éducation, art.~D.~123-13), délivrée gratuitement avec le diplôme, selon le
+modèle commun Commission européenne / Conseil de l'Europe / UNESCO-CEPES repris par
+Europass. Il ne remplace pas le diplôme et ne vaut pas reconnaissance. Sa structure est
+fixe, en huit rubriques~:
+\begin{enumerate}
+  \item \textbf{Informations sur le titulaire}~: 1.1 nom(s) de famille, 1.2 prénom(s),
+    1.3 date de naissance, 1.4 numéro ou code d'identification de l'étudiant.
+  \item \textbf{Informations sur le diplôme}~: 2.1 intitulé du diplôme et titre conféré,
+    2.2 principal(aux) domaine(s) d'étude, 2.3 nom et statut de l'établissement ayant
+    délivré le diplôme, 2.4 nom et statut de l'établissement dispensant les cours,
+    2.5 langue(s) d'enseignement et d'examen.
+  \item \textbf{Niveau et durée}~: 3.1 niveau du diplôme, 3.2 durée officielle du
+    programme (crédits, années), 3.3 conditions d'accès.
+  \item \textbf{Programme suivi et résultats}~: 4.1 organisation des études, 4.2 acquis
+    d'apprentissage du programme, \textbf{4.3 détail du programme, crédits obtenus et
+    notes}, 4.4 système de notation et répartition des notes, 4.5 classification générale.
+  \item \textbf{Fonction du diplôme}~: 5.1 accès à un niveau d'études supérieur,
+    5.2 statut professionnel (profession réglementée).
+  \item \textbf{Informations complémentaires}~: \textbf{6.1 informations complémentaires},
+    6.2 autres sources d'information.
+  \item \textbf{Certification du supplément}~: 7.1 date, 7.2 signature, 7.3 qualité du
+    signataire, 7.4 cachet ou sceau officiel.
+  \item \textbf{Système national d'enseignement supérieur} (texte national fourni par le
+    ministère).
+\end{enumerate}
+Deux rubriques reçoivent ce que ce module produit~: la \textbf{4.3} accueille les EP
+validés (intitulé, année, ECTS, note ou « validé »), la \textbf{6.1} les éléments que
+l'étudiant demande à y voir figurer (engagements, distinctions, mobilités, certifications)
+une fois validés. Les autres rubriques sont du texte d'établissement, saisi une fois par la
+DEVE et transférable d'une activité à l'autre, sauf la rubrique~1 (profil de l'étudiant)
+et la rubrique~7 (signataire et date, renseignés à l'émission).
+
+Sources~: Europass, \emph{Supplément au diplôme}
+(\url{https://europass.europa.eu/fr/what-europass-1/education-et-formation/supplement-au-diplome})~;
+Agence Erasmus+ France, \emph{Supplément au diplôme : mode d'emploi} et trame officielle
+(\url{https://agence.erasmusplus.fr/programme-erasmus/outils/europass/supplement-au-diplome/},
+\url{https://agence.erasmusplus.fr/publications/guide-pratique-pour-la-mise-en-place-du-supplement-au-diplome/})~;
+annexe~III de la décision Europass sur EUR-Lex
+(\url{https://eur-lex.europa.eu/resource.html?uri=cellar:2ddb7ba0-339e-467d-ba4a-008837e1f1cb.0007.02/DOC_190&format=PDF})~;
+ENIC-NARIC France, \emph{Le supplément au diplôme}
+(\url{https://www.enic-naric.net/fileusers/8601_LE_SUPPLEMENT_AU_DIPLOME.pdf})~;
+Euroguidance France, \emph{Les outils de la reconnaissance}
+(\url{https://www.euroguidance-france.org/wp-content/uploads/2017/11/Les-outils-de-la-reconnaissance.pdf}).
+
+\subsection{Fiche descriptive d'une unité d'enseignement (syllabus)}
+
+Le guide d'utilisation ECTS (2015) prévoit, pour chaque unité du catalogue de cours, une
+description d'une page au plus avec~: code, intitulé, type d'unité, niveau, année
+d'étude, semestre, crédits ECTS, enseignant(s), acquis d'apprentissage, mode
+d'enseignement, prérequis et corequis, contenu, lectures et ressources recommandées,
+activités pédagogiques et méthodes, langue d'enseignement, modalités et critères
+d'évaluation, charge de travail (un crédit valant environ 25 à 30~heures de travail de
+l'étudiant). Les fiches francophones (ULB, UCLouvain, Fédération Wallonie-Bruxelles)
+reprennent ces rubriques sous les intitulés « acquis d'apprentissage », « prérequis »,
+« contenu », « méthodes d'enseignement », « modalités d'évaluation », « charge de travail
+», « bibliographie »~; c'est ce vocabulaire qui sera employé dans l'interface.
+
+Sources~: ECTS Users' Guide 2015
+(\url{https://ehea.info/media.ehea.info/file/ECTS_Guide/77/4/ects-guide_en_595774.pdf})~;
+gabarit FIBAA « Description of course unit according to the ECTS Users' Guide 2015 »
+(\url{https://www.fibaa.org/fileadmin/redakteur/pdf/PROG/Handreichungen_und_Vorlagen/DESCRIPTION_Course_Unit_ECTS_User_s_Guide_2015_202004.pdf})~;
+UCLouvain, fiche descriptive d'unité d'enseignement
+(\url{https://uclouvain.be/fr/system/files/uclouvain_assetmanager/groups/cms-editors-lll/Fiche_Descriptive_0.pdf})~;
+ULB, manuel d'édition des fiches UE
+(\url{https://ulb.be/fr/programme/manuel-dedition-des-fiches-ue}).
+
+\section{Cible fonctionnelle}\label{sec:cible}
+
+\subsection{Types d'EP définis par la DEVE, sans programmation}\label{sec:types}
+
+Les six types codés en dur deviennent des \textbf{types paramétrés}~: la DEVE en ajoute,
+en renomme, en désactive, en supprime (s'il ne porte aucun crédit) et en ordonne
+librement. Le comportement d'un type n'est plus déduit de son code mais de ses
+paramètres~:
+\begin{itemize}
+  \item \textbf{Mode d'acquisition}~: \emph{catalogue} (inscription à un EP du catalogue,
+    qui porte ses ECTS), \emph{déclaration} (l'étudiant déclare, avec justificatifs),
+    \emph{automatique depuis les stages} (barème d'ECTS par jour, lu dans \code{mod_stage}),
+    \emph{saisie DEVE} (seule la DEVE crée des crédits de ce type, à la main ou par import).
+  \item \textbf{Circuit de validation}, suite ordonnée d'étapes parmi~: \emph{aucune}
+    (validé d'office à l'inscription ou à la déclaration), \emph{responsable de l'EP},
+    \emph{enseignant référent}, \emph{DEVE}. Exemples~: « responsable » (EP interne
+    actuel), « référent » (déclarations actuelles), « référent puis DEVE », « DEVE seule »,
+    « aucune ».
+  \item \textbf{Évaluation}~: \emph{sans note} (validé / non validé), \emph{avec note}
+    (barème et seuil de validation, par défaut sur 20 avec seuil 10), \emph{validé
+    d'office} (toute inscription confirmée est validée). Un EP du catalogue peut préciser son
+    propre barème dans les limites du type.
+  \item \textbf{Justificatifs}~: facultatifs, obligatoires (au moins un fichier), ou sans
+    objet~; formats admis (PDF seul, ou documents et images).
+  \item \textbf{ECTS}~: fixés par l'EP du catalogue, proposés par l'étudiant (avec un
+    maximum), ou calculés (barème par jour)~; plafonds par année et par cursus, inchangés.
+  \item \textbf{Supplément au diplôme}~: le type figure ou non en rubrique~4.3.
+  \item \textbf{Consigne} affichée à l'étudiant, \textbf{libellé} et \textbf{code court}
+    (utilisé dans les imports et les exports).
+\end{itemize}
+Les six types existants sont migrés automatiquement vers ces paramètres à la mise à jour
+(\code{db/upgrade.php}), à l'identique de leur comportement actuel~; les constantes
+\code{EP_TYPE_*} ne servent plus qu'à cette migration. L'attribution depuis les stages est
+portée par le mode d'acquisition, non plus par le code \code{stage}, ce qui permet
+plusieurs barèmes (par exemple un type pour les stages à l'étranger).
+
+\subsection{Catalogue, inscriptions, notes}\label{sec:catalogue}
+
+Un EP du catalogue reçoit~: un \textbf{code}, une \textbf{période d'inscription}
+(ouverture et fermeture, facultatives), des \textbf{dates de déroulement}, un
+\textbf{état} (brouillon, proposé, publié, clos, archivé), son \textbf{syllabus}
+(§\ref{sec:syllabus}) et ses \textbf{prérequis} (§\ref{sec:prerequis}).
+
+Une page \textbf{Participants} par EP, ouverte au responsable et à la DEVE, permet~:
+\begin{itemize}
+  \item d'\textbf{ajouter} un étudiant après la période d'inscription (au-delà des places
+    si la DEVE le décide, avec avertissement), un par un ou par sélection multiple parmi les
+    inscrits au cours~;
+  \item de \textbf{retirer} un étudiant (motif conservé, place libérée, état « retiré »
+    distinct de « refusé »)~;
+  \item de \textbf{saisir les notes} ou les validations de toute la liste en une fois
+    (tableau éditable, enregistrement en une transaction sous le verrou de l'activité)~; la
+    note décide du statut selon le seuil, un « absent » ou « non validé » explicite est
+    possible~; les ECTS retenus suivent la validation~;
+  \item d'\textbf{importer les notes} par CSV (adresse ou identifiant, note ou
+    validé/non validé, commentaire) et d'\textbf{exporter la liste} (CSV, feuille
+    d'émargement PDF)~;
+  \item de \textbf{clore} l'EP~: les inscriptions restées en attente sont tranchées
+    (validées d'office, non validées, ou laissées) selon le choix du responsable.
+\end{itemize}
+L'inscription de l'étudiant vérifie les places \textbf{sous le verrou de l'activité} et
+relit le compte avant d'insérer (défaut~1 de §\ref{sec:defauts}). Les décisions ne sont
+écrites que si le crédit est encore dans l'état lu (défaut~3), comme
+\code{stage_update_entry_if()} dans StageCompagnon.
+
+\subsection{Proposition d'EP par un enseignant et syllabus}\label{sec:syllabus}
+
+Nouvelle capacité \code{mod/ep:propose} (archétypes enseignant et enseignant éditeur).
+Un enseignant peut~:
+\begin{itemize}
+  \item \textbf{proposer un nouvel EP}~: il crée une fiche à l'état « brouillon », la
+    complète, la \textbf{soumet}~; la DEVE la \textbf{publie} (elle entre au catalogue),
+    la \textbf{renvoie} avec commentaire, ou la \textbf{refuse}~; chaque passage est
+    journalisé et notifié par courriel~;
+  \item \textbf{mettre à jour son EP} déjà publié~: les modifications du syllabus sont
+    enregistrées comme \textbf{révision en attente}, publiée par la DEVE (ou d'office si
+    la DEVE a choisi « publication directe par le responsable » dans les paramètres). Le
+    catalogue montre la version publiée tant que la révision n'est pas acceptée.
+\end{itemize}
+Le \textbf{syllabus} comprend les rubriques ECTS~: objectifs, acquis d'apprentissage,
+prérequis (texte libre, plus les prérequis structurés de §\ref{sec:prerequis}), contenu,
+méthodes d'enseignement, langue, charge de travail (heures en présence et de travail
+personnel, par nature~: cours, TD, TP, terrain, projet), \textbf{conditions d'examen}
+(modalités, critères, seuil, seconde session), bibliographie, et la \textbf{liste des
+séances}~: pour chacune, intitulé, nature (CM, TD, TP, clinique, autre), durée, intervenant
+(compte Moodle ou nom libre pour un intervenant extérieur), date facultative. Un même
+enseignant peut intervenir sur plusieurs séances~; le volume horaire total et la
+répartition par nature sont calculés.
+
+\textbf{Éditions PDF}~: la fiche complète d'un EP (syllabus, séances, responsables,
+modalités), et le \textbf{livret des EP} de la promotion (toutes les fiches publiées, avec
+sommaire), générés avec la bibliothèque PDF de Moodle (TCPDF, déjà employée pour le bilan
+de promotion de StageCompagnon). Un gabarit de page (logo, en-tête, pied de page) est
+réglé par la DEVE.
+
+\subsection{Supplément au diplôme}\label{sec:supplement}
+
+\paragraph{Paramétrage (DEVE, panneau d'administration).} Les textes fixes des rubriques
+2 à 5 et 8, le logo, le nom et la qualité du signataire, l'image du cachet, la langue
+d'édition (français, anglais facultatif champ par champ), la liste des \textbf{catégories}
+d'éléments que l'étudiant peut proposer (par exemple engagement associatif, mobilité,
+distinction, certification, publication), et pour ces éléments le \textbf{circuit de
+validation} (aucune, enseignant référent, DEVE, référent puis DEVE) et l'\textbf{exigence
+de preuve} (PDF obligatoire ou non, nombre maximal, taille). Ce paramétrage est
+transférable (§\ref{sec:transfert}).
+
+\paragraph{Contenu automatique.} Tous les crédits validés dont le type est marqué « figure
+au supplément » sont portés en rubrique~4.3~: intitulé, année d'étude, ECTS retenus, note
+ou « validé », date. L'étudiant ne peut pas en retirer.
+
+\paragraph{Éléments demandés par l'étudiant.} Depuis sa page, l'étudiant \textbf{propose
+un élément}~: catégorie, intitulé, description, période, preuves (PDF, enregistrés dans une
+zone de fichiers dédiée, conservés avec le dossier). L'élément suit le circuit configuré~;
+le validateur voit les preuves, retient ou refuse avec motif~; l'étudiant est notifié.
+L'élément validé est porté en rubrique~6.1. L'étudiant peut retirer une demande tant
+qu'elle n'est pas tranchée.
+
+\paragraph{Émission.} La DEVE \textbf{émet} le supplément d'un étudiant~: le PDF est
+généré, numéroté (numéro unique par activité et année), horodaté, signé du nom et de la
+qualité du signataire, porte le cachet, un \textbf{code de vérification} (empreinte
+SHA-256 du fichier, affichée sur le document) et la mention « Document établi
+conformément au modèle européen ». Le fichier est \textbf{conservé} (zone de fichiers,
+ligne d'émission avec auteur, date, empreinte)~: une réédition produit un nouveau numéro et
+l'ancien est marqué remplacé. L'étudiant télécharge ses suppléments émis~; avant émission,
+il voit un \textbf{aperçu} filigrané « non certifié ». L'\textbf{émission en lot} pour
+toute la promotion produit une archive ZIP (tâche ad hoc au-delà de quelques dizaines
+d'étudiants, comme le téléchargement groupé des rapports de StageCompagnon), avec un
+compte rendu des étudiants dont il manque des données (date de naissance, identifiant).
+
+\paragraph{Données de la rubrique 1.} Nom et prénom du profil Moodle~; identifiant
+\code{idnumber}~; date de naissance lue dans un champ de profil personnalisé désigné par la
+DEVE, à défaut dans le détail de convention de \code{mod_stage} (\code{birthdate}), à
+défaut laissée à compléter avant émission (l'émission d'un supplément incomplet est
+refusée, sauf case « émettre malgré les champs manquants »).
+
+\subsection{Prérequis d'EP et validation de l'année}\label{sec:prerequis}
+
+Un EP du catalogue peut exiger, pour l'inscription~: un ou plusieurs \textbf{EP validés}
+(prérequis structurés), une \textbf{année d'étude minimale} (existe), un \textbf{nombre
+minimal d'ECTS} déjà retenus. Le catalogue affiche à l'étudiant ce qui lui manque~; la
+règle est bloquante ou seulement signalée, au choix de la DEVE par EP~; la DEVE peut
+inscrire malgré tout depuis la page Participants.
+
+La \textbf{validation de l'année} devient une procédure explicite~: pour chaque étudiant
+et chaque année d'étude, la DEVE constate (en lot, depuis le pilotage, avec filtres « à
+jour / en défaut ») que les minimums sont atteints, et enregistre « année validée » (date,
+auteur, commentaire), ou « année non validée » avec motif. Le bilan de l'étudiant, les
+exports et le supplément s'appuient sur cette décision. La \textbf{rentrée} est une
+procédure guidée~: passage de l'année courante à la suivante, rappel des étudiants en
+défaut, et \textbf{transfert d'un étudiant} (redoublement, changement de promotion) vers
+une autre activité \code{mod_ep} du site, crédits, preuves et éléments de supplément
+compris, sur le modèle du transfert de StageCompagnon.
+
+\subsection{Imports, exports, transfert du paramétrage}\label{sec:transfert}
+
+\paragraph{Import CSV des EP (DEVE).} Deux fichiers, avec modèle téléchargeable,
+documentation des colonnes dans l'interface et dans \code{INSTALL.md}, prévisualisation
+ligne par ligne (erreurs, doublons, lignes ignorées), confirmation sous verrou et en une
+transaction~:
+\begin{itemize}
+  \item \textbf{catalogue}~: code, intitulé, type (code), ECTS, années, places, période,
+    responsables (adresses), rubriques du syllabus, séances (une ligne par séance avec le
+    code de l'EP)~;
+  \item \textbf{crédits}~: étudiant (adresse ou identifiant), type (code), EP du catalogue
+    (code, facultatif), intitulé, année d'étude, ECTS demandés et retenus, note, statut,
+    date, validateur (adresse), commentaire. Sert aussi à reprendre l'historique d'une
+    promotion.
+\end{itemize}
+
+\paragraph{Export global du module.} Un classeur Excel avec une feuille par table
+fonctionnelle~: paramètres, types, catalogue et syllabus, séances, responsables,
+prérequis, minimums, bilan par étudiant, crédits, éléments de supplément, suppléments émis.
+Toutes les colonnes nécessaires à une \textbf{restauration} y figurent, et
+\code{import_global.php} relit ce classeur dans une activité vide (ou en complément), avec
+la même prévisualisation que les imports CSV. Les fichiers (justificatifs, preuves, PDF
+émis) ne tiennent pas dans un classeur~: une archive ZIP les accompagne, avec un index
+reliant chaque fichier à sa ligne.
+
+\paragraph{Transfert du paramétrage.} Deux voies, l'une n'excluant pas l'autre~:
+\begin{itemize}
+  \item \textbf{export et import du paramétrage} en un fichier JSON signé par version
+    (types, minimums, catégories et textes du supplément, gabarit PDF, réglages de
+    proposition), depuis le panneau d'administration~;
+  \item \textbf{copie depuis une autre activité} du site, choisie dans une liste (les
+    activités où l'utilisateur a \code{mod/ep:manage}), avec cases pour choisir ce qui est
+    copié, y compris le catalogue et ses syllabus (sans inscriptions).
+\end{itemize}
+La sauvegarde Moodle (§\ref{sec:backup}) emporte en outre tout cela lors d'une
+duplication ou d'un import de cours.
+
+\subsection{Sauvegarde, journaux, données personnelles}\label{sec:backup}
+
+\begin{itemize}
+  \item \code{backup/moodle2/} pour \code{mod_ep}~: paramétrage toujours sauvegardé (types,
+    catalogue, syllabus, séances, responsables, prérequis, minimums, textes et images du
+    supplément, gabarit PDF)~; avec les données utilisateur~: crédits, notes, validations
+    d'année, éléments de supplément, émissions, et tous les fichiers. Pour
+    \code{mod_epsynthesis}~: liens, conservés sur le même site. Tests de sauvegarde et
+    restauration comme dans StageCompagnon. Dates non décalées à la restauration.
+  \item \textbf{Événements Moodle} pour chaque transition~: inscription, ajout et retrait
+    par le responsable, note saisie, validation, refus, annulation, déclaration créée et
+    modifiée, proposition soumise, renvoyée, publiée, refusée, révision publiée, élément de
+    supplément demandé, validé, refusé, supplément émis, année validée, transfert, import
+    (avec le nombre de lignes).
+  \item \textbf{Fournisseur RGPD} étendu aux nouvelles tables et zones de fichiers~; même
+    règle que StageCompagnon~: l'étudiant supprimé emporte tout son dossier (preuves et
+    suppléments émis compris, avec l'avertissement d'archivage dans \code{INSTALL.md}), le
+    personnel supprimé est seulement dissocié.
+  \item \textbf{Notifications} par courriel, avec modèles modifiables par la DEVE (comme les
+    courriels de StageCompagnon)~: décision sur une demande, proposition à examiner,
+    supplément émis, relance des demandes en attente (tâche planifiée hebdomadaire).
+  \item \textbf{Réinitialisation de cours}~: options pour supprimer les crédits, les
+    éléments de supplément et les émissions de l'année écoulée.
+\end{itemize}
+
+\subsection{Synthèse enseignant}
+
+\code{mod_epsynthesis} suit~: les propositions et révisions de l'enseignant et leur état,
+les EP dont il est responsable avec le nombre d'inscrits à noter, les éléments de
+supplément de ses étudiants à valider, en plus des files existantes. Il reçoit sa
+sauvegarde Moodle, ses événements et ses tests.
+
+\section{Modèle de données cible}
+
+Les tables actuelles sont conservées et étendues~; les nouvelles sont ajoutées par
+\code{db/upgrade.php} avec points de sauvegarde (contrôle \code{savepoints} de la CI).
+
+\begin{longtable}{p{4.6cm}p{10.3cm}}
+\toprule
+\textbf{Table} & \textbf{Évolution} \\
+\midrule
+\endhead
+\code{ep} & \code{proposalsdirectpublish}, \code{birthdatefield},
+  \code{supplementflow}, \code{supplementevidencerequired}, \code{supplementnumbering},
+  \code{pdfheader}, \code{pdffooter}, \code{timesyncedlock} \\
+\code{ep_type} & \code{acquisition}, \code{validationflow}, \code{grading},
+  \code{grademax}, \code{gradepass}, \code{evidence}, \code{evidencetypes},
+  \code{ectsmode}, \code{maxclaimedects}, \code{insupplement}~; code libre de 2 à 20
+  caractères \\
+\code{ep_activity} & \code{code}, \code{state}, \code{registrationstart},
+  \code{registrationend}, \code{datestart}, \code{dateend}, \code{grading},
+  \code{grademax}, \code{gradepass}, \code{closeaction}, \code{proposedby},
+  \code{publishedby}, \code{timepublished}, \code{prerequisitemode} \\
+\code{ep_syllabus} (nouvelle) & une ligne par EP et par version (publiée, en attente)~:
+  rubriques ECTS en texte formaté, charge de travail par nature, langue, bibliographie,
+  conditions d'examen, \code{status}, \code{reviewcomment}, auteur, dates \\
+\code{ep_session} (nouvelle) & séances d'un syllabus~: intitulé, nature, durée, date,
+  \code{teacherid} ou \code{teachername}, ordre \\
+\code{ep_prerequisite} (nouvelle) & EP requis, année minimale, ECTS minimaux,
+  \code{blocking} \\
+\code{ep_credit} & \code{grade}, \code{gradedby}, \code{timegraded}, \code{step} (étape
+  courante du circuit), \code{addedby} (ajout par le responsable), index unique
+  \code{epid, source, sourceref} pour les crédits automatiques, index
+  \code{epid, status}, \code{activityid, status}, \code{userid} \\
+\code{ep_credit_decision} (nouvelle) & historique des décisions par étape (qui, quand,
+  quoi, commentaire), pour les circuits à plusieurs étapes et la traçabilité \\
+\code{ep_year_validation} (nouvelle) & étudiant, année, décision, auteur, date,
+  commentaire \\
+\code{ep_supplement_category} (nouvelle) & catégories d'éléments proposables, ordre,
+  actif \\
+\code{ep_supplement_item} (nouvelle) & élément demandé par l'étudiant, statut, étape,
+  validateur, commentaire, zone de fichiers \code{supplementevidence} \\
+\code{ep_supplement_issue} (nouvelle) & émission~: numéro, étudiant, auteur, date,
+  empreinte, langue, \code{replacedby}, fichier en zone \code{supplementissued} \\
+\code{ep_supplement_text} (nouvelle) & textes des rubriques fixes, par langue \\
+\code{ep_notification} (nouvelle) & modèles de courriels modifiables \\
+\code{ep_import_log} (nouvelle) & imports réalisés (fichier, auteur, lignes, date), pour
+  retrouver et défaire un import \\
+\bottomrule
+\end{longtable}
+
+\section{Efficacité et accès simultanés}\label{sec:perf}
+
+Objectif chiffré, mesuré sur le banc (§\ref{sec:banc})~: toute page de liste en moins
+d'une seconde et moins de 40~requêtes pour une promotion de 250 étudiants et 100\,000
+crédits sur le site~; export global de 20 promotions en moins de deux minutes.
+\begin{itemize}
+  \item \textbf{Pagination en SQL} des listes (validation, pilotage, participants,
+    catalogue) avec comptage séparé~; recherche et tri en base.
+  \item \textbf{Cache de bilan de promotion} (classe \code{progress_cache}, comme
+    StageCompagnon)~: types, minimums, crédits de tous les étudiants de la page chargés en
+    trois requêtes~; \code{ep_get_student_progress()} s'y alimente quand il est armé.
+  \item \textbf{Chargements groupés}~: responsables, places prises, inscriptions de
+    l'étudiant courant, fichiers de preuve, en une requête par page et non par ligne.
+  \item \textbf{Index} listés dans le modèle de données, vérifiés par \code{EXPLAIN
+    ANALYZE} sur la base de stress.
+  \item \textbf{Verrou par activité} (\code{ep_get_activity_lock()}, fabrique de verrous
+    Moodle) sur~: inscription, ajout de participants, saisie des notes en lot, imports,
+    synchronisation des stages, émission en lot, transfert.
+  \item \textbf{Écritures conditionnées} à l'état lu (\code{ep_update_credit_if()}) pour
+    toute décision~; message « cette demande a changé entre-temps » à l'utilisateur dont
+    l'écriture n'a pas eu lieu.
+  \item \textbf{Synchronisation des stages}~: sous verrou, et mise à jour de
+    \code{timesynced} par requête conditionnelle avant le calcul, pour qu'une seule page
+    déclenche la synchronisation.
+  \item \textbf{Tâches ad hoc} pour les traitements longs (émission en lot, ZIP d'export,
+    notifications), avec compte rendu par courriel.
+  \item \textbf{Gabarits Mustache} et classes \code{output} pour les listes, badges,
+    filtres et actions, partagés avec \code{mod_epsynthesis}.
+\end{itemize}
+
+\section{Sécurité}
+
+Revue systématique avant livraison de chaque lot, et rapport dans \code{docs/audit/}~:
+\begin{itemize}
+  \item chaque action d'écriture passe par \code{require_sesskey()} ou
+    \code{confirm_sesskey()} et une capacité vérifiée dans le contexte du module~; les
+    identifiants reçus sont toujours contraints à l'instance (\code{epid}) et au périmètre
+    de l'utilisateur (responsable, référent, propriétaire)~;
+  \item accès aux fichiers (preuves, PDF émis) par un script de contrôle, comme
+    \code{evidence_file.php}, jamais par \code{pluginfile} ouvert~;
+  \item \code{PARAM_*} exacts (fin des \code{PARAM_RAW})~; \code{returnurl} en
+    \code{PARAM_LOCALURL}~; texte formaté passé par \code{format_text} avec le format
+    enregistré~; plus de JavaScript en ligne construit à partir de chaînes~;
+  \item imports~: taille et type de fichier contrôlés, cellules nettoyées, formules Excel
+    neutralisées à l'export (préfixe d'apostrophe, comme StageCompagnon)~;
+  \item PDF émis~: empreinte vérifiable, fichier en lecture seule, numéro non devinable
+    (année, séquence et contrôle)~;
+  \item tests PHPUnit « frontières de droits » pour chaque page (un étudiant sur le crédit
+    d'un autre, un responsable sur un EP qui n'est pas le sien, un référent sur un étudiant
+    qui n'est pas le sien, une activité sur les données d'une autre)~;
+  \item passage de la revue de sécurité outillée (\code{/security-review}) sur chaque lot et
+    de l'analyse statique Moodle de la CI.
+\end{itemize}
+
+\section{Tests et contrôle continu}\label{sec:tests}
+
+\subsection{Tests unitaires et de scénario}
+
+\begin{itemize}
+  \item \textbf{PHPUnit}~: un fichier par règle métier (types paramétrés, circuits de
+    validation, notes et seuils, places sous concurrence simulée, prérequis, validation
+    d'année, supplément et émission, imports, export et restauration, sauvegarde et
+    restauration Moodle, RGPD, événements, transfert)~; données tabulaires en
+    \code{dataProvider}~; les tests existants sont conservés et adaptés.
+  \item \textbf{Behat}, sans JavaScript, sur le serveur intégré de PHP, un scénario par
+    procédure~: la DEVE paramètre un type et le catalogue, un enseignant propose un EP et la
+    DEVE le publie, un étudiant s'inscrit, le responsable ajoute un étudiant et saisit les
+    notes, un étudiant déclare un EP et le référent le valide, un étudiant demande un
+    élément de supplément avec preuve PDF et la DEVE l'accepte puis émet le supplément,
+    la DEVE importe un CSV, exporte et restaure le module, valide l'année.
+  \item \textbf{CI GitHub} reprise de StageCompagnon~: \code{phpcs} standard Moodle (même
+    \code{phpcs.xml}), \code{moodle-plugin-ci} sur Moodle 4.3 / PHP 8.0 / PostgreSQL,
+    4.5 / 8.2 / PostgreSQL avec couverture et Behat, 4.5 / 8.2 / MariaDB~; lint,
+    validation, savepoints, PHPDoc, Mustache bloquants. \code{mod_stage} est installé en
+    plugin supplémentaire puisque \code{mod_ep} en dépend.
+\end{itemize}
+
+\subsection{Banc dans le cloud}\label{sec:banc}
+
+L'environnement de cette session dispose de PHP~8.3, PostgreSQL~16 et Docker~: un Moodle
+4.5 réel y est installé avec \code{mod_stage}, \code{mod_ep} et leurs synthèses, comme
+l'a fait l'audit de concurrence de StageCompagnon. Scripts versionnés dans
+\code{docs/audit/banc/}~:
+\begin{itemize}
+  \item \textbf{Volumétrie}~: 20 promotions, 5\,000 étudiants, 400 enseignants, 300 EP au
+    catalogue avec syllabus, 100\,000 crédits, 20\,000 éléments de supplément, 50\,000
+    fichiers de preuve~; stages complémentaires dans \code{mod_stage} pour l'attribution
+    automatique.
+  \item \textbf{Chronométrage de toutes les pages} pour chaque rôle, nombre de requêtes et
+    mémoire, avant et après correction, avec \code{EXPLAIN ANALYZE} des requêtes lentes.
+  \item \textbf{Concurrence}~: 50 étudiants sur les 5 dernières places d'un EP~; un
+    responsable et la DEVE statuant sur les mêmes crédits~; deux DEVE confirmant le même
+    import~; synchronisation des stages pendant une validation DEVE dans \code{mod_stage}~;
+    émission en lot pendant qu'un étudiant ajoute un élément~; vérification des invariants
+    (pas de surbooking, pas de crédit en double, pas de décision perdue, pas de verrou
+    restant).
+  \item \textbf{Procédures de bout en bout} jouées par scripts HTTP (sessions par rôle)~:
+    DEVE, enseignant référent, responsable d'EP, proposant, étudiant, jusqu'à la
+    validation de l'année et l'émission du supplément de la promotion.
+  \item Rapports LaTeX \code{docs/audit/test-de-charge.tex} et
+    \code{docs/audit/test-de-concurrence.tex}, avec mesures avant et après.
+\end{itemize}
+
+\section{Documentation}
+
+\code{README.md} et \code{INSTALL.md} des deux modules au niveau de StageCompagnon
+(rôles, mise en place, chaque procédure, colonnes des imports, RGPD, sauvegarde)~;
+\code{CHANGELOG.md} tenu à chaque changement de \code{version.php}~; trois guides LaTeX
+avec captures d'écran prises par script (\code{docs/guides/})~: paramétrage DEVE (types,
+catalogue, supplément, imports, rentrée), enseignant (référent, responsable d'EP,
+proposant), étudiant (inscription, déclaration, supplément). Les PDF sont compilés et
+versionnés avec leurs sources, comme dans StageCompagnon.
+
+\section{Lots et ordre de réalisation}\label{sec:lots}
+
+Chaque lot se termine par ses tests PHPUnit, le passage de la CI, une entrée de
+\code{CHANGELOG.md}, un numéro de version et une poussée sur la branche. L'ordre suit les
+dépendances~: les fondations (lot~1) servent à tout le reste, le modèle de types (lot~2)
+conditionne les circuits (lots~3 à 5), les imports et exports (lot~6) ont besoin de toutes
+les tables, le banc (lot~8) se joue sur le produit complet.
+
+\begin{longtable}{p{1.1cm}p{5.2cm}p{5.2cm}p{3.2cm}}
+\toprule
+\textbf{Lot} & \textbf{Contenu} & \textbf{Livrables} & \textbf{Dépend de} \\
+\midrule
+\endhead
+1 & Fondations~: CI et \code{phpcs}, Moodle 4.3+, verrou d'activité, écritures
+  conditionnées, index, sauvegarde \code{backup/moodle2}, événements, Mustache, correction
+  des défauts de §\ref{sec:defauts}, cache de bilan, pagination SQL &
+  \code{.github/workflows/ci.yml}, \code{phpcs.xml}, \code{backup/}, \code{classes/event/},
+  \code{templates/}, tests de sauvegarde, d'événements et de concurrence simulée & -- \\
+2 & Types paramétrés~: modèle, migration des six types, page d'administration (ajout,
+  édition, ordre, suppression), circuits de validation à étapes, historique des décisions,
+  justificatifs obligatoires & \code{types.php} refondu, \code{db/upgrade.php},
+  \code{ep_credit_decision}, tests de circuits & 1 \\
+3 & Catalogue et participants~: états et périodes de l'EP, page Participants (ajout,
+  retrait, notes en lot, import des notes, clôture), inscription sous verrou, prérequis
+  structurés & \code{participants.php}, \code{grades_import.php}, tests de notes, de
+  places et de prérequis, Behat « inscription et notes » & 2 \\
+4 & Proposition d'EP et syllabus~: fiche, séances, intervenants, soumission, revue,
+  publication, révisions~; PDF de fiche et livret~; notifications & \code{propose.php},
+  \code{syllabus.php}, \code{classes/pdf/}, modèles de courriels, Behat « proposition » & 2 \\
+5 & Supplément au diplôme~: paramétrage, catégories, éléments de l'étudiant avec preuves
+  PDF, circuit, aperçu, émission unitaire et en lot (ZIP, tâche ad hoc), vérification,
+  validation d'année et rentrée, transfert d'étudiant & \code{supplement*.php},
+  \code{year_validation.php}, \code{transfer.php}, tests, Behat « supplément » & 2, 3 \\
+6 & Imports et exports~: CSV catalogue et crédits avec prévisualisation, export global
+  Excel et ZIP, restauration d'export global, export et import JSON du paramétrage, copie
+  depuis une autre activité, journal des imports & \code{import*.php},
+  \code{export_global.php}, \code{classes/local/*importer.php}, tests & 2 à 5 \\
+7 & Synthèse enseignant et RGPD~: \code{mod_epsynthesis} étendu, sauvegarde, événements~;
+  fournisseur RGPD des deux modules, réinitialisation de cours & tests RGPD et de synthèse
+  & 4, 5 \\
+8 & Banc cloud~: installation Moodle réel, jeux de données, chronométrage, concurrence,
+  procédures de bout en bout, corrections, rapports LaTeX & \code{docs/audit/} & 1 à 7 \\
+9 & Documentation et sécurité finale~: README, INSTALL, CHANGELOG, guides avec captures,
+  revue de sécurité, version \code{1.0.0} & \code{docs/guides/}, rapport de sécurité & 1 à 8 \\
+\bottomrule
+\end{longtable}
+
+Le lot~1 est engagé en premier parce qu'il corrige des défauts qui existent aujourd'hui
+et qu'il fournit l'outillage (CI, verrou, événements, sauvegarde) sur lequel chaque lot
+suivant s'appuie pour être testé.
+
+\section{Hypothèses retenues et questions}\label{sec:questions}
+
+Pour ne pas bloquer le démarrage, les choix suivants sont faits par défaut~; chacun
+peut être inversé sans remettre en cause le plan.
+\begin{enumerate}
+  \item \textbf{Barème par défaut}~: note sur 20, seuil 10, pas de demi-point imposé~;
+    modifiable par type et par EP. Les notes ne sont \textbf{pas} poussées dans le carnet
+    de notes Moodle (\code{FEATURE_GRADE_HAS_GRADE} reste à faux)~: le carnet d'un cours de
+    promotion n'est pas utilisé pour les EP. À confirmer.
+  \item \textbf{Qui propose un EP}~: tout utilisateur ayant \code{mod/ep:propose} dans le
+    cours de la promotion (archétypes enseignant et enseignant éditeur). Un enseignant
+    extérieur au cours doit y être inscrit (rôle enseignant non éditeur) pour proposer.
+  \item \textbf{Date de naissance} pour la rubrique~1.3~: champ de profil personnalisé
+    choisi par la DEVE, puis \code{mod_stage}, puis saisie manuelle à l'émission.
+  \item \textbf{Langue du supplément}~: français~; chaque texte fixe peut recevoir une
+    version anglaise, et l'émission se fait dans l'une ou l'autre langue. Pas d'édition
+    bilingue en colonnes.
+  \item \textbf{Ce qui figure en rubrique 4.3}~: tous les crédits validés des types marqués
+    « figure au supplément », sans possibilité pour l'étudiant d'en retirer~; les EP non
+    validés et annulés n'y figurent jamais.
+  \item \textbf{Certification}~: signature par nom, qualité et cachet image, plus
+    empreinte SHA-256 imprimée et conservée. Pas de signature électronique qualifiée
+    (certificat) dans cette version~; la structure permet d'en ajouter une plus tard.
+  \item \textbf{Séances d'un EP}~: la fiche décrit le programme des séances (nature,
+    durée, intervenant)~; elle ne gère ni planning horaire ni salles.
+  \item \textbf{Synthèse}~: la décision continue de se prendre dans le cours de la
+    promotion, la synthèse n'étant qu'une vue, comme aujourd'hui.
+  \item \textbf{Moodle minimal}~: 4.3 et PHP 8.0, alignés sur StageCompagnon et sur sa CI.
+\end{enumerate}
+
+\end{document}
