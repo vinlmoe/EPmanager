@@ -2289,6 +2289,9 @@ function ep_render_navlinks(stdClass $ep, stdClass $cm, context $context, ?stdCl
     if ($rights->viewall || !empty($rights->referentids)) {
         $links[get_string('pilotage', 'mod_ep')] = new moodle_url('/mod/ep/dashboard.php', ['id' => $cm->id]);
     }
+    if (has_capability('mod/ep:propose', $context) || $rights->manage) {
+        $links[get_string('proposals', 'mod_ep')] = new moodle_url('/mod/ep/proposals.php', ['id' => $cm->id]);
+    }
     if ($rights->viewall) {
         $links[get_string('exportcsv', 'mod_ep')] = new moodle_url('/mod/ep/export.php', ['id' => $cm->id]);
     }
@@ -4215,8 +4218,15 @@ function ep_submit_syllabus(stdClass $ep, stdClass $activity, stdClass $syllabus
  * @param bool $notify Prévenir l'auteur.
  * @return bool False si la version n'était plus soumise (décision prise entre-temps).
  */
-function ep_review_syllabus(stdClass $ep, stdClass $activity, stdClass $syllabus, $reviewerid, $decision, $comment = '',
-        $notify = true) {
+function ep_review_syllabus(
+    stdClass $ep,
+    stdClass $activity,
+    stdClass $syllabus,
+    $reviewerid,
+    $decision,
+    $comment = '',
+    $notify = true
+) {
     global $DB;
 
     $statuses = ['publish' => 'published', 'return' => 'returned', 'reject' => 'rejected'];
@@ -4328,8 +4338,10 @@ function ep_get_proposals(stdClass $ep, context $context, $userid) {
         $activityid = (int) $syllabus->a_id;
         unset($syllabus->a_id);
         // La DEVE n'a à voir que ce qui lui est soumis ; les brouillons restent à leurs auteurs.
-        if ($ismanager && $syllabus->status !== 'submitted' && !ep_is_activity_teacher($activityid, $userid)
-                && (int) ($activities[$activityid]->proposedby ?? 0) !== (int) $userid) {
+        if (
+            $ismanager && $syllabus->status !== 'submitted' && !ep_is_activity_teacher($activityid, $userid)
+                && (int) ($activities[$activityid]->proposedby ?? 0) !== (int) $userid
+        ) {
             continue;
         }
         $rows[] = (object) ['activity' => $activities[$activityid], 'syllabus' => $syllabus];

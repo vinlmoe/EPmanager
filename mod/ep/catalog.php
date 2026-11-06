@@ -144,6 +144,14 @@ if (empty($activities)) {
     exit;
 }
 
+// EP qui ont un syllabus publié, en une requête pour tout le catalogue : seuls ceux-là ont une
+// fiche à consulter.
+[$insql, $inparams] = $DB->get_in_or_equal(array_keys($activities), SQL_PARAMS_NAMED, 'act');
+$withsyllabus = array_flip($DB->get_fieldset_sql(
+    "SELECT DISTINCT activityid FROM {ep_syllabus} WHERE status = :published AND activityid $insql",
+    $inparams + ['published' => 'published']
+));
+
 $table = new html_table();
 $table->head = [
     get_string('catalogactivity', 'mod_ep'),
@@ -167,6 +175,12 @@ foreach ($activities as $activity) {
     }
     if (trim((string) $activity->description) !== '') {
         $name .= html_writer::div(format_text($activity->description, FORMAT_PLAIN), 'text-muted small');
+    }
+    if (isset($withsyllabus[$activity->id])) {
+        $name .= html_writer::div(html_writer::link(
+            new moodle_url('/mod/ep/syllabus.php', ['id' => $cm->id, 'activityid' => $activity->id]),
+            get_string('syllabus', 'mod_ep')
+        ), 'small');
     }
     $period = ep_activity_registration_label($activity);
     if ($period !== '') {

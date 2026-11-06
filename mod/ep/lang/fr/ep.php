@@ -628,3 +628,7 @@ $string['messageprovider:pendingreminder'] = 'Relance des demandes d\'EP en atte
 $string['tasksendpendingreminders'] = 'Relance hebdomadaire des demandes d\'EP en attente';
 $string['eventsyllabussubmitted'] = 'Syllabus d\'EP soumis';
 $string['eventsyllabusreviewed'] = 'Syllabus d\'EP examiné';
+$string['syllabusauthor'] = 'Auteur';
+$string['proposedbylabel'] = 'Proposé par';
+$string['syllabusversionlabel'] = 'Version';
+$string['errornegativeduration'] = 'Une durée ne peut pas être négative.';

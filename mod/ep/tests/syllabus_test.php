@@ -159,7 +159,8 @@ final class syllabus_test extends \advanced_testcase {
         $this->assertSame(15.5, $hours->total);
         $this->assertSame(3.5, $hours->bykind['practical']);
 
-        $this->assertSame('submitted', ep_submit_syllabus($this->ep, $activity, $this->syllabus($syllabus->id), $this->teacher->id));
+        $submitted = ep_submit_syllabus($this->ep, $activity, $this->syllabus($syllabus->id), $this->teacher->id);
+        $this->assertSame('submitted', $submitted);
         $this->assertFalse(ep_save_syllabus($this->syllabus($syllabus->id), (object) ['objectives' => 'Modifié'], []));
         $this->assertSame('Savoir réaliser une échographie.', $this->syllabus($syllabus->id)->objectives);
         $this->assertCount(3, ep_get_syllabus_sessions($syllabus->id));
@@ -185,8 +186,14 @@ final class syllabus_test extends \advanced_testcase {
         $this->assertNull(ep_submit_syllabus($this->ep, $activity, $this->syllabus($syllabus->id), $this->teacher->id));
 
         $activity = $DB->get_record('ep_activity', ['id' => $activity->id]);
-        $this->assertTrue(ep_review_syllabus($this->ep, $activity, $this->syllabus($syllabus->id), $this->deve->id,
-            'return', 'Préciser les conditions d\'examen.'));
+        $this->assertTrue(ep_review_syllabus(
+            $this->ep,
+            $activity,
+            $this->syllabus($syllabus->id),
+            $this->deve->id,
+            'return',
+            'Préciser les conditions d\'examen.'
+        ));
         $this->assertSame(EP_ACTIVITY_DRAFT, $DB->get_field('ep_activity', 'state', ['id' => $activity->id]));
         $returned = $this->syllabus($syllabus->id);
         $this->assertSame('returned', $returned->status);

@@ -3,6 +3,36 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## 0.5.0 — mod_ep 2026110900 (9 novembre 2026)
+
+Lot 4 : propositions d'EP, syllabus, éditions PDF, courriels.
+
+### mod_ep
+- **Proposition d'un EP par un enseignant** (capacité `mod/ep:propose`, `proposals.php`,
+  `syllabus_edit.php`) : il crée l'EP à l'état de brouillon, en devient responsable, rédige sa
+  fiche et la soumet à la DEVE ; la DEVE la publie (l'EP entre au catalogue), la renvoie avec un
+  commentaire (l'EP repasse en brouillon) ou la refuse (l'EP est archivé).
+- **Syllabus** aux rubriques de la fiche ECTS : objectifs, acquis d'apprentissage, prérequis,
+  contenu, méthodes, conditions d'examen, seconde session, bibliographie, langue, travail
+  personnel ; **programme des séances** (intitulé, nature, durée, intervenant du cours ou
+  extérieur, date) ; volume horaire par nature, charge de travail totale et heures par ECTS.
+- **Mise à jour d'un EP publié** par son responsable : version de travail, la version en vigueur
+  restant au catalogue jusqu'à la publication de la nouvelle ; publication directe facultative,
+  au choix de la DEVE. Historique des versions (publiée, remplacée, refusée).
+- **Fiche du syllabus** (`syllabus.php`) pour tous les inscrits, avec la décision de la DEVE sur
+  une version soumise ; **fiche PDF** et **livret PDF** de tous les EP du catalogue (page de
+  titre, sommaire, signets), avec en-tête, pied de page et logo réglés par la DEVE.
+- **Courriels** par la messagerie Moodle (courriel ou notification, au choix de chacun), au texte
+  personnalisable par activité (`notifications.php`) : décision finale sur une demande d'EP, à
+  l'étudiant ; proposition à examiner, à la DEVE ; décision sur une proposition, à son auteur ;
+  relance hebdomadaire des validateurs qui ont des demandes en attente depuis plus d'une semaine
+  (tâche planifiée du lundi).
+- Panneau d'administration : section « Éditions PDF et propositions » (réglages PDF, courriels,
+  livret). Barre de navigation : « Propositions et syllabus ». Catalogue : lien vers la fiche.
+- Sauvegarde : syllabus (toutes versions) et séances, courriels personnalisés, logo, réglages.
+- Tests : proposition, rédaction et volume horaire, soumission, renvoi, publication, révision,
+  publication directe, refus, listes, courriels et relance (98 tests).
+
 ## 0.4.0 — mod_ep 2026110800 (8 novembre 2026)
 
 Lot 3 : catalogue, participants, notes.

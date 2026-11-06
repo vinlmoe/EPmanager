@@ -264,7 +264,8 @@ function xmldb_ep_upgrade($oldversion) {
         $table->add_field('activityid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
         $table->add_field('version', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '1');
         $table->add_field('status', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'draft');
-        foreach (['objectives', 'outcomes', 'prerequisitestext', 'content', 'methods', 'assessment', 'resit', 'bibliography'] as $name) {
+        $textfields = ['objectives', 'outcomes', 'prerequisitestext', 'content', 'methods', 'assessment', 'resit', 'bibliography'];
+        foreach ($textfields as $name) {
             $table->add_field($name, XMLDB_TYPE_TEXT, null, null, null, null, null);
         }
         $table->add_field('language', XMLDB_TYPE_CHAR, '50', null, XMLDB_NOTNULL, null, '');

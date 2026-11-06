@@ -628,3 +628,7 @@ $string['messageprovider:pendingreminder'] = 'Reminder of pending unit requests'
 $string['tasksendpendingreminders'] = 'Weekly reminder of pending unit requests';
 $string['eventsyllabussubmitted'] = 'Unit syllabus submitted';
 $string['eventsyllabusreviewed'] = 'Unit syllabus reviewed';
+$string['syllabusauthor'] = 'Author';
+$string['proposedbylabel'] = 'Proposed by';
+$string['syllabusversionlabel'] = 'Version';
+$string['errornegativeduration'] = 'A duration cannot be negative.';
