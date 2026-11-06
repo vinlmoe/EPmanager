@@ -2282,9 +2282,16 @@ function ep_render_navlinks(stdClass $ep, stdClass $cm, context $context, ?stdCl
             $links[get_string('declarecredit', 'mod_ep')] =
                 new moodle_url('/mod/ep/declare.php', ['id' => $cm->id]);
         }
+        $links[get_string('mysupplement', 'mod_ep')] = new moodle_url('/mod/ep/supplement.php', ['id' => $cm->id]);
     }
     if (ep_rights_has_validation_scope($rights)) {
         $links[get_string('validation', 'mod_ep')] = new moodle_url('/mod/ep/credits.php', ['id' => $cm->id]);
+    }
+    // Les éléments de supplément attendent la DEVE ou le référent de l'étudiant : le lien n'est
+    // utile qu'à eux.
+    if ($rights->validatedeve || !empty($rights->referentids)) {
+        $links[get_string('supplementitemstodecide', 'mod_ep')] =
+            new moodle_url('/mod/ep/supplement_items.php', ['id' => $cm->id]);
     }
     if ($rights->viewall || !empty($rights->referentids)) {
         $links[get_string('pilotage', 'mod_ep')] = new moodle_url('/mod/ep/dashboard.php', ['id' => $cm->id]);
@@ -5587,4 +5594,34 @@ function ep_transfer_student(stdClass $source, stdClass $target, $userid) {
         $lock1->release();
     }
     return $result;
+}
+
+/**
+ * Autres activités « Enseignement personnalisé » du site que l'utilisateur gère : destinations
+ * possibles d'un transfert d'étudiant, sources d'une copie du paramétrage (même règle que
+ * epsynthesis_get_available_ep_activities(), recopiée pour ne pas faire dépendre ce module de
+ * mod_epsynthesis).
+ *
+ * @param int $excludecmid Module de l'activité courante.
+ * @return array cmid => libellé « cours : activité »
+ */
+function ep_get_managed_instances(int $excludecmid): array {
+    global $DB;
+
+    $sql = "SELECT cm.id AS cmid, e.name AS epname, c.fullname AS coursename
+              FROM {course_modules} cm
+              JOIN {modules} m ON m.id = cm.module AND m.name = 'ep'
+              JOIN {ep} e ON e.id = cm.instance
+              JOIN {course} c ON c.id = cm.course
+             WHERE cm.id <> :excludecmid AND cm.deletioninprogress = 0
+          ORDER BY c.fullname ASC, e.name ASC";
+    $targets = [];
+    foreach ($DB->get_records_sql($sql, ['excludecmid' => $excludecmid]) as $candidate) {
+        $modcontext = context_module::instance($candidate->cmid, IGNORE_MISSING);
+        if ($modcontext && has_capability('mod/ep:manage', $modcontext)) {
+            $targets[(int) $candidate->cmid] = format_string($candidate->coursename) . get_string('labelsep', 'langconfig')
+                . format_string($candidate->epname, true, ['context' => $modcontext]);
+        }
+    }
+    return $targets;
 }

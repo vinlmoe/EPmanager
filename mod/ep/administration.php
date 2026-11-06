@@ -17,7 +17,7 @@
 /**
  * Page d'administration de l'activité (DEVE) : regroupe les pages de paramétrage utilisées
  * ponctuellement — types d'EP et leurs plafonds, catalogue des EP internes, minimums d'ECTS,
- * éditions PDF et courriels.
+ * éditions PDF et courriels, supplément au diplôme, validation des années et rentrée.
  * Chaque page est accompagnée de ce à quoi elle sert : elles sont visitées rarement, et leurs
  * seuls intitulés ne suffisent pas à savoir laquelle ouvrir.
  *
@@ -87,6 +87,44 @@ $sections = [
         ],
     ]],
 ];
+
+// Supplément au diplôme et fin d'année : la validation des années et les éléments à examiner
+// relèvent de la DEVE (mod/ep:validatedeve), que la gestion de l'activité n'implique pas.
+$supplemententries = [
+    [
+        get_string('supplementsettings', 'mod_ep'),
+        get_string('supplementsettings_desc', 'mod_ep'),
+        new moodle_url('/mod/ep/supplement_settings.php', ['id' => $cm->id]),
+    ],
+    [
+        get_string('supplementissuesadmin', 'mod_ep'),
+        get_string('supplementissuesadmin_desc', 'mod_ep'),
+        new moodle_url('/mod/ep/supplement_issue.php', ['id' => $cm->id]),
+    ],
+];
+if (has_capability('mod/ep:validatedeve', $context)) {
+    $supplemententries[] = [
+        get_string('supplementitemstodecide', 'mod_ep'),
+        get_string('supplementitemstodecide_desc', 'mod_ep'),
+        new moodle_url('/mod/ep/supplement_items.php', ['id' => $cm->id]),
+    ];
+    $supplemententries[] = [
+        get_string('yearvalidation', 'mod_ep'),
+        get_string('yearvalidation_desc', 'mod_ep'),
+        new moodle_url('/mod/ep/year_validation.php', ['id' => $cm->id]),
+    ];
+}
+$supplemententries[] = [
+    get_string('rollover', 'mod_ep'),
+    get_string('rollover_desc', 'mod_ep'),
+    new moodle_url('/mod/ep/rollover.php', ['id' => $cm->id]),
+];
+$supplemententries[] = [
+    get_string('supplementverify', 'mod_ep'),
+    get_string('supplementverify_desc', 'mod_ep'),
+    new moodle_url('/mod/ep/supplement_verify.php', ['id' => $cm->id]),
+];
+$sections[] = [get_string('supplement', 'mod_ep'), $supplemententries];
 
 if (has_capability('mod/ep:viewall', $context)) {
     $sections[] = [get_string('adminsectionfollowup', 'mod_ep'), [

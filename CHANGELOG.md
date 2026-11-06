@@ -3,6 +3,37 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## 0.6.0 — mod_ep 2026111000 (10 novembre 2026)
+
+Lot 5 : supplément au diplôme, validation des années, rentrée, transfert d'étudiant.
+
+### mod_ep
+- **Supplément au diplôme** au modèle Europass (huit rubriques) : les rubriques fixes (titulaire,
+  qualification, niveau, système national, certification) sont rédigées par la DEVE en français
+  et en anglais (`supplement_settings.php`) ; la rubrique 4.3 reprend tous les EP retenus au
+  dossier de l'étudiant, avec leurs ECTS et leur note.
+- **Éléments complémentaires** (rubrique 6.1) demandés par l'étudiant (`supplement.php`,
+  `supplement_item.php`) : catégorie définie par la DEVE, période, intitulé en français et en
+  anglais, preuves PDF facultatives ou obligatoires au choix de la DEVE ; circuit de validation
+  réglable (DEVE seule, ou enseignant référent puis DEVE) ; file d'examen
+  (`supplement_items.php`) ; retrait ou modification tant que l'élément est en attente.
+- **Émission certifiée** par la DEVE (`supplement_issue.php`) : numéro unique, empreinte SHA-256
+  du contenu imprimée sur le document, cachet et signataire, PDF conservé ; aperçu non certifié
+  (filigrane) pour l'étudiant ; une nouvelle émission remplace la précédente. Émission groupée
+  pour toute une promotion par une tâche ad hoc, avec message à la fin, et archive ZIP des PDF.
+  Page publique de **vérification** d'un supplément par son numéro et son code
+  (`supplement_verify.php`).
+- **Validation des années d'étude** (`year_validation.php`) : bilan de chaque étudiant face au
+  minimum annuel, décision individuelle ou en lot, historique.
+- **Rentrée** (`rollover.php`) : passage à l'année suivante ; **transfert d'un étudiant** vers une
+  autre activité gérée (EP, décisions d'année, éléments du supplément et preuves).
+- Panneau d'administration : section « Supplément au diplôme ». Barre de navigation : « Mon
+  supplément au diplôme », « Éléments du supplément à examiner ».
+- Sauvegarde : catégories, textes, éléments et preuves, émissions et PDF, cachet, décisions
+  d'année. Mise à niveau : catégories par défaut créées pour chaque activité existante.
+- Tests : circuit des éléments, contenu du supplément, émission, remplacement, vérification,
+  décisions d'année, rentrée, transfert (103 tests).
+
 ## 0.5.0 — mod_ep 2026110900 (9 novembre 2026)
 
 Lot 4 : propositions d'EP, syllabus, éditions PDF, courriels.
