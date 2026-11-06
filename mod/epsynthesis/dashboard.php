@@ -101,16 +101,7 @@ epsynthesis_sync_active_links($activelinks);
 
 $listurl = new moodle_url($baseurl, ['search' => $search, 'tsort' => $tsort, 'tdir' => $tdir]);
 
-$searchformurl = new moodle_url($baseurl);
-echo html_writer::start_tag('form', ['method' => 'get', 'action' => $searchformurl, 'class' => 'form-inline ep-filters mb-3']);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
-echo html_writer::empty_tag('input', [
-    'type' => 'text', 'name' => 'search', 'value' => s($search),
-    'placeholder' => get_string('searchstudent', 'mod_ep'), 'class' => 'form-control mr-2',
-]);
-echo html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('search'), 'class' => 'btn btn-secondary mr-2']);
-echo html_writer::link($searchformurl, get_string('resetfilters', 'mod_ep'), ['class' => 'btn btn-link']);
-echo html_writer::end_tag('form');
+echo $OUTPUT->render(new \mod_ep\output\list_filters($listurl, ['search', 'tsort', 'tdir', 'page'], $search));
 
 $rows = epsynthesis_get_pilotage_rows($activelinks);
 

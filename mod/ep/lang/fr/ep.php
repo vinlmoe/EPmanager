@@ -144,7 +144,6 @@ $string['openforregistration'] = 'Ouvert';
 $string['addactivity'] = 'Ajouter un EP au catalogue';
 $string['activitysaved'] = 'EP enregistré. Désignez maintenant son ou ses responsables.';
 $string['activitydeleted'] = 'EP supprimé du catalogue.';
-$string['confirmdeleteactivity'] = 'Supprimer définitivement cet EP du catalogue ?';
 $string['nocatalogactivities'] = 'Aucun EP n\'est proposé au catalogue pour l\'instant.';
 $string['managecatalog_desc'] = "Les EP académiques internes proposés aux étudiants : intitulé, ECTS, années "
     . "d'étude concernées, nombre de places et responsables qui valideront les inscriptions.";
@@ -214,7 +213,6 @@ $string['creditcancelled'] = 'EP retiré.';
 $string['creditalreadydecided'] = 'Cette demande a déjà été traitée.';
 $string['cancelcredit'] = 'Retirer cet EP';
 $string['cancelreason'] = 'Motif du retrait';
-$string['confirmcancelcredit'] = 'Retirer cet EP du dossier de l\'étudiant ?';
 $string['fromcatalogactivity'] = 'Inscription à l\'EP « {$a->name} » — responsable(s) : {$a->teachers}';
 $string['automatic'] = 'automatique';
 $string['automaticattribution'] = 'Attribution automatique';
@@ -347,3 +345,18 @@ $string['privacy:metadata:ep_activity_teacher'] = "Enseignants désignés respon
 $string['privacy:metadata:ep_activity_teacher:teacherid'] = 'Enseignant responsable.';
 $string['privacy:metadata:core_files'] = 'Justificatifs déposés à l\'appui d\'une demande.';
 $string['privacy:path:credits'] = 'Enseignements personnalisés';
+
+// Accès simultanés et confirmations.
+$string['erroractivitybusy'] = "Une autre opération est en cours sur cette activité : réessayez dans quelques secondes.";
+$string['errorcreditchanged'] = "Cette demande a changé entre-temps (décision prise, demande retirée) : rien n'a été enregistré. Vérifiez son état actuel.";
+$string['errorconfirmcancel'] = 'Cochez la case de confirmation pour retirer cet EP.';
+$string['confirmdeleteactivity'] = 'Supprimer définitivement l\'EP « {$a} » du catalogue ?';
+$string['confirmcancelcredit'] = 'Je confirme le retrait de cet EP du dossier de l\'étudiant.';
+
+// Événements.
+$string['eventcreditcreated'] = 'Enseignement personnalisé demandé';
+$string['eventcreditupdated'] = 'Enseignement personnalisé modifié';
+$string['eventcreditvalidated'] = 'Enseignement personnalisé validé';
+$string['eventcreditrejected'] = 'Enseignement personnalisé refusé';
+$string['eventcreditcancelled'] = 'Enseignement personnalisé annulé';
+$string['eventcreditsynced'] = 'Enseignement personnalisé synchronisé depuis un stage';

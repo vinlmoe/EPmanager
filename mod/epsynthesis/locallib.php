@@ -247,9 +247,10 @@ function epsynthesis_parse_type_filter($value, array $typeoptions) {
 }
 
 /**
- * Rend le formulaire de recherche/filtre au-dessus de la liste combinée : mêmes filtres que
- * ep_render_list_filters() (nom étudiant, type, année, statut), le type étant ici une valeur
- * combinée « epcmid:typeid » (voir epsynthesis_get_type_options()).
+ * Rend le formulaire de recherche/filtre au-dessus de la liste combinée (gabarit
+ * mod_ep/list_filters) : mêmes filtres que ep_render_list_filters() (nom étudiant, type, année,
+ * statut), le type étant ici une valeur combinée « epcmid:typeid » (voir
+ * epsynthesis_get_type_options()).
  *
  * @param moodle_url $baseurl
  * @param array $typeoptions
@@ -257,54 +258,28 @@ function epsynthesis_parse_type_filter($value, array $typeoptions) {
  * @return string
  */
 function epsynthesis_render_list_filters(moodle_url $baseurl, array $typeoptions, array $values) {
-    $formurl = new moodle_url($baseurl);
-    $formurl->remove_params('search', 'typekey', 'status', 'studyyear', 'tsort', 'tdir', 'page');
+    global $OUTPUT;
 
-    $out = html_writer::start_tag(
-        'form',
-        ['method' => 'get', 'action' => $formurl, 'class' => 'form-inline ep-filters mb-3']
+    $filters = new \mod_ep\output\list_filters(
+        $baseurl,
+        ['search', 'typekey', 'status', 'studyyear', 'tsort', 'tdir', 'page'],
+        $values['search'] ?? '',
+        [
+            'typekey' => [
+                'options' => ['' => get_string('alltypes', 'mod_ep')] + $typeoptions,
+                'selected' => $values['typekey'] ?? '',
+            ],
+            'studyyear' => [
+                'options' => ['' => get_string('allyears', 'mod_ep')] + ep_studyyear_options(),
+                'selected' => $values['studyyear'] ?? '',
+            ],
+            'status' => [
+                'options' => ['' => get_string('allstatuses', 'mod_ep')] + ep_status_options(),
+                'selected' => $values['status'] ?? '',
+            ],
+        ]
     );
-    foreach ($formurl->params() as $key => $value) {
-        $out .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => $key, 'value' => $value]);
-    }
-    $out .= html_writer::empty_tag('input', [
-        'type' => 'text', 'name' => 'search', 'value' => s($values['search'] ?? ''),
-        'placeholder' => get_string('searchstudent', 'mod_ep'), 'class' => 'form-control mr-2',
-    ]);
-
-    $out .= html_writer::select(
-        ['' => get_string('alltypes', 'mod_ep')] + $typeoptions,
-        'typekey',
-        $values['typekey'] ?? '',
-        false,
-        ['class' => 'form-control mr-2']
-    );
-
-    $yearoptions = ['' => get_string('allyears', 'mod_ep')] + ep_studyyear_options();
-    $out .= html_writer::select(
-        $yearoptions,
-        'studyyear',
-        $values['studyyear'] ?? '',
-        false,
-        ['class' => 'form-control mr-2']
-    );
-
-    $statusoptions = ['' => get_string('allstatuses', 'mod_ep')] + ep_status_options();
-    $out .= html_writer::select(
-        $statusoptions,
-        'status',
-        $values['status'] ?? '',
-        false,
-        ['class' => 'form-control mr-2']
-    );
-
-    $out .= html_writer::empty_tag('input', [
-        'type' => 'submit', 'value' => get_string('search'), 'class' => 'btn btn-secondary mr-2',
-    ]);
-    $out .= html_writer::link($formurl, get_string('resetfilters', 'mod_ep'), ['class' => 'btn btn-link']);
-    $out .= html_writer::end_tag('form');
-
-    return $out;
+    return $OUTPUT->render($filters);
 }
 
 /**

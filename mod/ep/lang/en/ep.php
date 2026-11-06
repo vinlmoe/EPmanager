@@ -143,7 +143,6 @@ $string['openforregistration'] = 'Open';
 $string['addactivity'] = 'Add a unit to the catalogue';
 $string['activitysaved'] = 'Unit saved. Now name the person or people in charge.';
 $string['activitydeleted'] = 'Unit removed from the catalogue.';
-$string['confirmdeleteactivity'] = 'Permanently delete this unit from the catalogue?';
 $string['nocatalogactivities'] = 'No unit is offered in the catalogue yet.';
 $string['managecatalog_desc'] = 'The internal academic units offered to students: title, credits, study years '
     . 'concerned, number of places and the people who will validate enrolments.';
@@ -213,7 +212,6 @@ $string['creditcancelled'] = 'Personalised learning withdrawn.';
 $string['creditalreadydecided'] = 'This request has already been dealt with.';
 $string['cancelcredit'] = 'Withdraw';
 $string['cancelreason'] = 'Reason for withdrawal';
-$string['confirmcancelcredit'] = "Withdraw this from the student's record?";
 $string['fromcatalogactivity'] = 'Enrolment in unit "{$a->name}" — in charge: {$a->teachers}';
 $string['automatic'] = 'automatic';
 $string['automaticattribution'] = 'Automatic award';
@@ -347,3 +345,18 @@ $string['privacy:metadata:ep_activity_teacher'] = 'Teachers named in charge of a
 $string['privacy:metadata:ep_activity_teacher:teacherid'] = 'Teacher in charge.';
 $string['privacy:metadata:core_files'] = 'Supporting documents submitted with a request.';
 $string['privacy:path:credits'] = 'Personalised learning';
+
+// Concurrent access and confirmations.
+$string['erroractivitybusy'] = 'Another operation is in progress on this activity: try again in a few seconds.';
+$string['errorcreditchanged'] = 'This request changed in the meantime (decision taken, request withdrawn): nothing was saved. Check its current state.';
+$string['errorconfirmcancel'] = 'Tick the confirmation box to withdraw this unit.';
+$string['confirmdeleteactivity'] = 'Permanently delete the unit "{$a}" from the catalogue?';
+$string['confirmcancelcredit'] = "I confirm the withdrawal of this unit from the student's record.";
+
+// Events.
+$string['eventcreditcreated'] = 'Personalised learning requested';
+$string['eventcreditupdated'] = 'Personalised learning updated';
+$string['eventcreditvalidated'] = 'Personalised learning validated';
+$string['eventcreditrejected'] = 'Personalised learning rejected';
+$string['eventcreditcancelled'] = 'Personalised learning cancelled';
+$string['eventcreditsynced'] = 'Personalised learning synchronised from an internship';

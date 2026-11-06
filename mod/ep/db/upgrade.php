@@ -25,13 +25,32 @@
 /**
  * Applique les évolutions de schéma successives depuis la version installée.
  *
- * Le plugin n'a pas encore connu de version publiée nécessitant une migration : la fonction est
- * là pour que la première évolution de schéma s'ajoute au bon endroit, plutôt que d'obliger à
- * réinstaller le plugin ce jour-là.
- *
  * @param int $oldversion Version actuellement installée.
  * @return bool
  */
 function xmldb_ep_upgrade($oldversion) {
+    global $DB;
+
+    $dbman = $DB->get_manager();
+
+    if ($oldversion < 2026110600) {
+        // Index des listes paginées en base : crédits d'une instance par statut (files de
+        // validation), inscriptions d'un EP du catalogue par statut (places prises), crédits
+        // d'un étudiant toutes instances confondues (RGPD, synthèse).
+        $table = new xmldb_table('ep_credit');
+        $indexes = [
+            new xmldb_index('epid-status', XMLDB_INDEX_NOTUNIQUE, ['epid', 'status']),
+            new xmldb_index('activityid-status', XMLDB_INDEX_NOTUNIQUE, ['activityid', 'status']),
+            new xmldb_index('userid', XMLDB_INDEX_NOTUNIQUE, ['userid']),
+        ];
+        foreach ($indexes as $index) {
+            if (!$dbman->index_exists($table, $index)) {
+                $dbman->add_index($table, $index);
+            }
+        }
+
+        upgrade_mod_savepoint(true, 2026110600, 'ep');
+    }
+
     return true;
 }

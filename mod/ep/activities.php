@@ -185,6 +185,8 @@ echo html_writer::link(
 );
 
 $activities = ep_get_activities($ep->id);
+$takenplaces = ep_get_activities_taken_places($ep->id);
+$allteachers = ep_get_activities_teachers($ep->id);
 
 if (empty($activities)) {
     echo $OUTPUT->notification(get_string('nocatalogactivities', 'mod_ep'), 'info');
@@ -207,7 +209,8 @@ $table->head = [
 
 foreach ($activities as $activity) {
     $type = $alltypes[$activity->typeid] ?? null;
-    $remaining = ep_get_activity_remaining_places($activity);
+    $taken = $takenplaces[$activity->id] ?? 0;
+    $remaining = empty($activity->capacity) ? null : max(0, (int) $activity->capacity - $taken);
 
     $togglevisibleurl = new moodle_url(
         $baseurl,
@@ -223,7 +226,7 @@ foreach ($activities as $activity) {
         '/mod/ep/activity_teachers.php',
         ['id' => $cm->id, 'activityid' => $activity->id]
     );
-    $teachercount = count(ep_get_activity_teachers($activity->id));
+    $teachercount = count($allteachers[$activity->id] ?? []);
     $teacherscell = html_writer::link(
         $teachersurl,
         get_string('activityteacherscount', 'mod_ep', $teachercount)
@@ -234,17 +237,11 @@ foreach ($activities as $activity) {
         $teacherscell .= ' ' . html_writer::span(get_string('noteacherwarning', 'mod_ep'), 'badge badge-warning');
     }
 
-    $deleteurl = new moodle_url(
-        $baseurl,
-        ['action' => 'delete', 'activityid' => $activity->id, 'sesskey' => sesskey()]
-    );
+    $deleteurl = new moodle_url($baseurl, ['action' => 'delete', 'activityid' => $activity->id]);
     $actions = ep_render_actions([
         get_string('edit') => new moodle_url($baseurl, ['action' => 'edit', 'activityid' => $activity->id]),
         get_string('activityteachers', 'mod_ep') => $teachersurl,
-    ]) . html_writer::link($deleteurl, get_string('delete'), [
-        'class' => 'btn btn-sm btn-outline-danger mr-1 mb-1',
-        'onclick' => "return confirm('" . get_string('confirmdeleteactivity', 'mod_ep') . "');",
-    ]);
+    ]) . ep_render_actions([get_string('delete') => $deleteurl], 'btn btn-sm btn-outline-danger mr-1 mb-1', '');
 
     $table->data[] = [
         format_string($activity->name),
@@ -254,7 +251,7 @@ foreach ($activities as $activity) {
         $remaining === null
             ? get_string('unlimitedplaces', 'mod_ep')
             : get_string('placesleft', 'mod_ep', (object) ['left' => $remaining, 'total' => $activity->capacity]),
-        ep_get_activity_taken_places($activity->id),
+        $taken,
         $teacherscell,
         $visible,
         $actions,

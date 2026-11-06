@@ -1,0 +1,69 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_ep/list_filters
+
+    Formulaire de filtres d'une liste : recherche par nom d'étudiant, listes déroulantes
+    facultatives (type, année, statut...), bouton de recherche et lien de réinitialisation.
+    Soumis en GET : les paramètres de l'URL qui ne sont pas des filtres sont conservés en
+    champs cachés.
+
+    Context variables required for this template:
+    * formurl - URL de soumission.
+    * hidden - Champs cachés : liste de {name, value}.
+    * search - Recherche courante.
+    * searchplaceholder - Texte d'aide du champ de recherche.
+    * selects - Listes déroulantes : liste de {name, options}, options étant une liste de {value, label, selected}.
+    * submitlabel - Libellé du bouton.
+    * resetlabel - Libellé du lien de réinitialisation.
+    * reseturl - URL de la liste sans filtre.
+
+    Example context (json):
+    {
+        "formurl": "https://example.com/mod/ep/credits.php",
+        "hidden": [{"name": "id", "value": "3"}],
+        "search": "Martin",
+        "searchplaceholder": "Student name",
+        "selects": [
+            {"name": "status", "options": [
+                {"value": "", "label": "All statuses", "selected": false},
+                {"value": "1", "label": "Pending", "selected": true}
+            ]}
+        ],
+        "submitlabel": "Search",
+        "resetlabel": "Reset filters",
+        "reseturl": "https://example.com/mod/ep/credits.php?id=3"
+    }
+}}
+<form method="get" action="{{formurl}}" class="form-inline ep-filters mb-3">
+    {{#hidden}}
+    <input type="hidden" name="{{name}}" value="{{value}}">
+    {{/hidden}}
+    <label class="sr-only" for="ep-filters-search-{{uniqid}}">{{searchplaceholder}}</label>
+    <input type="text" name="search" id="ep-filters-search-{{uniqid}}" value="{{search}}"
+           placeholder="{{searchplaceholder}}" class="form-control mr-2">
+    {{#selects}}
+    <label class="sr-only" for="ep-filters-{{name}}-{{uniqid}}">{{name}}</label>
+    <select name="{{name}}" id="ep-filters-{{name}}-{{uniqid}}" class="custom-select form-control mr-2">
+        {{#options}}
+        <option value="{{value}}"{{#selected}} selected{{/selected}}>{{label}}</option>
+        {{/options}}
+    </select>
+    {{/selects}}
+    <input type="submit" value="{{submitlabel}}" class="btn btn-secondary mr-2">
+    <a href="{{reseturl}}" class="btn btn-link">{{resetlabel}}</a>
+</form>

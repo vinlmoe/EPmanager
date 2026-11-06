@@ -62,17 +62,11 @@ if ($action === 'register' && $activityid) {
     $PAGE->set_url($registerurl);
 
     // Chaque condition est revérifiée ici : la page de liste a pu être affichée avant qu'une
-    // place ne soit prise, ou l'URL forgée à la main.
-    $problem = null;
-    if (!$activity->visible || !$type || empty($type->enabled)) {
-        $problem = get_string('errorregisterclosed', 'mod_ep');
-    } else if (ep_get_active_registration($activity->id, $USER->id)) {
-        $problem = get_string('erroralreadyregistered', 'mod_ep');
-    } else {
-        $remaining = ep_get_activity_remaining_places($activity);
-        if ($remaining !== null && $remaining <= 0) {
-            $problem = get_string('errornoplaceleft', 'mod_ep');
-        }
+    // place ne soit prise, ou l'URL forgée à la main. L'inscription elle-même les revérifie une
+    // dernière fois sous le verrou de l'activité.
+    $problem = ep_registration_problem($activity, $type, $USER->id);
+    if ($problem !== null) {
+        $problem = get_string($problem, 'mod_ep');
     }
 
     if ($problem === null && data_submitted() && confirm_sesskey()) {
@@ -81,15 +75,10 @@ if ($action === 'register' && $activityid) {
         if (!array_key_exists($studyyear, $yearoptions)) {
             $studyyear = (int) $ep->currentstudyyear;
         }
-        if (!ep_activity_open_to_year($activity, $studyyear)) {
-            redirect(
-                $baseurl,
-                get_string('errorwrongyear', 'mod_ep'),
-                null,
-                \core\output\notification::NOTIFY_ERROR
-            );
+        $result = ep_register_to_activity($ep, $activity, $USER->id, $studyyear);
+        if ($result->problem !== null) {
+            redirect($baseurl, get_string($result->problem, 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
         }
-        ep_register_to_activity($ep, $activity, $USER->id, $studyyear);
         redirect(
             new moodle_url('/mod/ep/view.php', ['id' => $cm->id]),
             get_string('registered', 'mod_ep'),
@@ -142,6 +131,12 @@ echo html_writer::link(new moodle_url('/mod/ep/view.php', ['id' => $cm->id]), ge
 $canmanage = has_capability('mod/ep:manage', $context);
 $activities = ep_get_activities($ep->id, !$canmanage);
 
+// Places prises, responsables et inscriptions de l'étudiant : une requête chacun pour tout le
+// catalogue, et non une par EP.
+$takenplaces = ep_get_activities_taken_places($ep->id);
+$allteachers = ep_get_activities_teachers($ep->id);
+$myregistrations = $cansubmit ? ep_get_user_active_registrations($ep->id, $USER->id) : [];
+
 if (empty($activities)) {
     echo $OUTPUT->notification(get_string('nocatalogactivities', 'mod_ep'), 'info');
     echo $OUTPUT->footer();
@@ -170,24 +165,23 @@ foreach ($activities as $activity) {
         $name .= html_writer::div(format_text($activity->description, FORMAT_PLAIN), 'text-muted small');
     }
 
-    $remaining = ep_get_activity_remaining_places($activity);
+    $remaining = empty($activity->capacity)
+        ? null
+        : max(0, (int) $activity->capacity - ($takenplaces[$activity->id] ?? 0));
     $placescell = $remaining === null
         ? get_string('unlimitedplaces', 'mod_ep')
         : get_string('placesleft', 'mod_ep', (object) ['left' => $remaining, 'total' => $activity->capacity]);
 
-    $teachers = ep_get_activity_teachers($activity->id);
+    $teachers = $allteachers[$activity->id] ?? [];
     $teacherscell = empty($teachers) ? '-' : implode(', ', array_map('fullname', $teachers));
 
     // Une seule action est proposée à l'étudiant, celle qui correspond à sa situation : déjà
     // inscrit, plus de place, année d'étude hors de la plage, ou inscription possible.
     $actioncell = '-';
     if ($cansubmit) {
-        $registration = ep_get_active_registration($activity->id, $USER->id);
+        $registration = $myregistrations[$activity->id] ?? null;
         if ($registration) {
-            $actioncell = html_writer::span(
-                ep_status_label($registration->status),
-                'badge ' . ep_status_badgeclass($registration->status)
-            );
+            $actioncell = ep_render_credit_status($registration->status);
         } else if (!$activity->visible || !$type || empty($type->enabled)) {
             $actioncell = html_writer::span(get_string('registerclosed', 'mod_ep'), 'text-muted');
         } else if ($remaining !== null && $remaining <= 0) {

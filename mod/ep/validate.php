@@ -45,7 +45,7 @@ $rights = ep_get_user_rights($ep, $context);
 
 $isowner = (int) $credit->userid === (int) $USER->id;
 $canvalidate = ep_rights_can_validate($rights, $credit);
-if (!$isowner && !$rights->viewall && !$canvalidate) {
+if (!$isowner && !ep_rights_can_view($rights, $credit)) {
     throw new moodle_exception('nopermissions', 'error', '', get_string('creditdetail', 'mod_ep'));
 }
 
@@ -74,19 +74,31 @@ if (
     $rights->validatedeve && $credit->source !== EP_SOURCE_STAGE
         && optional_param('cancelcredit', 0, PARAM_INT) && confirm_sesskey()
 ) {
-    ep_cancel_credit($credit, $USER->id, optional_param('validatorcomment', '', PARAM_TEXT));
+    // Le retrait est une action lourde (il retire des ECTS acquis) : il exige une case de
+    // confirmation explicite, contrôlée côté serveur.
+    if (!optional_param('confirmcancel', 0, PARAM_INT)) {
+        redirect($pageurl, get_string('errorconfirmcancel', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+    }
+    if (!ep_cancel_credit($credit, $USER->id, optional_param('validatorcomment', '', PARAM_TEXT), 'deve')) {
+        redirect($pageurl, get_string('errorcreditchanged', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+    }
     redirect($backurl, get_string('creditcancelled', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
 if ($canvalidate && (int) $credit->status === EP_STATUS_PENDING && data_submitted() && confirm_sesskey()) {
     $comment = optional_param('validatorcomment', '', PARAM_TEXT);
-    if (optional_param('rejectcredit', '', PARAM_RAW) !== '') {
-        ep_reject_credit($credit, $USER->id, $comment);
+    $role = $rights->validatedeve ? 'deve' : 'teacher';
+    if (optional_param('rejectcredit', '', PARAM_TEXT) !== '') {
+        if (!ep_reject_credit($credit, $USER->id, $comment, $role)) {
+            redirect($pageurl, get_string('errorcreditchanged', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+        }
         redirect($backurl, get_string('creditrejected', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
     }
-    if (optional_param('validatecredit', '', PARAM_RAW) !== '') {
+    if (optional_param('validatecredit', '', PARAM_TEXT) !== '') {
         $retained = optional_param('retainedects', 0, PARAM_FLOAT);
-        ep_validate_credit($credit, $USER->id, $retained, $comment);
+        if (!ep_validate_credit($credit, $USER->id, $retained, $comment)) {
+            redirect($pageurl, get_string('errorcreditchanged', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+        }
         redirect($backurl, get_string('creditvalidated', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
     }
 }
@@ -162,10 +174,13 @@ if ($rights->validatedeve && (int) $credit->status !== EP_STATUS_CANCELLED) {
         '',
         ['name' => 'validatorcomment', 'id' => 'cancelcomment', 'rows' => 2, 'class' => 'form-control']
     );
+    echo html_writer::div(
+        html_writer::checkbox('confirmcancel', 1, false, get_string('confirmcancelcredit', 'mod_ep'), ['id' => 'confirmcancel']),
+        'mt-2'
+    );
     echo html_writer::empty_tag('input', [
         'type' => 'submit', 'value' => get_string('cancelcredit', 'mod_ep'),
         'class' => 'btn btn-outline-danger mt-2',
-        'onclick' => "return confirm('" . get_string('confirmcancelcredit', 'mod_ep') . "');",
     ]);
     echo html_writer::end_tag('form');
 }

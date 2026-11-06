@@ -245,7 +245,8 @@ function ep_create_default_types($epid) {
 }
 
 /**
- * Types d'une instance, dans l'ordre d'affichage choisi par la DEVE.
+ * Types d'une instance, dans l'ordre d'affichage choisi par la DEVE. Pendant un calcul de
+ * promotion (voir mod_ep\local\progress_cache), la liste vient du cache.
  *
  * @param int $epid
  * @param bool $onlyenabled
@@ -254,11 +255,88 @@ function ep_create_default_types($epid) {
 function ep_get_types($epid, $onlyenabled = false) {
     global $DB;
 
+    $cached = \mod_ep\local\progress_cache::types((int) $epid, (bool) $onlyenabled);
+    if ($cached !== null) {
+        return $cached;
+    }
     $conditions = ['epid' => $epid];
     if ($onlyenabled) {
         $conditions['enabled'] = 1;
     }
     return $DB->get_records('ep_type', $conditions, 'sortorder ASC, name ASC');
+}
+
+/**
+ * Places occupées sur chaque EP du catalogue d'une instance, en une requête : les inscriptions
+ * validées et celles encore en attente (voir ep_get_activity_taken_places()).
+ *
+ * @param int $epid
+ * @return array activityid => int (absent = 0)
+ */
+function ep_get_activities_taken_places($epid) {
+    global $DB;
+
+    [$insql, $inparams] = $DB->get_in_or_equal([EP_STATUS_PENDING, EP_STATUS_VALIDATED], SQL_PARAMS_NAMED, 'st');
+    $sql = "SELECT c.activityid, COUNT(c.id) AS taken
+              FROM {ep_credit} c
+             WHERE c.epid = :epid AND c.activityid IS NOT NULL AND c.status $insql
+          GROUP BY c.activityid";
+    $counts = [];
+    foreach ($DB->get_records_sql($sql, ['epid' => $epid] + $inparams) as $row) {
+        $counts[(int) $row->activityid] = (int) $row->taken;
+    }
+    return $counts;
+}
+
+/**
+ * Responsables de tous les EP du catalogue d'une instance, en une requête.
+ *
+ * @param int $epid
+ * @return array activityid => [userid => stdClass user]
+ */
+function ep_get_activities_teachers($epid) {
+    global $DB;
+
+    $sql = "SELECT at.id AS atid, at.activityid, u.*
+              FROM {ep_activity_teacher} at
+              JOIN {ep_activity} a ON a.id = at.activityid
+              JOIN {user} u ON u.id = at.teacherid
+             WHERE a.epid = :epid
+          ORDER BY u.lastname ASC, u.firstname ASC";
+    $teachers = [];
+    foreach ($DB->get_records_sql($sql, ['epid' => $epid]) as $row) {
+        $activityid = (int) $row->activityid;
+        unset($row->atid, $row->activityid);
+        $teachers[$activityid][(int) $row->id] = $row;
+    }
+    return $teachers;
+}
+
+/**
+ * Inscriptions en cours (en attente ou validées) d'un étudiant sur les EP du catalogue d'une
+ * instance, en une requête.
+ *
+ * @param int $epid
+ * @param int $userid
+ * @return array activityid => stdClass crédit
+ */
+function ep_get_user_active_registrations($epid, $userid) {
+    global $DB;
+
+    [$insql, $inparams] = $DB->get_in_or_equal([EP_STATUS_PENDING, EP_STATUS_VALIDATED], SQL_PARAMS_NAMED, 'st');
+    $records = $DB->get_records_select(
+        'ep_credit',
+        "epid = :epid AND userid = :userid AND activityid IS NOT NULL AND status $insql",
+        ['epid' => $epid, 'userid' => $userid] + $inparams,
+        'timecreated DESC, id DESC'
+    );
+    $registrations = [];
+    foreach ($records as $credit) {
+        if (!isset($registrations[(int) $credit->activityid])) {
+            $registrations[(int) $credit->activityid] = $credit;
+        }
+    }
+    return $registrations;
 }
 
 /**
@@ -497,13 +575,19 @@ function ep_get_active_registration($activityid, $userid) {
 // Minimums d'ECTS par année d'étude.
 
 /**
- * Minimums d'ECTS définis par année d'étude pour une instance.
+ * Minimums d'ECTS définis par année d'étude pour une instance. Pendant un calcul de promotion
+ * (voir mod_ep\local\progress_cache), la liste vient du cache.
  *
  * @param int $epid
  * @return array studyyear => float
  */
 function ep_get_year_requirements($epid) {
     global $DB;
+
+    $cached = \mod_ep\local\progress_cache::requirements((int) $epid);
+    if ($cached !== null) {
+        return $cached;
+    }
 
     $records = $DB->get_records('ep_year_requirement', ['epid' => $epid], 'studyyear ASC');
 
@@ -575,7 +659,8 @@ function ep_set_year_requirement($epid, $studyyear, $requiredects) {
 // Crédits : création, inscription, validation.
 
 /**
- * Crédits d'un étudiant dans une instance, du plus récent au plus ancien.
+ * Crédits d'un étudiant dans une instance, du plus récent au plus ancien. Pendant un calcul de
+ * promotion (voir mod_ep\local\progress_cache), la liste vient du cache.
  *
  * @param int $epid
  * @param int $userid
@@ -584,6 +669,10 @@ function ep_set_year_requirement($epid, $studyyear, $requiredects) {
 function ep_get_student_credits($epid, $userid) {
     global $DB;
 
+    $cached = \mod_ep\local\progress_cache::credits($epid, $userid);
+    if ($cached !== null) {
+        return $cached;
+    }
     return $DB->get_records('ep_credit', ['epid' => $epid, 'userid' => $userid], 'timecreated DESC');
 }
 
@@ -603,6 +692,7 @@ function ep_create_credit(stdClass $ep, $userid, stdClass $type, array $data) {
     $now = time();
     $claimed = round((float) ($data['claimedects'] ?? 0), 2);
     $auto = !empty($type->autovalidate);
+    $source = (string) ($data['source'] ?? EP_SOURCE_STUDENT);
 
     $record = (object) [
         'epid' => $ep->id,
@@ -615,7 +705,7 @@ function ep_create_credit(stdClass $ep, $userid, stdClass $type, array $data) {
         'claimedects' => $claimed,
         'retainedects' => $auto ? $claimed : 0,
         'status' => $auto ? EP_STATUS_VALIDATED : EP_STATUS_PENDING,
-        'source' => (string) ($data['source'] ?? EP_SOURCE_STUDENT),
+        'source' => $source,
         'sourceref' => (int) ($data['sourceref'] ?? 0),
         'validatedby' => null,
         'validatetime' => $auto ? $now : null,
@@ -624,32 +714,60 @@ function ep_create_credit(stdClass $ep, $userid, stdClass $type, array $data) {
         'timemodified' => $now,
     ];
 
-    return $DB->insert_record('ep_credit', $record);
+    $record->id = $DB->insert_record('ep_credit', $record);
+
+    if ($source === EP_SOURCE_STAGE) {
+        $origin = 'stage';
+    } else if ($source === EP_SOURCE_DEVE) {
+        $origin = 'deve';
+    } else {
+        $origin = $record->activityid ? 'registration' : 'declaration';
+    }
+    ep_trigger_credit_event(\mod_ep\event\credit_created::class, $record, ['origin' => $origin]);
+
+    return $record->id;
 }
 
 /**
  * Inscrit un étudiant à un EP du catalogue. Le nombre d'ECTS demandé est celui de l'EP : il n'est
  * pas au choix de l'étudiant, c'est l'EP qui le porte.
  *
+ * Les places restantes et l'absence d'inscription en cours sont revérifiées sous le verrou de
+ * l'activité : deux étudiants qui confirment ensemble sur la dernière place ne sont plus inscrits
+ * tous les deux, et un double envoi du formulaire ne crée plus deux inscriptions.
+ *
  * @param stdClass $ep
  * @param stdClass $activity
  * @param int $userid
  * @param int $studyyear
- * @return int Identifiant du crédit créé.
+ * @return stdClass {creditid: int, problem: string|null} L'identifiant du crédit créé, ou la clé
+ *                  du message qui explique pourquoi l'inscription a été refusée.
  */
 function ep_register_to_activity(stdClass $ep, stdClass $activity, $userid, $studyyear) {
     global $DB;
 
-    $type = $DB->get_record('ep_type', ['id' => $activity->typeid], '*', MUST_EXIST);
-
-    return ep_create_credit($ep, $userid, $type, [
-        'activityid' => $activity->id,
-        'studyyear' => $studyyear,
-        'name' => $activity->name,
-        'description' => '',
-        'claimedects' => $activity->ects,
-        'source' => EP_SOURCE_STUDENT,
-    ]);
+    $result = (object) ['creditid' => 0, 'problem' => null];
+    $lock = ep_get_activity_lock($ep->id);
+    try {
+        // L'EP et son type sont relus sous le verrou : la DEVE a pu fermer l'EP ou réduire ses
+        // places pendant que l'étudiant confirmait.
+        $activity = $DB->get_record('ep_activity', ['id' => $activity->id, 'epid' => $ep->id], '*', MUST_EXIST);
+        $type = $DB->get_record('ep_type', ['id' => $activity->typeid], '*', MUST_EXIST);
+        $result->problem = ep_registration_problem($activity, $type, $userid, $studyyear);
+        if ($result->problem === null) {
+            $result->creditid = ep_create_credit($ep, $userid, $type, [
+                'activityid' => $activity->id,
+                'studyyear' => $studyyear,
+                'name' => $activity->name,
+                'description' => '',
+                'claimedects' => $activity->ects,
+                'source' => EP_SOURCE_STUDENT,
+            ]);
+        }
+    } finally {
+        $lock->release();
+    }
+    return $result;
 }
 
 /**
@@ -658,15 +776,16 @@ function ep_register_to_activity(stdClass $ep, stdClass $activity, $userid, $stu
  * compter que ce que le plafond autorise, de façon à ce qu'un relèvement ultérieur du plafond
  * fasse ressortir des ECTS déjà validés sans avoir à les revalider un par un.
  *
+ * La décision n'est écrite que si le crédit est toujours en attente (voir ep_update_credit_if()) :
+ * un refus ou un retrait enregistré entre-temps par un autre intervenant n'est pas écrasé.
+ *
  * @param stdClass $credit
  * @param int $byuserid
  * @param float $retainedects
  * @param string $comment
- * @return void
+ * @return bool False si le crédit n'était plus en attente : rien n'a été écrit.
  */
 function ep_validate_credit(stdClass $credit, $byuserid, $retainedects, $comment = '') {
-    global $DB;
-
     $credit->status = EP_STATUS_VALIDATED;
     $credit->retainedects = max(0, round((float) $retainedects, 2));
     $credit->validatedby = $byuserid;
@@ -674,20 +793,31 @@ function ep_validate_credit(stdClass $credit, $byuserid, $retainedects, $comment
     $credit->validatorcomment = $comment;
     $credit->timemodified = time();
 
-    $DB->update_record('ep_credit', $credit);
+    $applied = ep_update_credit_if(
+        $credit,
+        ['status', 'retainedects', 'validatedby', 'validatetime', 'validatorcomment', 'timemodified'],
+        'status = :pending AND source <> :stage',
+        ['pending' => EP_STATUS_PENDING, 'stage' => EP_SOURCE_STAGE]
+    );
+    if ($applied) {
+        ep_trigger_credit_event(\mod_ep\event\credit_validated::class, $credit, [
+            'retainedects' => (float) $credit->retainedects,
+        ]);
+    }
+    return $applied;
 }
 
 /**
- * Refuse un crédit, avec le motif communiqué à l'étudiant.
+ * Refuse un crédit, avec le motif communiqué à l'étudiant. Comme la validation, le refus n'est
+ * écrit que si le crédit est toujours en attente.
  *
  * @param stdClass $credit
  * @param int $byuserid
  * @param string $comment
- * @return void
+ * @param string $role 'teacher' (responsable de l'EP, enseignant référent) ou 'deve'.
+ * @return bool False si le crédit n'était plus en attente : rien n'a été écrit.
  */
-function ep_reject_credit(stdClass $credit, $byuserid, $comment) {
-    global $DB;
-
+function ep_reject_credit(stdClass $credit, $byuserid, $comment, $role = 'teacher') {
     $credit->status = EP_STATUS_REJECTED;
     $credit->retainedects = 0;
     $credit->validatedby = $byuserid;
@@ -695,7 +825,16 @@ function ep_reject_credit(stdClass $credit, $byuserid, $comment) {
     $credit->validatorcomment = $comment;
     $credit->timemodified = time();
 
-    $DB->update_record('ep_credit', $credit);
+    $applied = ep_update_credit_if(
+        $credit,
+        ['status', 'retainedects', 'validatedby', 'validatetime', 'validatorcomment', 'timemodified'],
+        'status = :pending AND source <> :stage',
+        ['pending' => EP_STATUS_PENDING, 'stage' => EP_SOURCE_STAGE]
+    );
+    if ($applied) {
+        ep_trigger_credit_event(\mod_ep\event\credit_rejected::class, $credit, ['role' => $role]);
+    }
+    return $applied;
 }
 
 /**
@@ -703,14 +842,17 @@ function ep_reject_credit(stdClass $credit, $byuserid, $comment) {
  * retrait par la DEVE. La ligne est conservée (état terminal) plutôt que supprimée, pour garder
  * la trace de ce qui a été demandé, et sa place sur l'EP du catalogue est libérée.
  *
+ * L'étudiant ne peut retirer qu'une demande encore en attente ; la DEVE peut retirer tout crédit
+ * qui n'est pas déjà annulé. Dans les deux cas, un crédit attribué automatiquement est hors de
+ * portée : il suit son stage d'origine.
+ *
  * @param stdClass $credit
  * @param int $byuserid
  * @param string $comment
- * @return void
+ * @param string $role 'student' ou 'deve'.
+ * @return bool False si le crédit n'était plus dans l'état attendu : rien n'a été écrit.
  */
-function ep_cancel_credit(stdClass $credit, $byuserid, $comment = '') {
-    global $DB;
-
+function ep_cancel_credit(stdClass $credit, $byuserid, $comment = '', $role = 'deve') {
     $credit->status = EP_STATUS_CANCELLED;
     $credit->retainedects = 0;
     $credit->validatedby = $byuserid;
@@ -718,7 +860,189 @@ function ep_cancel_credit(stdClass $credit, $byuserid, $comment = '') {
     $credit->validatorcomment = $comment;
     $credit->timemodified = time();
 
-    $DB->update_record('ep_credit', $credit);
+    if ($role === 'student') {
+        $where = 'status = :pending AND source <> :stage';
+        $params = ['pending' => EP_STATUS_PENDING, 'stage' => EP_SOURCE_STAGE];
+    } else {
+        $where = 'status <> :cancelled AND source <> :stage';
+        $params = ['cancelled' => EP_STATUS_CANCELLED, 'stage' => EP_SOURCE_STAGE];
+    }
+    $applied = ep_update_credit_if(
+        $credit,
+        ['status', 'retainedects', 'validatedby', 'validatetime', 'validatorcomment', 'timemodified'],
+        $where,
+        $params
+    );
+    if ($applied) {
+        ep_trigger_credit_event(\mod_ep\event\credit_cancelled::class, $credit, ['role' => $role]);
+    }
+    return $applied;
+}
+
+/**
+ * Verrou d'écriture d'une instance, à prendre avant toute écriture en lot ou toute écriture dont
+ * la validité dépend d'une lecture qui précède (places restantes avant une inscription,
+ * crédits existants avant une synchronisation). Le verrou est rendu par l'appelant
+ * (`$lock->release()`), dans un bloc finally.
+ *
+ * @param int $epid
+ * @return \core\lock\lock
+ */
+function ep_get_activity_lock($epid) {
+    global $PAGE;
+
+    $factory = \core\lock\lock_config::get_lock_factory('mod_ep_activity');
+    $lock = $factory->get_lock('ep-' . (int) $epid, 30);
+    if (!$lock) {
+        // La page d'erreur propose de revenir à la page en cours, pour réessayer.
+        throw new moodle_exception('erroractivitybusy', 'mod_ep', $PAGE->has_set_url() ? $PAGE->url : '');
+    }
+    return $lock;
+}
+
+/**
+ * Module de cours d'une instance, lu une fois par requête : les événements et les notifications
+ * en ont besoin à chaque écriture, et une synchronisation en déclenche un par crédit.
+ *
+ * @param int $epid
+ * @return stdClass|null
+ */
+function ep_get_cm_of_instance($epid) {
+    // Cache de requête MUC plutôt qu'une variable statique : il est vidé entre deux tests, alors
+    // que les identifiants d'instance y sont réutilisés d'un test à l'autre.
+    $cache = cache::make_from_params(cache_store::MODE_REQUEST, 'mod_ep', 'cm');
+    $epid = (int) $epid;
+    $cm = $cache->get($epid);
+    if ($cm === false) {
+        $cm = get_coursemodule_from_instance('ep', $epid, 0, false, IGNORE_MISSING) ?: null;
+        $cache->set($epid, $cm);
+    }
+    return $cm;
+}
+
+/**
+ * Déclenche un événement du circuit d'un crédit (voir mod_ep\event\credit_event_base), une fois la
+ * base mise à jour. Les journaux Moodle gardent ainsi qui a fait quoi et quand sur chaque EP.
+ *
+ * @param string $eventclass Classe de l'événement.
+ * @param stdClass|int $credit Crédit (enregistrement complet) ou son identifiant.
+ * @param array $other Données propres à l'événement, complétées du statut, du type et de l'EP.
+ * @return void
+ */
+function ep_trigger_credit_event($eventclass, $credit, array $other = []) {
+    global $DB;
+
+    if (!is_object($credit)) {
+        $credit = $DB->get_record('ep_credit', ['id' => (int) $credit], '*', MUST_EXIST);
+    }
+    $cm = ep_get_cm_of_instance($credit->epid);
+    if (!$cm) {
+        return;
+    }
+    $event = $eventclass::create([
+        'objectid' => $credit->id,
+        'context' => context_module::instance($cm->id),
+        'relateduserid' => $credit->userid,
+        'other' => $other + [
+            'status' => (int) $credit->status,
+            'typeid' => (int) $credit->typeid,
+            'activityid' => (int) ($credit->activityid ?? 0),
+        ],
+    ]);
+    $event->trigger();
+}
+
+/**
+ * Écrit des champs d'un crédit à condition qu'il soit encore dans l'état attendu.
+ *
+ * Les pages lisent le crédit au début de la requête et en déduisent ce qui est permis (valider,
+ * refuser, retirer). Écrire ensuite sans condition laissait une décision prise entre-temps par un
+ * autre intervenant (la DEVE et le responsable de l'EP, l'étudiant qui retire sa demande) être
+ * écrasée par un statut calculé sur une lecture périmée.
+ *
+ * La ligne est d'abord verrouillée par une mise à jour sans effet, jusqu'à la fin de la
+ * transaction : toute autre écriture du crédit attend. La condition est ensuite vérifiée sur une
+ * relecture, qui voit donc la dernière écriture validée, et les champs ne sont écrits que si elle
+ * est remplie. Rien n'est écrit sinon : la transaction englobante, s'il y en a une, peut continuer.
+ *
+ * @param stdClass $credit Crédit, avec les nouvelles valeurs des champs à écrire.
+ * @param string[] $fields Champs à écrire (un champ absent de l'objet n'est pas écrit).
+ * @param string $where Condition SQL sur la ligne de ep_credit, paramètres nommés.
+ * @param array $whereparams Paramètres de la condition.
+ * @return bool False si le crédit n'était plus dans l'état attendu : rien n'a été écrit.
+ */
+function ep_update_credit_if(stdClass $credit, array $fields, $where, array $whereparams) {
+    global $DB;
+
+    $transaction = $DB->start_delegated_transaction();
+    $DB->execute('UPDATE {ep_credit} SET timemodified = timemodified WHERE id = ?', [$credit->id]);
+    $applied = $DB->record_exists_select(
+        'ep_credit',
+        "id = :creditid AND ($where)",
+        ['creditid' => $credit->id] + $whereparams
+    );
+    if ($applied) {
+        $update = (object) ['id' => $credit->id];
+        foreach ($fields as $field) {
+            if (property_exists($credit, $field)) {
+                $update->$field = $credit->$field;
+            }
+        }
+        $DB->update_record('ep_credit', $update);
+    }
+    $transaction->allow_commit();
+    return $applied;
+}
+
+/**
+ * Ce qui empêche un étudiant de s'inscrire à un EP du catalogue, ou null s'il le peut : EP fermé
+ * ou type désactivé, inscription déjà en cours, plus de place, année d'étude hors de la plage.
+ * Chaque condition est revérifiée à l'inscription elle-même, sous le verrou de l'activité (voir
+ * ep_register_to_activity()) : la page a pu être affichée avant qu'une place ne soit prise.
+ *
+ * @param stdClass $activity
+ * @param stdClass|null $type Type de l'EP.
+ * @param int $userid
+ * @param int|null $studyyear Année de rattachement choisie ; null pour ne pas la contrôler.
+ * @return string|null Clé du message d'erreur, ou null.
+ */
+function ep_registration_problem(stdClass $activity, $type, $userid, $studyyear = null) {
+    if (!$activity->visible || !$type || empty($type->enabled)) {
+        return 'errorregisterclosed';
+    }
+    if (ep_get_active_registration($activity->id, $userid)) {
+        return 'erroralreadyregistered';
+    }
+    $remaining = ep_get_activity_remaining_places($activity);
+    if ($remaining !== null && $remaining <= 0) {
+        return 'errornoplaceleft';
+    }
+    if ($studyyear !== null && !ep_activity_open_to_year($activity, $studyyear)) {
+        return 'errorwrongyear';
+    }
+    return null;
+}
+
+/**
+ * Enregistre les modifications apportées par l'étudiant à une déclaration encore en attente
+ * (type, intitulé, description, année, ECTS demandés). Rien n'est écrit si la demande a été
+ * tranchée entre-temps.
+ *
+ * @param stdClass $credit Crédit, avec les nouvelles valeurs.
+ * @return bool False si la demande n'était plus en attente.
+ */
+function ep_update_declaration(stdClass $credit) {
+    $credit->timemodified = time();
+    $applied = ep_update_credit_if(
+        $credit,
+        ['typeid', 'studyyear', 'name', 'description', 'claimedects', 'timemodified'],
+        'status = :pending AND source = :student AND activityid IS NULL',
+        ['pending' => EP_STATUS_PENDING, 'student' => EP_SOURCE_STUDENT]
+    );
+    if ($applied) {
+        ep_trigger_credit_event(\mod_ep\event\credit_updated::class, $credit);
+    }
+    return $applied;
 }
 
 /**
@@ -956,84 +1280,20 @@ function ep_get_eligible_stage_entries(stdClass $ep) {
  * n'est créé et les crédits existants sont retirés : c'est la façon de désactiver l'attribution
  * automatique sans avoir à faire le ménage soi-même.
  *
+ * Le calcul se fait sous le verrou de l'activité : deux synchronisations lancées ensemble (deux
+ * pages ouvertes au même moment, la tâche planifiée pendant un enregistrement de la page des
+ * types) créaient chacune les crédits manquants, en double.
+ *
  * @param stdClass $ep
  * @return stdClass {created, updated, deleted}
  */
 function ep_sync_stage_credits(stdClass $ep) {
-    global $DB;
-
-    $result = (object) ['created' => 0, 'updated' => 0, 'deleted' => 0];
-
-    $type = ep_get_type_by_code($ep->id, EP_TYPE_STAGE);
-    $existing = $DB->get_records('ep_credit', ['epid' => $ep->id, 'source' => EP_SOURCE_STAGE]);
-    $byref = [];
-    foreach ($existing as $credit) {
-        $byref[(int) $credit->sourceref] = $credit;
+    $lock = ep_get_activity_lock($ep->id);
+    try {
+        return ep_sync_stage_credits_locked($ep);
+    } finally {
+        $lock->release();
     }
-
-    $entries = [];
-    if ($type && !empty($type->enabled) && $type->ectsperday > 0) {
-        $entries = ep_get_eligible_stage_entries($ep);
-    }
-
-    $now = time();
-    foreach ($entries as $entry) {
-        $ects = round((float) $entry->retainedduration * (float) $type->ectsperday, 2);
-        $name = get_string('stagecreditname', 'mod_ep', (object) [
-            'theme' => $entry->themename !== null ? format_string($entry->themename) : '-',
-            'structure' => $entry->structure !== null ? format_string($entry->structure) : '-',
-        ]);
-        $description = get_string('stagecreditdescription', 'mod_ep', (object) [
-            'days' => $entry->retainedduration,
-            'rate' => ep_format_ects($type->ectsperday),
-            'activity' => format_string($entry->stagename),
-        ]);
-
-        $credit = $byref[(int) $entry->id] ?? null;
-        if ($credit) {
-            unset($byref[(int) $entry->id]);
-            if (
-                (float) $credit->retainedects === $ects && (int) $credit->studyyear === (int) $entry->studyyear
-                    && $credit->name === $name && (int) $credit->status === EP_STATUS_VALIDATED
-                    && (int) $credit->typeid === (int) $type->id
-            ) {
-                continue;
-            }
-            $credit->typeid = $type->id;
-            $credit->studyyear = (int) $entry->studyyear;
-            $credit->name = $name;
-            $credit->description = $description;
-            $credit->claimedects = $ects;
-            $credit->retainedects = $ects;
-            $credit->status = EP_STATUS_VALIDATED;
-            $credit->validatetime = $now;
-            $credit->timemodified = $now;
-            $DB->update_record('ep_credit', $credit);
-            $result->updated++;
-        } else {
-            ep_create_credit($ep, (int) $entry->userid, $type, [
-                'studyyear' => (int) $entry->studyyear,
-                'name' => $name,
-                'description' => $description,
-                'claimedects' => $ects,
-                'source' => EP_SOURCE_STAGE,
-                'sourceref' => (int) $entry->id,
-            ]);
-            $result->created++;
-        }
-    }
-
-    // Ce qui reste dans $byref ne correspond plus à un stage complémentaire validé : le crédit
-    // n'a plus lieu d'être.
-    foreach ($byref as $orphan) {
-        $DB->delete_records('ep_credit', ['id' => $orphan->id]);
-        $result->deleted++;
-    }
-
-    $DB->set_field('ep', 'timesynced', $now, ['id' => $ep->id]);
-    $ep->timesynced = $now;
-
-    return $result;
 }
 
 /**
@@ -1042,14 +1302,34 @@ function ep_sync_stage_credits(stdClass $ep) {
  * validation DEVE faite dans la foulée s'y voie sans attendre la tâche planifiée de la nuit, sans
  * pour autant relancer la synchronisation à chaque rafraîchissement de page.
  *
+ * Si une autre requête synchronise déjà (verrou pris), la page n'attend pas : elle affiche le
+ * décompte tel qu'il est, l'autre requête le mettant à jour. La date de dernière synchronisation
+ * est relue sous le verrou, pour que deux pages ouvertes au même moment n'enchaînent pas deux
+ * synchronisations.
+ *
  * @param stdClass $ep
  * @return void
  */
 function ep_sync_stage_credits_if_due(stdClass $ep) {
+    global $DB;
+
     if (time() - (int) $ep->timesynced < EP_STAGE_SYNC_INTERVAL) {
         return;
     }
-    ep_sync_stage_credits($ep);
+    $factory = \core\lock\lock_config::get_lock_factory('mod_ep_activity');
+    $lock = $factory->get_lock('ep-' . (int) $ep->id, 0);
+    if (!$lock) {
+        return;
+    }
+    try {
+        $ep->timesynced = (int) $DB->get_field('ep', 'timesynced', ['id' => $ep->id]);
+        if (time() - $ep->timesynced < EP_STAGE_SYNC_INTERVAL) {
+            return;
+        }
+        ep_sync_stage_credits_locked($ep);
+    } finally {
+        $lock->release();
+    }
 }
 
 // Décompte des ECTS : plafonds par type, minimums par année et de cursus.
@@ -1229,42 +1509,35 @@ function ep_filter_due_years(stdClass $ep, array $yearrows) {
  * @return array Liste d'objets {user, progress, creditcount, pendingcount}
  */
 function ep_get_pilotage_overview(stdClass $ep, context $context, ?array $restrictuserids = null) {
-    $students = ep_get_enrolled_students($context);
-    if ($restrictuserids !== null) {
-        $students = array_filter($students, function ($student) use ($restrictuserids) {
-            return in_array((int) $student->id, $restrictuserids, true);
-        });
-    }
-
-    $rows = [];
-    foreach ($students as $student) {
-        $credits = ep_get_student_credits($ep->id, $student->id);
-        $pending = 0;
-        foreach ($credits as $credit) {
-            if ((int) $credit->status === EP_STATUS_PENDING) {
-                $pending++;
-            }
-        }
-
-        $rows[] = (object) [
-            'user' => $student,
-            'progress' => ep_get_student_progress($ep, $student->id),
-            'creditcount' => count($credits),
-            'pendingcount' => $pending,
-        ];
-    }
-
-    return $rows;
+    $students = ep_get_enrolled_students($context, '', $restrictuserids);
+    return ep_build_pilotage_rows($ep, $students);
 }
 
 /**
- * Retourne les étudiants inscrits au cours (capacité de soumission) dans le contexte du module.
+ * Retourne les étudiants inscrits au cours (capacité de soumission) dans le contexte du module,
+ * triés par nom, avec recherche, restriction et pagination en base.
  *
  * @param context $context
- * @return array
+ * @param string $search Recherche sur le nom complet.
+ * @param array|null $restrictids Si fourni, seuls ces étudiants.
+ * @param int $limitfrom
+ * @param int $limitnum 0 = sans limite.
+ * @return array userid => stdClass user
  */
-function ep_get_enrolled_students(context $context) {
-    return get_enrolled_users($context, 'mod/ep:submit', 0, 'u.*', 'u.lastname, u.firstname');
+function ep_get_enrolled_students(context $context, $search = '', ?array $restrictids = null, $limitfrom = 0, $limitnum = 0) {
+    global $DB;
+
+    $built = ep_enrolled_students_sql($context, $search, $restrictids);
+    if ($built === null) {
+        return [];
+    }
+    [$sql, $params] = $built;
+    return $DB->get_records_sql(
+        "SELECT u.* $sql ORDER BY u.lastname ASC, u.firstname ASC, u.id ASC",
+        $params,
+        $limitfrom,
+        $limitnum
+    );
 }
 
 /**
@@ -1296,17 +1569,21 @@ function ep_credit_sort_options() {
 }
 
 /**
- * Recherche / tri des crédits, pour les listes de la DEVE et des enseignants.
+ * Recherche / tri des crédits, pour les listes de la DEVE et des enseignants, paginés en base.
  *
  * @param int $epid
  * @param array $filters ['search' => nom étudiant, 'typeid' => int, 'activityid' => int,
- *                        'status' => int, 'studyyear' => int|'' (0 = année non précisée)]
+ *                        'status' => int, 'studyyear' => int|'' (0 = année non précisée),
+ *                        'userid' => int]
  * @param string $sort Une des clés de ep_credit_sort_options().
  * @param string $dir 'ASC' ou 'DESC'.
  * @param array|null $restrictuserids Si fourni, limite aux crédits de ces étudiants.
  * @param array|null $restrictactivityids Si fourni, ajoute aux crédits ci-dessus ceux portant sur
  *                                        ces EP du catalogue (responsable d'un EP mais pas
  *                                        référent de l'étudiant, cas courant).
+ * @param int $limitfrom
+ * @param int $limitnum 0 = sans limite.
+ * @param string $scopemode 'view' ou 'decide' (voir ep_filtered_credits_sql()).
  * @return array id => stdClass
  */
 function ep_get_filtered_credits(
@@ -1315,75 +1592,38 @@ function ep_get_filtered_credits(
     $sort = 'timecreated',
     $dir = 'DESC',
     ?array $restrictuserids = null,
-    ?array $restrictactivityids = null
+    ?array $restrictactivityids = null,
+    $limitfrom = 0,
+    $limitnum = 0,
+    $scopemode = 'view'
 ) {
     global $DB;
 
-    $params = ['epid' => $epid];
-    $where = ['c.epid = :epid'];
+    $built = ep_filtered_credits_sql($epid, $filters, $restrictuserids, $restrictactivityids, $scopemode);
+    if ($built === null) {
+        return [];
+    }
+    [$where, $params] = $built;
 
-    if (!empty($filters['search'])) {
-        $fullname = $DB->sql_concat('u.firstname', "' '", 'u.lastname');
-        $where[] = $DB->sql_like($fullname, ':search', false, false);
-        $params['search'] = '%' . $DB->sql_like_escape($filters['search']) . '%';
-    }
-    if (!empty($filters['typeid'])) {
-        $where[] = 'c.typeid = :typeid';
-        $params['typeid'] = (int) $filters['typeid'];
-    }
-    if (!empty($filters['activityid'])) {
-        $where[] = 'c.activityid = :activityid';
-        $params['activityid'] = (int) $filters['activityid'];
-    }
-    if (isset($filters['status']) && $filters['status'] !== '') {
-        $where[] = 'c.status = :status';
-        $params['status'] = (int) $filters['status'];
-    }
-    if (isset($filters['studyyear']) && $filters['studyyear'] !== '') {
-        $where[] = 'c.studyyear = :studyyear';
-        $params['studyyear'] = (int) $filters['studyyear'];
-    }
-
-    // Périmètre d'un enseignant : ses étudiants (comme référent) et/ou les EP dont il est
-    // responsable. Les deux ensembles vides signifient qu'il n'a rien à voir ici — et non qu'il
-    // peut tout voir : la requête est alors court-circuitée.
-    if ($restrictuserids !== null || $restrictactivityids !== null) {
-        $scope = [];
-        if (!empty($restrictuserids)) {
-            [$insql, $inparams] = $DB->get_in_or_equal($restrictuserids, SQL_PARAMS_NAMED, 'ru');
-            $scope[] = "c.userid $insql";
-            $params += $inparams;
-        }
-        if (!empty($restrictactivityids)) {
-            [$insql, $inparams] = $DB->get_in_or_equal($restrictactivityids, SQL_PARAMS_NAMED, 'ra');
-            $scope[] = "c.activityid $insql";
-            $params += $inparams;
-        }
-        if (empty($scope)) {
-            return [];
-        }
-        $where[] = '(' . implode(' OR ', $scope) . ')';
-    }
-
-    $sortmap = [
-        'student' => 'u.lastname, u.firstname',
-        'type' => 't.sortorder, t.name',
-        'name' => 'c.name',
-        'ects' => 'c.claimedects',
-        'status' => 'c.status',
-        'timecreated' => 'c.timecreated',
-    ];
-    $sortcolumn = $sortmap[$sort] ?? $sortmap['timecreated'];
     $dir = strtoupper($dir) === 'ASC' ? 'ASC' : 'DESC';
+    $sortmap = [
+        'student' => "u.lastname $dir, u.firstname $dir",
+        'type' => "t.sortorder $dir, t.name $dir",
+        'name' => "c.name $dir",
+        'ects' => "c.claimedects $dir",
+        'status' => "c.status $dir",
+        'timecreated' => "c.timecreated $dir",
+    ];
+    $sortcolumns = $sortmap[$sort] ?? $sortmap['timecreated'];
 
     $sql = "SELECT c.*
               FROM {ep_credit} c
               JOIN {user} u ON u.id = c.userid
          LEFT JOIN {ep_type} t ON t.id = c.typeid
-             WHERE " . implode(' AND ', $where) . "
-          ORDER BY $sortcolumn $dir, c.id $dir";
+             WHERE $where
+          ORDER BY $sortcolumns, c.id $dir";
 
-    return $DB->get_records_sql($sql, $params);
+    return $DB->get_records_sql($sql, $params, $limitfrom, $limitnum);
 }
 
 /**
@@ -1488,38 +1728,35 @@ function ep_rights_has_validation_scope(stdClass $rights) {
  * @param stdClass $rights Voir ep_get_user_rights().
  * @param string $sort
  * @param string $dir
+ * @param int $limitfrom
+ * @param int $limitnum
  * @return array
  */
-function ep_get_credits_awaiting($ep, stdClass $rights, $sort = 'timecreated', $dir = 'ASC') {
+function ep_get_credits_awaiting($ep, stdClass $rights, $sort = 'timecreated', $dir = 'ASC', $limitfrom = 0, $limitnum = 0) {
     $filters = ['status' => EP_STATUS_PENDING];
 
     if ($rights->validatedeve) {
-        return ep_get_filtered_credits($ep->id, $filters, $sort, $dir);
+        return ep_get_filtered_credits($ep->id, $filters, $sort, $dir, null, null, $limitfrom, $limitnum);
     }
-
-    $credits = ep_get_filtered_credits(
+    return ep_get_filtered_credits(
         $ep->id,
         $filters,
         $sort,
         $dir,
         $rights->referentids,
-        $rights->responsibleids
+        $rights->responsibleids,
+        $limitfrom,
+        $limitnum,
+        'decide'
     );
-
-    // Un enseignant référent n'a pas à statuer sur une inscription à un EP du catalogue dont il
-    // n'est pas responsable, même s'il est référent de l'étudiant : c'est le responsable de l'EP
-    // qui sait si l'étudiant l'a suivi.
-    return array_filter($credits, function ($credit) use ($rights) {
-        return ep_rights_can_validate($rights, $credit);
-    });
 }
 
 // Rendu commun aux vues.
 
 /**
- * Rend une série d'actions en petits boutons. Une entrée dont l'URL est nulle est ignorée, ce qui
- * permet aux appelants de décrire toutes les actions possibles et de laisser la condition
- * d'affichage à l'endroit où elle se lit.
+ * Rend une série d'actions en petits boutons (gabarit mod_ep/actions). Une entrée dont l'URL est
+ * nulle est ignorée, ce qui permet aux appelants de décrire toutes les actions possibles et de
+ * laisser la condition d'affichage à l'endroit où elle se lit.
  *
  * @param array $links libellé => moodle_url|null
  * @param string $class
@@ -1527,14 +1764,74 @@ function ep_get_credits_awaiting($ep, stdClass $rights, $sort = 'timecreated', $
  * @return string
  */
 function ep_render_actions(array $links, $class = 'btn btn-sm btn-secondary mr-1 mb-1', $empty = '-') {
-    $out = '';
+    global $OUTPUT;
+
+    $actions = [];
     foreach ($links as $label => $url) {
         if ($url === null) {
             continue;
         }
-        $out .= html_writer::link($url, $label, ['class' => $class]);
+        $actions[] = ['label' => $label, 'url' => $url instanceof moodle_url ? $url->out(false) : (string) $url, 'class' => $class];
     }
-    return $out !== '' ? $out : $empty;
+    return $OUTPUT->render_from_template('mod_ep/actions', ['actions' => $actions, 'empty' => $empty]);
+}
+
+/**
+ * Badge du statut d'un crédit (gabarit mod_ep/credit_status) : en attente, validé, refusé,
+ * annulé.
+ *
+ * @param int $status
+ * @return string HTML
+ */
+function ep_render_credit_status($status) {
+    global $OUTPUT;
+
+    return $OUTPUT->render_from_template('mod_ep/credit_status', [
+        'label' => ep_status_label($status),
+        'class' => ep_status_badgeclass($status),
+    ]);
+}
+
+/**
+ * Rend un tableau de liste (gabarit mod_ep/paged_table) : en-têtes et cellules déjà rendus,
+ * suivis d'une barre de pagination.
+ *
+ * @param array $head En-têtes (HTML), dans l'ordre des colonnes.
+ * @param array $rows Lignes : tableaux de cellules (HTML).
+ * @param string $pagingbar Barre de pagination (HTML), ou vide.
+ * @param string $class Classe CSS du tableau.
+ * @return string
+ */
+function ep_render_paged_table(array $head, array $rows, $pagingbar = '', $class = 'generaltable ep-table') {
+    global $OUTPUT;
+
+    $data = (object) ['head' => [], 'rows' => [], 'pagingbar' => $pagingbar, 'class' => $class];
+    foreach ($head as $cell) {
+        $data->head[] = ['html' => $cell];
+    }
+    foreach ($rows as $row) {
+        $cells = [];
+        foreach ($row as $cell) {
+            $cells[] = ['html' => $cell];
+        }
+        $data->rows[] = ['cells' => $cells];
+    }
+    return $OUTPUT->render_from_template('mod_ep/paged_table', $data);
+}
+
+/**
+ * Barre de pagination d'une liste paginée en base.
+ *
+ * @param int $total Nombre total de lignes.
+ * @param int $page Page courante (0-indexée).
+ * @param moodle_url $baseurl
+ * @param int $perpage
+ * @return string HTML, vide s'il n'y a qu'une page.
+ */
+function ep_render_paging_bar($total, $page, moodle_url $baseurl, $perpage = EP_LIST_PERPAGE) {
+    global $OUTPUT;
+
+    return $total > $perpage ? $OUTPUT->render(new paging_bar($total, $page, $perpage, $baseurl)) : '';
 }
 
 /**
@@ -1592,15 +1889,19 @@ function ep_paginate(array $items, $page, moodle_url $baseurl, $perpage = EP_LIS
 }
 
 /**
- * Badge « Atteint » / « À compléter », utilisé dans tous les bilans de l'étudiant.
+ * Badge « Atteint » / « À compléter » (gabarit mod_ep/status_badge), utilisé dans tous les bilans
+ * de l'étudiant.
  *
  * @param bool $done
  * @return string HTML
  */
 function ep_render_status_badge($done) {
-    return $done
-        ? html_writer::span(get_string('objectivedone', 'mod_ep'), 'badge badge-success')
-        : html_writer::span(get_string('objectivetodo', 'mod_ep'), 'badge badge-warning');
+    global $OUTPUT;
+
+    return $OUTPUT->render_from_template('mod_ep/status_badge', [
+        'done' => (bool) $done,
+        'label' => get_string($done ? 'objectivedone' : 'objectivetodo', 'mod_ep'),
+    ]);
 }
 
 /**
@@ -1688,8 +1989,8 @@ function ep_render_navlinks(stdClass $ep, stdClass $cm, context $context, ?stdCl
 }
 
 /**
- * Formulaire de recherche / filtre au-dessus des listes de crédits. Les autres paramètres présents
- * dans $baseurl (id, mode...) sont préservés en champs cachés.
+ * Formulaire de recherche / filtre au-dessus des listes de crédits (gabarit mod_ep/list_filters).
+ * Les autres paramètres présents dans $baseurl (id, mode...) sont préservés en champs cachés.
  *
  * @param moodle_url $baseurl URL courante, avec les valeurs de filtre déjà appliquées.
  * @param array $types Types proposés dans le filtre.
@@ -1698,53 +1999,34 @@ function ep_render_navlinks(stdClass $ep, stdClass $cm, context $context, ?stdCl
  * @return string
  */
 function ep_render_list_filters(moodle_url $baseurl, array $types, array $values, $showstatus = true) {
-    $formurl = new moodle_url($baseurl);
-    $formurl->remove_params('search', 'typeid', 'status', 'studyyear', 'tsort', 'tdir', 'page');
-
-    $out = html_writer::start_tag('form', ['method' => 'get', 'action' => $formurl, 'class' => 'form-inline ep-filters mb-3']);
-    foreach ($formurl->params() as $key => $value) {
-        $out .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => $key, 'value' => $value]);
-    }
-    $out .= html_writer::empty_tag('input', [
-        'type' => 'text', 'name' => 'search', 'value' => s($values['search'] ?? ''),
-        'placeholder' => get_string('searchstudent', 'mod_ep'), 'class' => 'form-control mr-2',
-    ]);
+    global $OUTPUT;
 
     $typeoptions = [0 => get_string('alltypes', 'mod_ep')];
     foreach ($types as $type) {
         $typeoptions[$type->id] = format_string($type->name);
     }
-    $out .= html_writer::select($typeoptions, 'typeid', $values['typeid'] ?? 0, false, ['class' => 'form-control mr-2']);
+    $selects = ['typeid' => ['options' => $typeoptions, 'selected' => $values['typeid'] ?? 0]];
 
     // L'année non précisée (0) est une valeur de rattachement à part entière : le « toutes les
     // années » du filtre est donc la chaîne vide, pas 0.
-    $yearoptions = ['' => get_string('allyears', 'mod_ep')] + ep_studyyear_options();
-    $out .= html_writer::select(
-        $yearoptions,
-        'studyyear',
-        $values['studyyear'] ?? '',
-        false,
-        ['class' => 'form-control mr-2']
-    );
-
+    $selects['studyyear'] = [
+        'options' => ['' => get_string('allyears', 'mod_ep')] + ep_studyyear_options(),
+        'selected' => $values['studyyear'] ?? '',
+    ];
     if ($showstatus) {
-        $statusoptions = ['' => get_string('allstatuses', 'mod_ep')] + ep_status_options();
-        $out .= html_writer::select(
-            $statusoptions,
-            'status',
-            $values['status'] ?? '',
-            false,
-            ['class' => 'form-control mr-2']
-        );
+        $selects['status'] = [
+            'options' => ['' => get_string('allstatuses', 'mod_ep')] + ep_status_options(),
+            'selected' => $values['status'] ?? '',
+        ];
     }
 
-    $out .= html_writer::empty_tag('input', [
-        'type' => 'submit', 'value' => get_string('search'), 'class' => 'btn btn-secondary mr-2',
-    ]);
-    $out .= html_writer::link($formurl, get_string('resetfilters', 'mod_ep'), ['class' => 'btn btn-link']);
-    $out .= html_writer::end_tag('form');
-
-    return $out;
+    $filters = new \mod_ep\output\list_filters(
+        $baseurl,
+        ['search', 'typeid', 'status', 'studyyear', 'tsort', 'tdir', 'page'],
+        $values['search'] ?? '',
+        $selects
+    );
+    return $OUTPUT->render($filters);
 }
 
 /**
@@ -1770,7 +2052,7 @@ function ep_render_credit_summary(stdClass $credit, $type = null, $student = nul
     $rows[] = [get_string('claimedects', 'mod_ep'), ep_format_ects($credit->claimedects)];
     $rows[] = [
         get_string('status', 'mod_ep'),
-        html_writer::span(ep_status_label($credit->status), 'badge ' . ep_status_badgeclass($credit->status)),
+        ep_render_credit_status($credit->status),
     ];
     if ((int) $credit->status === EP_STATUS_VALIDATED) {
         $rows[] = [get_string('retainedects', 'mod_ep'), ep_format_ects($credit->retainedects)];
@@ -2030,7 +2312,7 @@ function ep_print_student_dashboard(stdClass $ep, $userid, stdClass $cm, stdClas
             ep_studyyear_label($credit->studyyear),
             ep_format_ects($credit->claimedects),
             (int) $credit->status === EP_STATUS_VALIDATED ? ep_format_ects($credit->retainedects) : '-',
-            html_writer::span(ep_status_label($credit->status), 'badge ' . ep_status_badgeclass($credit->status)),
+            ep_render_credit_status($credit->status),
             ep_render_credit_actions($credit, $cm, $rights, $isowner),
         ];
     }
@@ -2039,4 +2321,336 @@ function ep_print_student_dashboard(stdClass $ep, $userid, stdClass $cm, stdClas
     } else {
         echo html_writer::table($table);
     }
+}
+
+/**
+ * Corps de la synchronisation des crédits de type stage, à appeler sous le verrou de l'activité
+ * (voir ep_sync_stage_credits()).
+ *
+ * @param stdClass $ep
+ * @return stdClass {created, updated, deleted}
+ */
+function ep_sync_stage_credits_locked(stdClass $ep) {
+    global $DB;
+
+    $result = (object) ['created' => 0, 'updated' => 0, 'deleted' => 0];
+
+    $type = ep_get_type_by_code($ep->id, EP_TYPE_STAGE);
+    $existing = $DB->get_records('ep_credit', ['epid' => $ep->id, 'source' => EP_SOURCE_STAGE]);
+    $byref = [];
+    foreach ($existing as $credit) {
+        $byref[(int) $credit->sourceref] = $credit;
+    }
+
+    $entries = [];
+    if ($type && !empty($type->enabled) && $type->ectsperday > 0) {
+        $entries = ep_get_eligible_stage_entries($ep);
+    }
+
+    $now = time();
+    foreach ($entries as $entry) {
+        $ects = round((float) $entry->retainedduration * (float) $type->ectsperday, 2);
+        $name = get_string('stagecreditname', 'mod_ep', (object) [
+            'theme' => $entry->themename !== null ? format_string($entry->themename) : '-',
+            'structure' => $entry->structure !== null ? format_string($entry->structure) : '-',
+        ]);
+        $description = get_string('stagecreditdescription', 'mod_ep', (object) [
+            'days' => $entry->retainedduration,
+            'rate' => ep_format_ects($type->ectsperday),
+            'activity' => format_string($entry->stagename),
+        ]);
+
+        $credit = $byref[(int) $entry->id] ?? null;
+        if ($credit) {
+            unset($byref[(int) $entry->id]);
+            if (
+                (float) $credit->retainedects === $ects && (int) $credit->studyyear === (int) $entry->studyyear
+                    && $credit->name === $name && (int) $credit->status === EP_STATUS_VALIDATED
+                    && (int) $credit->typeid === (int) $type->id
+            ) {
+                continue;
+            }
+            $credit->typeid = $type->id;
+            $credit->studyyear = (int) $entry->studyyear;
+            $credit->name = $name;
+            $credit->description = $description;
+            $credit->claimedects = $ects;
+            $credit->retainedects = $ects;
+            $credit->status = EP_STATUS_VALIDATED;
+            $credit->validatetime = $now;
+            $credit->timemodified = $now;
+            $DB->update_record('ep_credit', $credit);
+            ep_trigger_credit_event(\mod_ep\event\credit_synced::class, $credit, [
+                'action' => 'updated',
+                'sourceref' => (int) $entry->id,
+            ]);
+            $result->updated++;
+        } else {
+            ep_create_credit($ep, (int) $entry->userid, $type, [
+                'studyyear' => (int) $entry->studyyear,
+                'name' => $name,
+                'description' => $description,
+                'claimedects' => $ects,
+                'source' => EP_SOURCE_STAGE,
+                'sourceref' => (int) $entry->id,
+            ]);
+            $result->created++;
+        }
+    }
+
+    // Ce qui reste dans $byref ne correspond plus à un stage complémentaire validé : le crédit
+    // n'a plus lieu d'être.
+    foreach ($byref as $orphan) {
+        $DB->delete_records('ep_credit', ['id' => $orphan->id]);
+        ep_trigger_credit_event(\mod_ep\event\credit_synced::class, $orphan, [
+            'action' => 'deleted',
+            'sourceref' => (int) $orphan->sourceref,
+        ]);
+        $result->deleted++;
+    }
+
+    $DB->set_field('ep', 'timesynced', $now, ['id' => $ep->id]);
+    $ep->timesynced = $now;
+
+    return $result;
+}
+
+/**
+ * Lignes du tableau de pilotage pour les étudiants donnés (voir ep_get_pilotage_overview()). Les
+ * données de tous ces étudiants sont chargées une fois pour toutes (voir
+ * mod_ep\local\progress_cache) : trois requêtes au lieu de trois par étudiant.
+ *
+ * @param stdClass $ep
+ * @param array $students Étudiants, indexés par identifiant.
+ * @return array Liste d'objets {user, progress, creditcount, pendingcount}
+ */
+function ep_build_pilotage_rows(stdClass $ep, array $students) {
+    \mod_ep\local\progress_cache::prime((int) $ep->id, array_keys($students));
+    try {
+        $rows = [];
+        foreach ($students as $student) {
+            $credits = ep_get_student_credits($ep->id, $student->id);
+            $pending = 0;
+            foreach ($credits as $credit) {
+                if ((int) $credit->status === EP_STATUS_PENDING) {
+                    $pending++;
+                }
+            }
+
+            $rows[] = (object) [
+                'user' => $student,
+                'progress' => ep_get_student_progress($ep, $student->id),
+                'creditcount' => count($credits),
+                'pendingcount' => $pending,
+            ];
+        }
+        return $rows;
+    } finally {
+        \mod_ep\local\progress_cache::clear();
+    }
+}
+
+/**
+ * Clause SQL des étudiants inscrits (capacité de soumission) dans le contexte du module, avec
+ * recherche sur le nom et restriction à une liste d'identifiants.
+ *
+ * @param context $context
+ * @param string $search Recherche sur le nom complet (vide : tous).
+ * @param array|null $restrictids Si fourni, seuls ces étudiants (liste vide : aucun).
+ * @return array{0: string, 1: array}|null [clause FROM/WHERE après « SELECT ... », paramètres], ou null si
+ *                                        la restriction est une liste vide.
+ */
+function ep_enrolled_students_sql(context $context, $search = '', ?array $restrictids = null) {
+    global $DB;
+
+    [$esql, $params] = get_enrolled_sql($context, 'mod/ep:submit');
+    $where = [];
+    if ($search !== '') {
+        $fullname = $DB->sql_concat('u.firstname', "' '", 'u.lastname');
+        $where[] = $DB->sql_like($fullname, ':search', false, false);
+        $params['search'] = '%' . $DB->sql_like_escape($search) . '%';
+    }
+    if ($restrictids !== null) {
+        $restrictids = array_values(array_unique(array_map('intval', $restrictids)));
+        if (empty($restrictids)) {
+            return null;
+        }
+        [$insql, $inparams] = $DB->get_in_or_equal($restrictids, SQL_PARAMS_NAMED, 'ri');
+        $where[] = "u.id $insql";
+        $params += $inparams;
+    }
+    $sql = "FROM {user} u
+            JOIN ($esql) je ON je.id = u.id";
+    if ($where) {
+        $sql .= ' WHERE ' . implode(' AND ', $where);
+    }
+    return [$sql, $params];
+}
+
+/**
+ * Nombre d'étudiants inscrits répondant à une recherche (voir ep_get_enrolled_students()).
+ *
+ * @param context $context
+ * @param string $search
+ * @param array|null $restrictids
+ * @return int
+ */
+function ep_count_enrolled_students(context $context, $search = '', ?array $restrictids = null) {
+    global $DB;
+
+    $built = ep_enrolled_students_sql($context, $search, $restrictids);
+    if ($built === null) {
+        return 0;
+    }
+    [$sql, $params] = $built;
+    return $DB->count_records_sql("SELECT COUNT(u.id) $sql", $params);
+}
+
+/**
+ * Clauses SQL communes à la liste et au comptage des crédits filtrés (voir
+ * ep_get_filtered_credits()).
+ *
+ * Périmètre d'un enseignant : en mode « view », les crédits de ses étudiants (comme référent) et
+ * ceux des EP dont il est responsable ; en mode « decide », seulement ce sur quoi il a à statuer,
+ * c'est-à-dire les déclarations hors catalogue de ses étudiants et les inscriptions aux EP dont il
+ * est responsable (un référent n'a pas à statuer sur une inscription à un EP dont il n'est pas
+ * responsable, même s'il est référent de l'étudiant). Les deux ensembles vides signifient qu'il
+ * n'a rien à voir ici, et non qu'il peut tout voir : null est alors renvoyé.
+ *
+ * @param int $epid
+ * @param array $filters Voir ep_get_filtered_credits().
+ * @param array|null $restrictuserids
+ * @param array|null $restrictactivityids
+ * @param string $scopemode 'view' ou 'decide'.
+ * @return array{0: string, 1: array}|null [clause WHERE sans le mot-clé, paramètres], ou null.
+ */
+function ep_filtered_credits_sql(
+    $epid,
+    array $filters,
+    ?array $restrictuserids,
+    ?array $restrictactivityids,
+    $scopemode = 'view'
+) {
+    global $DB;
+
+    $params = ['epid' => $epid];
+    $where = ['c.epid = :epid'];
+
+    if (!empty($filters['search'])) {
+        $fullname = $DB->sql_concat('u.firstname', "' '", 'u.lastname');
+        $where[] = $DB->sql_like($fullname, ':search', false, false);
+        $params['search'] = '%' . $DB->sql_like_escape($filters['search']) . '%';
+    }
+    if (!empty($filters['typeid'])) {
+        $where[] = 'c.typeid = :typeid';
+        $params['typeid'] = (int) $filters['typeid'];
+    }
+    if (!empty($filters['activityid'])) {
+        $where[] = 'c.activityid = :activityid';
+        $params['activityid'] = (int) $filters['activityid'];
+    }
+    if (isset($filters['status']) && $filters['status'] !== '') {
+        $where[] = 'c.status = :status';
+        $params['status'] = (int) $filters['status'];
+    }
+    if (isset($filters['studyyear']) && $filters['studyyear'] !== '') {
+        $where[] = 'c.studyyear = :studyyear';
+        $params['studyyear'] = (int) $filters['studyyear'];
+    }
+    if (!empty($filters['userid'])) {
+        $where[] = 'c.userid = :fuserid';
+        $params['fuserid'] = (int) $filters['userid'];
+    }
+
+    if ($restrictuserids !== null || $restrictactivityids !== null) {
+        $scope = [];
+        if (!empty($restrictuserids)) {
+            [$insql, $inparams] = $DB->get_in_or_equal($restrictuserids, SQL_PARAMS_NAMED, 'ru');
+            $scope[] = $scopemode === 'decide' ? "(c.activityid IS NULL AND c.userid $insql)" : "c.userid $insql";
+            $params += $inparams;
+        }
+        if (!empty($restrictactivityids)) {
+            [$insql, $inparams] = $DB->get_in_or_equal($restrictactivityids, SQL_PARAMS_NAMED, 'ra');
+            $scope[] = "c.activityid $insql";
+            $params += $inparams;
+        }
+        if (empty($scope)) {
+            return null;
+        }
+        $where[] = '(' . implode(' OR ', $scope) . ')';
+        if ($scopemode === 'decide') {
+            // Un crédit attribué automatiquement n'est validable par personne.
+            $where[] = 'c.source <> :scopestage';
+            $params['scopestage'] = EP_SOURCE_STAGE;
+        }
+    }
+
+    return [implode(' AND ', $where), $params];
+}
+
+/**
+ * Nombre de crédits répondant aux mêmes filtres que ep_get_filtered_credits().
+ *
+ * @param int $epid
+ * @param array $filters
+ * @param array|null $restrictuserids
+ * @param array|null $restrictactivityids
+ * @param string $scopemode
+ * @return int
+ */
+function ep_count_filtered_credits(
+    $epid,
+    array $filters = [],
+    ?array $restrictuserids = null,
+    ?array $restrictactivityids = null,
+    $scopemode = 'view'
+) {
+    global $DB;
+
+    $built = ep_filtered_credits_sql($epid, $filters, $restrictuserids, $restrictactivityids, $scopemode);
+    if ($built === null) {
+        return 0;
+    }
+    [$where, $params] = $built;
+    return $DB->count_records_sql(
+        "SELECT COUNT(c.id)
+           FROM {ep_credit} c
+           JOIN {user} u ON u.id = c.userid
+          WHERE $where",
+        $params
+    );
+}
+
+/**
+ * Applique les droits pré-calculés par ep_get_user_rights() à un crédit donné, en lecture : la
+ * DEVE voit tout, un enseignant voit ce sur quoi il peut statuer et le dossier complet des
+ * étudiants dont il est référent.
+ *
+ * @param stdClass $rights
+ * @param stdClass $credit
+ * @return bool
+ */
+function ep_rights_can_view(stdClass $rights, stdClass $credit) {
+    if ($rights->viewall) {
+        return true;
+    }
+    if (in_array((int) $credit->userid, $rights->referentids, true)) {
+        return true;
+    }
+    return ep_rights_can_validate($rights, $credit);
+}
+
+/**
+ * Nombre de crédits en attente de la décision de l'utilisateur (voir ep_get_credits_awaiting()).
+ *
+ * @param stdClass $ep
+ * @param stdClass $rights
+ * @return int
+ */
+function ep_count_credits_awaiting($ep, stdClass $rights) {
+    $filters = ['status' => EP_STATUS_PENDING];
+    if ($rights->validatedeve) {
+        return ep_count_filtered_credits($ep->id, $filters);
+    }
+    return ep_count_filtered_credits($ep->id, $filters, $rights->referentids, $rights->responsibleids, 'decide');
 }

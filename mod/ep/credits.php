@@ -119,21 +119,29 @@ $filters = [
     'status' => $filterstatus,
     'studyyear' => $filteryear,
 ];
-$allcredits = $rights->validatedeve
-    ? ep_get_filtered_credits($ep->id, $filters, $tsort, $tdir)
-    : ep_get_filtered_credits($ep->id, $filters, $tsort, $tdir, $rights->referentids, $rights->responsibleids);
-
-if (empty($allcredits)) {
+// Liste paginée en base : seule la page demandée est chargée, le total sert à la pagination.
+$restrictusers = $rights->validatedeve ? null : $rights->referentids;
+$restrictactivities = $rights->validatedeve ? null : $rights->responsibleids;
+$total = ep_count_filtered_credits($ep->id, $filters, $restrictusers, $restrictactivities);
+if ($total === 0) {
     echo $OUTPUT->notification(get_string('nocredits', 'mod_ep'), 'info');
     echo $OUTPUT->footer();
     exit;
 }
-
-[$credits, $pagingbarhtml] = ep_paginate($allcredits, $page, $listurl);
+$credits = ep_get_filtered_credits(
+    $ep->id,
+    $filters,
+    $tsort,
+    $tdir,
+    $restrictusers,
+    $restrictactivities,
+    $page * EP_LIST_PERPAGE,
+    EP_LIST_PERPAGE
+);
+$pagingbarhtml = ep_render_paging_bar($total, $page, $listurl);
 $students = ep_get_credit_users($credits);
 
-$table = new html_table();
-$table->head = [
+$head = [
     ep_sort_header(get_string('student', 'mod_ep'), 'student', $listurl, $tsort, $tdir),
     ep_sort_header(get_string('type', 'mod_ep'), 'type', $listurl, $tsort, $tdir),
     ep_sort_header(get_string('creditname', 'mod_ep'), 'name', $listurl, $tsort, $tdir),
@@ -144,20 +152,21 @@ $table->head = [
     get_string('actions', 'mod_ep'),
 ];
 
+$rows = [];
 foreach ($credits as $credit) {
     $student = $students[$credit->userid] ?? null;
     $type = $types[$credit->typeid] ?? null;
     $canvalidate = ep_rights_can_validate($rights, $credit) && (int) $credit->status === EP_STATUS_PENDING;
     $label = $canvalidate ? get_string('validatecredit', 'mod_ep') : get_string('viewdetails', 'mod_ep');
 
-    $table->data[] = [
+    $rows[] = [
         $student ? fullname($student) : '-',
         $type ? format_string($type->name) : '-',
         format_string($credit->name),
         ep_studyyear_label($credit->studyyear),
         ep_format_ects($credit->claimedects),
         (int) $credit->status === EP_STATUS_VALIDATED ? ep_format_ects($credit->retainedects) : '-',
-        html_writer::span(ep_status_label($credit->status), 'badge ' . ep_status_badgeclass($credit->status)),
+        ep_render_credit_status($credit->status),
         ep_render_actions([
             $label => new moodle_url(
                 '/mod/ep/validate.php',
@@ -168,7 +177,6 @@ foreach ($credits as $credit) {
     ];
 }
 
-echo html_writer::table($table);
-echo $pagingbarhtml;
+echo ep_render_paged_table($head, $rows, $pagingbarhtml);
 
 echo $OUTPUT->footer();

@@ -74,7 +74,9 @@ if ($creditid) {
 // Retrait d'une demande (déclaration comme inscription au catalogue) tant qu'elle est en attente.
 if ($action === 'cancel' && $credit) {
     require_sesskey();
-    ep_cancel_credit($credit, $USER->id, get_string('cancelledbystudent', 'mod_ep'));
+    if (!ep_cancel_credit($credit, $USER->id, get_string('cancelledbystudent', 'mod_ep'), 'student')) {
+        redirect($returnurl, get_string('errorcreditchanged', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+    }
     redirect($returnurl, get_string('requestcancelled', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
@@ -145,8 +147,11 @@ if ($mform->is_cancelled()) {
         $credit->name = $data->name;
         $credit->description = $data->description;
         $credit->claimedects = round((float) $data->claimedects, 2);
-        $credit->timemodified = time();
-        $DB->update_record('ep_credit', $credit);
+        // La demande a pu être tranchée pendant que l'étudiant la modifiait : rien n'est alors
+        // réécrit, et il en est averti.
+        if (!ep_update_declaration($credit)) {
+            redirect($returnurl, get_string('errorcreditchanged', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+        }
         $savedid = $credit->id;
     } else {
         $savedid = ep_create_credit($ep, $USER->id, $type, [

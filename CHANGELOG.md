@@ -1,0 +1,66 @@
+# Historique des versions
+
+Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
+a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
+
+## 0.2.0 — mod_ep 2026110600, mod_epsynthesis 2026110600 (6 novembre 2026)
+
+Premier lot de la mise à niveau au niveau de StageCompagnon (voir
+`docs/plan-mise-a-niveau.tex`) : les fondations sur lesquelles les lots suivants s'appuient.
+
+### Dépôt
+- Standard de codage Moodle (`phpcs.xml`, mêmes règles que StageCompagnon), `.editorconfig`,
+  licence GPL v3, réglages d'attribution des commits.
+- Contrôle continu GitHub Actions : style, puis `moodle-plugin-ci` (lint, validation, points de
+  sauvegarde, PHPDoc, Mustache, PHPUnit, Behat) sur Moodle 4.3 / PHP 8.0 / PostgreSQL,
+  Moodle 4.5 / PHP 8.2 / PostgreSQL avec couverture, et Moodle 4.5 / PHP 8.2 / MariaDB.
+  `mod_stage` et `mod_stagesynthesis` sont installés depuis le dépôt StageCompagnon.
+- Moodle 4.3 minimum (`requires = 2023100900`) pour les deux modules, aligné sur `mod_stage`.
+
+### mod_ep
+- **Sauvegarde Moodle** (`backup/moodle2/`) : le paramétrage (types, catalogue et responsables,
+  minimums) est toujours sauvegardé ; les crédits et leurs justificatifs le sont avec les
+  données utilisateur. Les identifiants de type et d'EP du catalogue sont remappés, l'activité
+  « Gestion des stages » désignée aussi ; les dates ne sont pas décalées. Jusqu'ici
+  `FEATURE_BACKUP_MOODLE2` était annoncé sans implémentation : une copie de cours produisait une
+  activité vide.
+- **Accès simultanés** :
+  - validation, refus, retrait et modification d'une déclaration ne sont écrits que si le crédit
+    est toujours dans l'état lu à l'ouverture de la page (`ep_update_credit_if()`) ; l'utilisateur
+    dont l'écriture n'a pas eu lieu en est averti (« Cette demande a changé entre-temps ») ;
+  - l'inscription à un EP du catalogue recompte les places et l'inscription en cours sous le
+    verrou de l'activité (`ep_get_activity_lock()`) : la dernière place n'est plus donnée deux
+    fois, un double envoi ne crée plus deux inscriptions ;
+  - la synchronisation des EP de type stage se fait sous ce même verrou, et la synchronisation
+    d'opportunité des pages relit la date de dernière synchronisation sous le verrou : deux
+    pages ouvertes ensemble ne créaient plus les crédits manquants en double.
+- **Journaux** : un événement Moodle par transition (demande d'EP par inscription, déclaration,
+  saisie DEVE ou attribution automatique ; modification ; validation avec les ECTS retenus ;
+  refus ; annulation ; synchronisation depuis un stage ; consultation de l'activité).
+- **Charge** : listes de validation et de pilotage paginées en base (comptage séparé, recherche et
+  tri en SQL) ; bilan de promotion calculé à travers un cache (`progress_cache`) chargé en trois
+  requêtes au lieu de trois par étudiant ; places prises, responsables et inscriptions de
+  l'étudiant lus en une requête pour tout le catalogue ; index sur `ep_credit` (instance et
+  statut, EP et statut, étudiant).
+- **Gabarits Mustache** (`templates/`) et classe de sortie `list_filters` : filtres de liste,
+  boutons d'action, badges de statut, tableau paginé ; partagés avec `mod_epsynthesis`.
+- Confirmations sans JavaScript : page de confirmation pour la suppression d'un EP du catalogue,
+  case à cocher contrôlée côté serveur pour le retrait d'un crédit par la DEVE. Les boutons
+  `onclick="return confirm(...)"` recevaient une chaîne de langue non échappée.
+- Un enseignant référent peut consulter tout le dossier de ses étudiants (y compris les
+  inscriptions aux EP dont il n'est pas responsable), sans pouvoir statuer dessus.
+- Paramètres de requête lus avec leur type exact (`PARAM_TEXT` au lieu de `PARAM_RAW`).
+- Tests : sauvegarde et restauration, événements, accès simultanés, listes et cache, gabarits
+  (74 tests).
+
+### mod_epsynthesis
+- Sauvegarde Moodle (instance et liens, remappés à la restauration sur le même site).
+- Événement de consultation de l'activité ; filtres rendus par les gabarits de `mod_ep`.
+- Générateur de tests et test de sauvegarde.
+
+## 0.1.0 — mod_ep 2026090500, mod_epsynthesis 2026090500 (5 septembre 2026)
+
+Première version : six types d'EP fixes, catalogue des EP internes avec places et responsables,
+déclarations hors catalogue avec justificatifs, attribution automatique depuis les stages
+complémentaires de `mod_stage`, plafonds par type, minimums annuels et de cursus, tableau de
+pilotage, exports CSV, synthèse enseignant.

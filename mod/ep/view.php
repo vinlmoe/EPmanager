@@ -38,6 +38,12 @@ require_login($course, true, $cm);
 $context = context_module::instance($cm->id);
 require_capability('mod/ep:view', $context);
 
+$event = \mod_ep\event\course_module_viewed::create(['objectid' => $ep->id, 'context' => $context]);
+$event->add_record_snapshot('course', $course);
+$event->add_record_snapshot('ep', $ep);
+$event->trigger();
+(new completion_info($course))->set_module_viewed($cm);
+
 $rights = ep_get_user_rights($ep, $context);
 
 if ($rights->viewall || ep_rights_has_validation_scope($rights)) {

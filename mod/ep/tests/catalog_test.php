@@ -83,7 +83,7 @@ final class catalog_test extends \advanced_testcase {
      * l'EP, jusqu'à ce que son responsable se prononce.
      */
     public function test_registration_awards_nothing_until_validated(): void {
-        $creditid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3);
+        $creditid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3)->creditid;
 
         $credit = $this->credit($creditid);
         $this->assertEquals(EP_STATUS_PENDING, $credit->status);
@@ -106,7 +106,7 @@ final class catalog_test extends \advanced_testcase {
      * l'étudiant (il n'a pas suivi cet EP), ni un enseignant quelconque du cours.
      */
     public function test_only_the_activity_owner_validates_the_registration(): void {
-        $creditid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3);
+        $creditid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3)->creditid;
         $credit = $this->credit($creditid);
 
         $this->assertTrue(ep_can_validate_credit($this->ep, $credit, $this->context, $this->owner->id));
@@ -119,7 +119,7 @@ final class catalog_test extends \advanced_testcase {
      * l'inscription.
      */
     public function test_owner_may_retain_only_part_of_the_credits(): void {
-        $creditid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3);
+        $creditid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3)->creditid;
         ep_validate_credit($this->credit($creditid), $this->owner->id, 1.5, 'Participation partielle');
 
         $credit = $this->credit($creditid);
@@ -138,7 +138,7 @@ final class catalog_test extends \advanced_testcase {
     public function test_pending_registrations_take_up_a_place(): void {
         $this->assertSame(2, ep_get_activity_remaining_places($this->activity));
 
-        $firstid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3);
+        $firstid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3)->creditid;
         $this->assertSame(1, ep_get_activity_remaining_places($this->activity));
 
         $other = $this->getDataGenerator()->create_user();
@@ -164,7 +164,7 @@ final class catalog_test extends \advanced_testcase {
      * inscription en attente ou validée l'en empêche.
      */
     public function test_active_registration_blocks_a_second_one(): void {
-        $creditid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3);
+        $creditid = ep_register_to_activity($this->ep, $this->activity, $this->student->id, 3)->creditid;
         $this->assertNotFalse(ep_get_active_registration($this->activity->id, $this->student->id));
 
         ep_reject_credit($this->credit($creditid), $this->owner->id, 'Absences répétées');
