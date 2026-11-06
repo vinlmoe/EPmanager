@@ -16,7 +16,8 @@
 
 /**
  * Page d'administration de l'activité (DEVE) : regroupe les pages de paramétrage utilisées
- * ponctuellement — types d'EP et leurs plafonds, catalogue des EP internes, minimums d'ECTS.
+ * ponctuellement — types d'EP et leurs plafonds, catalogue des EP internes, minimums d'ECTS,
+ * éditions PDF et courriels.
  * Chaque page est accompagnée de ce à quoi elle sert : elles sont visitées rarement, et leurs
  * seuls intitulés ne suffisent pas à savoir laquelle ouvrir.
  *
@@ -66,6 +67,23 @@ $sections = [
             get_string('managecatalog', 'mod_ep'),
             get_string('managecatalog_desc', 'mod_ep'),
             new moodle_url('/mod/ep/activities.php', ['id' => $cm->id]),
+        ],
+    ]],
+    [get_string('pdfsettings', 'mod_ep'), [
+        [
+            get_string('pdfsettings', 'mod_ep'),
+            get_string('pdfsettings_desc', 'mod_ep'),
+            new moodle_url('/mod/ep/pdf_settings.php', ['id' => $cm->id]),
+        ],
+        [
+            get_string('notifications', 'mod_ep'),
+            get_string('notifications_desc', 'mod_ep'),
+            new moodle_url('/mod/ep/notifications.php', ['id' => $cm->id]),
+        ],
+        [
+            get_string('booklet', 'mod_ep'),
+            get_string('booklet_help', 'mod_ep'),
+            new moodle_url('/mod/ep/booklet.php', ['id' => $cm->id]),
         ],
     ]],
 ];
