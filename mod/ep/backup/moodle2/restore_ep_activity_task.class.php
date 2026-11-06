@@ -26,6 +26,9 @@
 defined('MOODLE_INTERNAL') || die();
 
 require_once($CFG->dirroot . '/mod/ep/lib.php');
+// L'étape de restauration met les types en forme avec ep_type_record() : sans locallib.php, une
+// restauration hors des tests échouerait sur une fonction inconnue.
+require_once($CFG->dirroot . '/mod/ep/locallib.php');
 require_once($CFG->dirroot . '/mod/ep/backup/moodle2/restore_ep_stepslib.php');
 
 /**
@@ -62,6 +65,11 @@ class restore_ep_activity_task extends restore_activity_task {
         $contents[] = new restore_decode_content('ep_activity', ['description'], 'ep_activity');
         $contents[] = new restore_decode_content('ep_credit', ['description', 'validatorcomment'], 'ep_credit');
 
+        $contents[] = new restore_decode_content(
+            'ep_syllabus',
+            ['objectives', 'outcomes', 'prerequisitestext', 'content', 'methods', 'assessment', 'resit', 'bibliography'],
+            'ep_syllabus'
+        );
         return $contents;
     }
 

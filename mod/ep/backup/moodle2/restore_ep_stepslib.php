@@ -55,6 +55,12 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
             'ep_activity_prereq',
             '/activity/ep/epactivities/epactivity/prereqs/prereq'
         );
+        $paths[] = new restore_path_element('ep_syllabus', '/activity/ep/epactivities/epactivity/syllabi/syllabus');
+        $paths[] = new restore_path_element(
+            'ep_session',
+            '/activity/ep/epactivities/epactivity/syllabi/syllabus/sessions/session'
+        );
+        $paths[] = new restore_path_element('ep_notification', '/activity/ep/notifications/notification');
         $paths[] = new restore_path_element(
             'ep_year_requirement',
             '/activity/ep/yearrequirements/yearrequirement'
@@ -147,9 +153,67 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
             $data->state = empty($data->visible) ? EP_ACTIVITY_ARCHIVED : EP_ACTIVITY_PUBLISHED;
         }
         unset($data->visible);
+        // L'auteur d'une proposition absent de l'archive est dissocié, pas rattaché à un autre compte.
+        $data->proposedby = empty($data->proposedby) ? null : ($this->get_mappingid('user', $data->proposedby) ?: null);
 
         $newitemid = $DB->insert_record('ep_activity', $data);
         $this->set_mapping('ep_activity', $oldid, $newitemid);
+    }
+
+    /**
+     * Restaure une version du syllabus d'un EP du catalogue ; auteur et validateur absents de
+     * l'archive sont dissociés.
+     *
+     * @param array $data
+     */
+    protected function process_ep_syllabus($data) {
+        global $DB;
+
+        $data = (object) $data;
+        $oldid = $data->id;
+        $data->activityid = $this->get_new_parentid('ep_activity');
+        foreach (['authorid', 'reviewerid'] as $field) {
+            $data->$field = empty($data->$field) ? null : ($this->get_mappingid('user', $data->$field) ?: null);
+        }
+        $newitemid = $DB->insert_record('ep_syllabus', $data);
+        $this->set_mapping('ep_syllabus', $oldid, $newitemid);
+    }
+
+    /**
+     * Restaure une séance du programme ; un intervenant dont le compte n'est pas dans l'archive
+     * garde son nom, en intervenant extérieur.
+     *
+     * @param array $data
+     */
+    protected function process_ep_session($data) {
+        global $DB;
+
+        $data = (object) $data;
+        unset($data->id);
+        $data->syllabusid = $this->get_new_parentid('ep_syllabus');
+        if (!empty($data->teacherid)) {
+            $teacherid = $this->get_mappingid('user', $data->teacherid);
+            if (!$teacherid && $data->teachername === '') {
+                $user = $DB->get_record('user', ['id' => $data->teacherid]);
+                $data->teachername = $user && $this->task->is_samesite() ? fullname($user) : '';
+            }
+            $data->teacherid = $teacherid ?: null;
+        }
+        $DB->insert_record('ep_session', $data);
+    }
+
+    /**
+     * Restaure la personnalisation d'un courriel.
+     *
+     * @param array $data
+     */
+    protected function process_ep_notification($data) {
+        global $DB;
+
+        $data = (object) $data;
+        unset($data->id);
+        $data->epid = $this->get_new_parentid('ep');
+        $DB->insert_record('ep_notification', $data);
     }
 
     /**
@@ -289,8 +353,9 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
             }
         }
 
-        // Zone sans itemid, rattachée au contexte du module.
+        // Zones sans itemid, rattachées au contexte du module.
         $this->add_related_files('mod_ep', 'intro', null);
+        $this->add_related_files('mod_ep', EP_PDFLOGO_FILEAREA, null);
 
         // Justificatifs : un ou plusieurs fichiers par crédit.
         if ($this->get_setting_value('userinfo')) {

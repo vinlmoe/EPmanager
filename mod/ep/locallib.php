@@ -933,6 +933,9 @@ function ep_validate_credit(stdClass $credit, $byuserid, $retainedects, $comment
         $decision = clone $credit;
         $decision->step = $decidedstep;
         ep_add_credit_decision($decision, $role, 'validated', $byuserid, $grade, $credit->retainedects, $comment);
+        if ($final) {
+            ep_notify_credit_decided($credit);
+        }
         ep_trigger_credit_event(\mod_ep\event\credit_validated::class, $credit, [
             'retainedects' => (float) $credit->retainedects,
             'role' => $role,
@@ -990,6 +993,7 @@ function ep_reject_credit(stdClass $credit, $byuserid, $comment, $role = null, $
         $decision = clone $credit;
         $decision->step = $step;
         ep_add_credit_decision($decision, $role, 'rejected', $byuserid, $grade, 0, $comment);
+        ep_notify_credit_decided($credit);
         ep_trigger_credit_event(\mod_ep\event\credit_rejected::class, $credit, ['role' => $role]);
     }
     return $applied;
@@ -3712,6 +3716,7 @@ function ep_correct_grade(stdClass $credit, $byuserid, $grade, $comment = '') {
     );
     if ($applied) {
         ep_add_credit_decision($credit, EP_ROLE_DEVE, 'corrected', $byuserid, $grade, $credit->retainedects, $comment);
+        ep_notify_credit_decided($credit);
         $eventclass = $passed ? \mod_ep\event\credit_validated::class : \mod_ep\event\credit_rejected::class;
         ep_trigger_credit_event($eventclass, $credit, [
             'role' => EP_ROLE_DEVE,
@@ -3849,4 +3854,782 @@ function ep_close_activity(stdClass $ep, stdClass $activity, stdClass $rights, $
         'rejected' => $applied->rejected,
         'kept' => count($pending) - $applied->validated - $applied->rejected,
     ];
+}
+
+/**
+ * Champs texte d'un syllabus, dans l'ordre de la fiche ECTS (guide d'utilisation ECTS 2015) :
+ * objectifs, acquis d'apprentissage, prérequis, contenu, méthodes, conditions d'examen,
+ * seconde session, bibliographie.
+ *
+ * @return string[]
+ */
+function ep_syllabus_text_fields() {
+    return ['objectives', 'outcomes', 'prerequisitestext', 'content', 'methods', 'assessment', 'resit', 'bibliography'];
+}
+
+/**
+ * Natures de séance proposées dans le programme d'un EP.
+ *
+ * @return array code => libellé
+ */
+function ep_session_kind_options() {
+    $options = [];
+    foreach (['lecture', 'tutorial', 'practical', 'clinical', 'fieldwork', 'project', 'other'] as $kind) {
+        $options[$kind] = get_string('sessionkind_' . $kind, 'mod_ep');
+    }
+    return $options;
+}
+
+/**
+ * Dernière version d'un syllabus dans l'un des statuts donnés.
+ *
+ * @param int $activityid
+ * @param string[] $statuses
+ * @return stdClass|null
+ */
+function ep_get_syllabus($activityid, array $statuses = ['published']) {
+    global $DB;
+
+    [$insql, $params] = $DB->get_in_or_equal($statuses, SQL_PARAMS_NAMED, 'st');
+    $records = $DB->get_records_select(
+        'ep_syllabus',
+        "activityid = :activityid AND status $insql",
+        $params + ['activityid' => $activityid],
+        'version DESC, id DESC',
+        '*',
+        0,
+        1
+    );
+    return $records ? reset($records) : null;
+}
+
+/**
+ * Version de travail d'un syllabus : celle en rédaction, soumise ou renvoyée à son auteur, s'il y
+ * en a une.
+ *
+ * @param int $activityid
+ * @return stdClass|null
+ */
+function ep_get_working_syllabus($activityid) {
+    return ep_get_syllabus($activityid, ['draft', 'submitted', 'returned']);
+}
+
+/**
+ * Séances d'une version de syllabus, dans l'ordre du programme.
+ *
+ * @param int $syllabusid
+ * @return array id => stdClass
+ */
+function ep_get_syllabus_sessions($syllabusid) {
+    global $DB;
+
+    return $DB->get_records('ep_session', ['syllabusid' => $syllabusid], 'sortorder ASC, id ASC');
+}
+
+/**
+ * Volume horaire d'un programme, par nature de séance et au total, et charge de travail totale
+ * (séances et travail personnel).
+ *
+ * @param array $sessions
+ * @param float $personalhours
+ * @return stdClass {bykind: array kind => heures, sessions: float, personal: float, total: float}
+ */
+function ep_syllabus_hours(array $sessions, $personalhours = 0.0) {
+    $bykind = [];
+    $total = 0.0;
+    foreach ($sessions as $session) {
+        $bykind[$session->kind] = ($bykind[$session->kind] ?? 0) + (float) $session->duration;
+        $total += (float) $session->duration;
+    }
+    return (object) [
+        'bykind' => $bykind,
+        'sessions' => round($total, 2),
+        'personal' => round((float) $personalhours, 2),
+        'total' => round($total + (float) $personalhours, 2),
+    ];
+}
+
+/**
+ * Indique si un utilisateur peut rédiger le syllabus d'un EP : la DEVE (gestion du catalogue),
+ * un responsable de l'EP, ou l'auteur d'une proposition encore à l'état de brouillon ou proposée.
+ *
+ * @param stdClass $activity
+ * @param context $context
+ * @param int|null $userid
+ * @return bool
+ */
+function ep_can_edit_syllabus(stdClass $activity, context $context, $userid = null) {
+    global $USER;
+
+    $userid = $userid ?: $USER->id;
+    if (has_capability('mod/ep:manage', $context, $userid)) {
+        return true;
+    }
+    if (!has_capability('mod/ep:propose', $context, $userid)) {
+        return false;
+    }
+    if (ep_is_activity_teacher($activity->id, $userid)) {
+        return true;
+    }
+    return !empty($activity->proposedby) && (int) $activity->proposedby === (int) $userid
+        && in_array($activity->state, [EP_ACTIVITY_DRAFT, EP_ACTIVITY_PROPOSED], true);
+}
+
+/**
+ * Enregistre les séances d'une version de syllabus, en remplaçant les précédentes : une séance
+ * sans intitulé est ignorée, une durée négative ramenée à zéro, un intervenant désigné par son
+ * compte l'emporte sur un nom libre.
+ *
+ * @param int $syllabusid
+ * @param array $sessions Liste de tableaux {title, kind, duration, teacherid, teachername, sessiondate}.
+ * @return int Nombre de séances enregistrées.
+ */
+function ep_set_syllabus_sessions($syllabusid, array $sessions) {
+    global $DB;
+
+    $DB->delete_records('ep_session', ['syllabusid' => $syllabusid]);
+    $kinds = ep_session_kind_options();
+    $order = 0;
+    foreach ($sessions as $session) {
+        $session = (array) $session;
+        $title = trim((string) ($session['title'] ?? ''));
+        if ($title === '') {
+            continue;
+        }
+        $teacherid = !empty($session['teacherid']) ? (int) $session['teacherid'] : null;
+        $order += 10;
+        $DB->insert_record('ep_session', (object) [
+            'syllabusid' => $syllabusid,
+            'sortorder' => $order,
+            'title' => core_text::substr($title, 0, 255),
+            'kind' => isset($kinds[$session['kind'] ?? '']) ? $session['kind'] : 'other',
+            'duration' => max(0, round((float) ($session['duration'] ?? 0), 2)),
+            'teacherid' => $teacherid,
+            'teachername' => $teacherid ? '' : core_text::substr(trim((string) ($session['teachername'] ?? '')), 0, 255),
+            'sessiondate' => (int) ($session['sessiondate'] ?? 0),
+            'timecreated' => time(),
+        ]);
+    }
+    return $order / 10;
+}
+
+/**
+ * Crée une nouvelle version de syllabus à l'état de brouillon, reprise de la version publiée si
+ * elle existe (avec ses séances), ou vide. Si une version de travail existe déjà, c'est elle qui
+ * est renvoyée : il n'y a qu'une révision en cours à la fois.
+ *
+ * @param stdClass $activity
+ * @param int $authorid
+ * @return stdClass La version de travail.
+ */
+function ep_start_syllabus_revision(stdClass $activity, $authorid) {
+    global $DB;
+
+    $working = ep_get_working_syllabus($activity->id);
+    if ($working) {
+        return $working;
+    }
+    $published = ep_get_syllabus($activity->id);
+    $version = 1 + (int) $DB->get_field('ep_syllabus', 'MAX(version)', ['activityid' => $activity->id]);
+    $now = time();
+    $record = (object) [
+        'activityid' => $activity->id,
+        'version' => $version,
+        'status' => 'draft',
+        'language' => $published->language ?? '',
+        'personalhours' => $published->personalhours ?? 0,
+        'authorid' => $authorid,
+        'reviewerid' => null,
+        'reviewcomment' => null,
+        'timesubmitted' => 0,
+        'timereviewed' => 0,
+        'timecreated' => $now,
+        'timemodified' => $now,
+    ];
+    foreach (ep_syllabus_text_fields() as $field) {
+        $record->$field = $published->$field ?? '';
+    }
+    $record->id = $DB->insert_record('ep_syllabus', $record);
+    if ($published) {
+        ep_set_syllabus_sessions($record->id, array_values(ep_get_syllabus_sessions($published->id)));
+    }
+    return $record;
+}
+
+/**
+ * Enregistre le texte et les séances d'une version de syllabus encore modifiable (brouillon ou
+ * renvoyée) ; une version soumise ou tranchée ne se modifie plus.
+ *
+ * @param stdClass $syllabus
+ * @param stdClass $data Champs texte, language, personalhours.
+ * @param array|null $sessions Séances (voir ep_set_syllabus_sessions()), ou null pour les laisser.
+ * @return bool False si la version n'était plus modifiable.
+ */
+function ep_save_syllabus(stdClass $syllabus, stdClass $data, ?array $sessions = null) {
+    global $DB;
+
+    $update = (object) ['id' => $syllabus->id, 'timemodified' => time()];
+    foreach (ep_syllabus_text_fields() as $field) {
+        if (property_exists($data, $field)) {
+            $update->$field = (string) $data->$field;
+        }
+    }
+    if (property_exists($data, 'language')) {
+        $update->language = core_text::substr(trim((string) $data->language), 0, 50);
+    }
+    if (property_exists($data, 'personalhours')) {
+        $update->personalhours = max(0, round((float) $data->personalhours, 2));
+    }
+
+    $transaction = $DB->start_delegated_transaction();
+    $DB->execute('UPDATE {ep_syllabus} SET timemodified = timemodified WHERE id = ?', [$syllabus->id]);
+    [$insql, $params] = $DB->get_in_or_equal(['draft', 'returned'], SQL_PARAMS_NAMED, 'st');
+    $editable = $DB->record_exists_select('ep_syllabus', "id = :id AND status $insql", $params + ['id' => $syllabus->id]);
+    if ($editable) {
+        $DB->update_record('ep_syllabus', $update);
+        if ($sessions !== null) {
+            ep_set_syllabus_sessions($syllabus->id, $sessions);
+        }
+    }
+    $transaction->allow_commit();
+    return $editable;
+}
+
+/**
+ * Crée la proposition d'un nouvel EP par un enseignant : un EP du catalogue à l'état de
+ * brouillon, dont l'auteur devient responsable, et la première version de son syllabus.
+ *
+ * @param stdClass $ep
+ * @param stdClass $data Champs de l'EP (name, typeid, ects, capacity, minstudyyear, maxstudyyear,
+ *                       description), au moins name et typeid.
+ * @param int $authorid
+ * @return stdClass {activityid, syllabusid}
+ */
+function ep_create_proposal(stdClass $ep, stdClass $data, $authorid) {
+    global $DB;
+
+    $types = ep_get_catalogable_types($ep->id);
+    if (!isset($types[$data->typeid])) {
+        throw new moodle_exception('errorinvalidtype', 'mod_ep');
+    }
+    $transaction = $DB->start_delegated_transaction();
+    $record = clone $data;
+    unset($record->id, $record->prerequisites);
+    $record->state = EP_ACTIVITY_DRAFT;
+    $activityid = ep_save_activity($ep, $record);
+    $DB->set_field('ep_activity', 'proposedby', $authorid, ['id' => $activityid]);
+    $current = array_keys(ep_get_activity_teachers($activityid));
+    ep_set_activity_teachers($activityid, array_merge($current, [$authorid]));
+    $activity = $DB->get_record('ep_activity', ['id' => $activityid], '*', MUST_EXIST);
+    $syllabus = ep_start_syllabus_revision($activity, $authorid);
+    $transaction->allow_commit();
+
+    return (object) ['activityid' => (int) $activityid, 'syllabusid' => (int) $syllabus->id];
+}
+
+/**
+ * Met à jour les caractéristiques d'un EP proposé tant qu'il n'est pas publié (intitulé, type,
+ * ECTS, places, années, description). Une fois publié, ces caractéristiques relèvent de la DEVE,
+ * dans la gestion du catalogue.
+ *
+ * @param stdClass $ep
+ * @param stdClass $activity
+ * @param stdClass $data
+ * @return bool False si l'EP n'est plus en brouillon ni proposé.
+ */
+function ep_update_proposal_activity(stdClass $ep, stdClass $activity, stdClass $data) {
+    if (!in_array($activity->state, [EP_ACTIVITY_DRAFT, EP_ACTIVITY_PROPOSED], true)) {
+        return false;
+    }
+    $types = ep_get_catalogable_types($ep->id);
+    $record = (object) ['id' => $activity->id];
+    foreach (['name', 'ects', 'capacity', 'minstudyyear', 'maxstudyyear', 'description', 'code'] as $field) {
+        if (property_exists($data, $field)) {
+            $record->$field = $data->$field;
+        }
+    }
+    if (!empty($data->typeid) && isset($types[$data->typeid])) {
+        $record->typeid = $data->typeid;
+    }
+    ep_save_activity($ep, $record);
+    return true;
+}
+
+/**
+ * Soumet une version de syllabus à la DEVE. Pour un nouvel EP, il passe de l'état de brouillon à
+ * l'état proposé. Si la DEVE a choisi la publication directe des mises à jour par les
+ * responsables, la mise à jour d'un EP déjà publié est publiée aussitôt.
+ *
+ * @param stdClass $ep
+ * @param stdClass $activity
+ * @param stdClass $syllabus
+ * @param int $userid
+ * @return string|null 'submitted', 'published', ou null si la version n'était plus soumettable.
+ */
+function ep_submit_syllabus(stdClass $ep, stdClass $activity, stdClass $syllabus, $userid) {
+    global $DB;
+
+    $transaction = $DB->start_delegated_transaction();
+    $DB->execute('UPDATE {ep_syllabus} SET timemodified = timemodified WHERE id = ?', [$syllabus->id]);
+    [$insql, $params] = $DB->get_in_or_equal(['draft', 'returned'], SQL_PARAMS_NAMED, 'st');
+    $ok = $DB->record_exists_select('ep_syllabus', "id = :id AND status $insql", $params + ['id' => $syllabus->id]);
+    if (!$ok) {
+        $transaction->allow_commit();
+        return null;
+    }
+    $now = time();
+    $DB->update_record('ep_syllabus', (object) [
+        'id' => $syllabus->id, 'status' => 'submitted', 'timesubmitted' => $now, 'timemodified' => $now,
+    ]);
+    if ($activity->state === EP_ACTIVITY_DRAFT) {
+        $DB->set_field('ep_activity', 'state', EP_ACTIVITY_PROPOSED, ['id' => $activity->id]);
+        $activity->state = EP_ACTIVITY_PROPOSED;
+    }
+    $transaction->allow_commit();
+    ep_trigger_syllabus_event(\mod_ep\event\syllabus_submitted::class, $activity, $syllabus->id, $userid);
+
+    // Publication directe d'une mise à jour, si la DEVE l'a choisie : seulement pour un EP déjà
+    // publié, un nouvel EP passant toujours par la DEVE.
+    $published = !in_array($activity->state, [EP_ACTIVITY_DRAFT, EP_ACTIVITY_PROPOSED], true);
+    if ($published && !empty($ep->proposalsdirectpublish)) {
+        $syllabus = $DB->get_record('ep_syllabus', ['id' => $syllabus->id], '*', MUST_EXIST);
+        ep_review_syllabus($ep, $activity, $syllabus, $userid, 'publish', '', false);
+        return 'published';
+    }
+
+    ep_notify_proposal_submitted($ep, $activity, $syllabus, $userid);
+    return 'submitted';
+}
+
+/**
+ * Décision de la DEVE sur une version soumise : la publier (elle remplace la version en vigueur
+ * et, pour un nouvel EP, le publie au catalogue), la renvoyer à son auteur avec un commentaire
+ * (pour un nouvel EP, il repasse en brouillon), ou la refuser (un nouvel EP est alors archivé).
+ *
+ * @param stdClass $ep
+ * @param stdClass $activity
+ * @param stdClass $syllabus
+ * @param int $reviewerid
+ * @param string $decision 'publish', 'return' ou 'reject'.
+ * @param string $comment
+ * @param bool $notify Prévenir l'auteur.
+ * @return bool False si la version n'était plus soumise (décision prise entre-temps).
+ */
+function ep_review_syllabus(stdClass $ep, stdClass $activity, stdClass $syllabus, $reviewerid, $decision, $comment = '',
+        $notify = true) {
+    global $DB;
+
+    $statuses = ['publish' => 'published', 'return' => 'returned', 'reject' => 'rejected'];
+    if (!isset($statuses[$decision])) {
+        throw new coding_exception('Décision inconnue : ' . $decision);
+    }
+    $transaction = $DB->start_delegated_transaction();
+    $DB->execute('UPDATE {ep_syllabus} SET timemodified = timemodified WHERE id = ?', [$syllabus->id]);
+    if (!$DB->record_exists('ep_syllabus', ['id' => $syllabus->id, 'status' => 'submitted'])) {
+        $transaction->allow_commit();
+        return false;
+    }
+    $now = time();
+    $isnew = in_array($activity->state, [EP_ACTIVITY_DRAFT, EP_ACTIVITY_PROPOSED], true);
+    if ($decision === 'publish') {
+        $DB->set_field_select(
+            'ep_syllabus',
+            'status',
+            'superseded',
+            'activityid = :activityid AND status = :published',
+            ['activityid' => $activity->id, 'published' => 'published']
+        );
+    }
+    $DB->update_record('ep_syllabus', (object) [
+        'id' => $syllabus->id,
+        'status' => $statuses[$decision],
+        'reviewerid' => $reviewerid,
+        'reviewcomment' => $comment,
+        'timereviewed' => $now,
+        'timemodified' => $now,
+    ]);
+    $state = null;
+    if ($decision === 'publish' && $isnew) {
+        $state = EP_ACTIVITY_PUBLISHED;
+        $DB->set_field('ep_activity', 'timepublished', $now, ['id' => $activity->id]);
+    } else if ($decision === 'return' && $isnew) {
+        $state = EP_ACTIVITY_DRAFT;
+    } else if ($decision === 'reject' && $isnew) {
+        $state = EP_ACTIVITY_ARCHIVED;
+    }
+    if ($state !== null) {
+        $DB->set_field('ep_activity', 'state', $state, ['id' => $activity->id]);
+        $activity->state = $state;
+    }
+    $DB->set_field('ep_activity', 'timemodified', $now, ['id' => $activity->id]);
+    $transaction->allow_commit();
+
+    ep_trigger_syllabus_event(\mod_ep\event\syllabus_reviewed::class, $activity, $syllabus->id, $reviewerid, [
+        'decision' => $decision,
+    ]);
+    if ($notify) {
+        $syllabus = $DB->get_record('ep_syllabus', ['id' => $syllabus->id], '*', MUST_EXIST);
+        ep_notify_proposal_reviewed($ep, $activity, $syllabus, $decision, $comment);
+    }
+    return true;
+}
+
+/**
+ * Déclenche un événement du circuit d'un syllabus (soumission, décision de la DEVE).
+ *
+ * @param string $eventclass
+ * @param stdClass $activity
+ * @param int $syllabusid
+ * @param int $userid Auteur de l'action.
+ * @param array $other
+ * @return void
+ */
+function ep_trigger_syllabus_event($eventclass, stdClass $activity, $syllabusid, $userid, array $other = []) {
+    $cm = ep_get_cm_of_instance($activity->epid);
+    if (!$cm) {
+        return;
+    }
+    $eventclass::create([
+        'objectid' => $syllabusid,
+        'context' => context_module::instance($cm->id),
+        'userid' => $userid,
+        'other' => $other + ['activityid' => (int) $activity->id, 'state' => (string) $activity->state],
+    ])->trigger();
+}
+
+/**
+ * EP proposés ou en cours de révision qui concernent un utilisateur : pour la DEVE, toutes les
+ * versions soumises ; pour un enseignant, ses propositions et les EP dont il est responsable qui
+ * ont une version de travail.
+ *
+ * @param stdClass $ep
+ * @param context $context
+ * @param int $userid
+ * @return array Liste de {activity, syllabus} : l'EP et sa version de travail.
+ */
+function ep_get_proposals(stdClass $ep, context $context, $userid) {
+    global $DB;
+
+    $ismanager = has_capability('mod/ep:manage', $context, $userid);
+    $sql = "SELECT s.*, a.id AS a_id
+              FROM {ep_syllabus} s
+              JOIN {ep_activity} a ON a.id = s.activityid
+             WHERE a.epid = :epid AND s.status IN ('draft', 'submitted', 'returned')";
+    $params = ['epid' => $ep->id];
+    if (!$ismanager) {
+        $sql .= " AND (a.proposedby = :proposer
+                       OR EXISTS (SELECT 1 FROM {ep_activity_teacher} t WHERE t.activityid = a.id AND t.teacherid = :teacher))";
+        $params += ['proposer' => $userid, 'teacher' => $userid];
+    }
+    $sql .= " ORDER BY s.timesubmitted DESC, s.timemodified DESC";
+    $rows = [];
+    $activities = ep_get_activities($ep->id);
+    foreach ($DB->get_records_sql($sql, $params) as $syllabus) {
+        $activityid = (int) $syllabus->a_id;
+        unset($syllabus->a_id);
+        // La DEVE n'a à voir que ce qui lui est soumis ; les brouillons restent à leurs auteurs.
+        if ($ismanager && $syllabus->status !== 'submitted' && !ep_is_activity_teacher($activityid, $userid)
+                && (int) ($activities[$activityid]->proposedby ?? 0) !== (int) $userid) {
+            continue;
+        }
+        $rows[] = (object) ['activity' => $activities[$activityid], 'syllabus' => $syllabus];
+    }
+    return $rows;
+}
+
+/**
+ * Courriels du module que la DEVE peut personnaliser, avec les variables que chacun accepte.
+ * Le texte par défaut vient de la langue (clés notify_<clé>_subject et notify_<clé>_body).
+ *
+ * @return array clé => string[] variables
+ */
+function ep_notification_definitions() {
+    return [
+        'creditdecided' => ['student', 'ep', 'decision', 'ects', 'grade', 'comment', 'link'],
+        'proposalsubmitted' => ['author', 'ep', 'link'],
+        'proposalreviewed' => ['author', 'ep', 'decision', 'comment', 'link'],
+        'pendingreminder' => ['recipient', 'count', 'link'],
+    ];
+}
+
+/**
+ * Modèle d'un courriel pour une instance : celui personnalisé par la DEVE, sinon celui de la
+ * langue.
+ *
+ * @param int $epid
+ * @param string $key
+ * @return stdClass {enabled, subject, body, custom}
+ */
+function ep_get_notification_template($epid, $key) {
+    global $DB;
+
+    $custom = $DB->get_record('ep_notification', ['epid' => $epid, 'msgkey' => $key]);
+    $template = (object) [
+        'enabled' => 1,
+        'subject' => get_string('notify_' . $key . '_subject', 'mod_ep'),
+        'body' => get_string('notify_' . $key . '_body', 'mod_ep'),
+        'custom' => false,
+    ];
+    if ($custom) {
+        $template->enabled = (int) $custom->enabled;
+        if (trim($custom->subject) !== '') {
+            $template->subject = $custom->subject;
+            $template->custom = true;
+        }
+        if (trim((string) $custom->body) !== '') {
+            $template->body = $custom->body;
+            $template->custom = true;
+        }
+    }
+    return $template;
+}
+
+/**
+ * Enregistre la personnalisation d'un courriel ; un sujet et un corps vides rétablissent le texte
+ * par défaut.
+ *
+ * @param int $epid
+ * @param string $key
+ * @param bool $enabled
+ * @param string $subject
+ * @param string $body
+ * @return void
+ */
+function ep_set_notification_template($epid, $key, $enabled, $subject, $body) {
+    global $DB;
+
+    if (!array_key_exists($key, ep_notification_definitions())) {
+        throw new coding_exception('Courriel inconnu : ' . $key);
+    }
+    $record = $DB->get_record('ep_notification', ['epid' => $epid, 'msgkey' => $key]);
+    $data = (object) [
+        'epid' => $epid,
+        'msgkey' => $key,
+        'enabled' => $enabled ? 1 : 0,
+        'subject' => core_text::substr(trim($subject), 0, 255),
+        'body' => trim($body),
+        'timemodified' => time(),
+    ];
+    if ($record) {
+        $data->id = $record->id;
+        $DB->update_record('ep_notification', $data);
+    } else {
+        $DB->insert_record('ep_notification', $data);
+    }
+}
+
+/**
+ * Remplace les variables {nom} d'un modèle par leurs valeurs ; une variable inconnue est laissée
+ * telle quelle, pour que la DEVE voie la faute de frappe plutôt qu'un blanc.
+ *
+ * @param string $text
+ * @param array $vars nom => valeur
+ * @return string
+ */
+function ep_render_template($text, array $vars) {
+    return preg_replace_callback('/\{([a-z]+)\}/', function ($match) use ($vars) {
+        return array_key_exists($match[1], $vars) ? (string) $vars[$match[1]] : $match[0];
+    }, (string) $text);
+}
+
+/**
+ * Envoie un courriel du module (messagerie Moodle : l'utilisateur choisit dans ses préférences
+ * s'il le reçoit par courriel, en notification, ou les deux). Rien n'est envoyé si la DEVE a
+ * désactivé ce courriel pour l'instance. Dans une transaction, Moodle diffère l'envoi après la
+ * validation : un message n'annonce jamais une décision annulée.
+ *
+ * @param stdClass $ep
+ * @param string $key Voir ep_notification_definitions().
+ * @param stdClass $touser
+ * @param array $vars
+ * @param moodle_url $url Page à laquelle le message renvoie.
+ * @return bool Vrai si un message a été envoyé.
+ */
+function ep_send_notification(stdClass $ep, $key, stdClass $touser, array $vars, moodle_url $url) {
+    $template = ep_get_notification_template($ep->id, $key);
+    if (empty($template->enabled) || !empty($touser->deleted) || !empty($touser->suspended)) {
+        return false;
+    }
+    $vars['link'] = $url->out(false);
+    $subject = ep_render_template($template->subject, $vars);
+    $body = ep_render_template($template->body, $vars);
+
+    $message = new \core\message\message();
+    $message->component = 'mod_ep';
+    $message->name = $key;
+    $message->userfrom = core_user::get_noreply_user();
+    $message->userto = $touser;
+    $message->subject = $subject;
+    $message->fullmessage = $body;
+    $message->fullmessageformat = FORMAT_PLAIN;
+    $message->fullmessagehtml = text_to_html(s($body), false, false, true);
+    $message->smallmessage = $subject;
+    $message->notification = 1;
+    $message->contexturl = $url->out(false);
+    $message->contexturlname = format_string($ep->name);
+    $message->courseid = $ep->course;
+    return (bool) message_send($message);
+}
+
+/**
+ * Prévient l'étudiant qu'une décision finale a été prise sur sa demande (validation, refus,
+ * correction de note).
+ *
+ * @param stdClass $credit Crédit, avec son statut final.
+ * @return void
+ */
+function ep_notify_credit_decided(stdClass $credit) {
+    global $DB;
+
+    $ep = $DB->get_record('ep', ['id' => $credit->epid]);
+    $cm = ep_get_cm_of_instance($credit->epid);
+    $student = $DB->get_record('user', ['id' => $credit->userid]);
+    if (!$ep || !$cm || !$student) {
+        return;
+    }
+    $validated = (int) $credit->status === EP_STATUS_VALIDATED;
+    ep_send_notification($ep, 'creditdecided', $student, [
+        'student' => fullname($student),
+        'ep' => format_string($credit->name),
+        'decision' => get_string($validated ? 'decision_validated' : 'decision_rejected', 'mod_ep'),
+        'ects' => $validated ? ep_format_ects($credit->retainedects) : '0',
+        'grade' => $credit->grade !== null ? ep_format_ects($credit->grade) : '-',
+        'comment' => (string) $credit->validatorcomment,
+    ], new moodle_url('/mod/ep/validate.php', ['id' => $cm->id, 'creditid' => $credit->id]));
+}
+
+/**
+ * Prévient la DEVE (utilisateurs qui gèrent le catalogue de l'activité) qu'une proposition ou une
+ * mise à jour de syllabus lui est soumise.
+ *
+ * @param stdClass $ep
+ * @param stdClass $activity
+ * @param stdClass $syllabus
+ * @param int $authorid
+ * @return int Nombre de destinataires.
+ */
+function ep_notify_proposal_submitted(stdClass $ep, stdClass $activity, stdClass $syllabus, $authorid) {
+    global $DB;
+
+    $cm = ep_get_cm_of_instance($ep->id);
+    if (!$cm) {
+        return 0;
+    }
+    $context = context_module::instance($cm->id);
+    $author = $DB->get_record('user', ['id' => $authorid]);
+    $url = new moodle_url('/mod/ep/syllabus.php', ['id' => $cm->id, 'activityid' => $activity->id]);
+    $sent = 0;
+    foreach (get_enrolled_users($context, 'mod/ep:manage', 0, 'u.*') as $manager) {
+        if ((int) $manager->id === (int) $authorid) {
+            continue;
+        }
+        $sent += ep_send_notification($ep, 'proposalsubmitted', $manager, [
+            'author' => $author ? fullname($author) : '-',
+            'ep' => format_string($activity->name),
+        ], $url) ? 1 : 0;
+    }
+    return $sent;
+}
+
+/**
+ * Prévient l'auteur d'une version de syllabus de la décision de la DEVE.
+ *
+ * @param stdClass $ep
+ * @param stdClass $activity
+ * @param stdClass $syllabus
+ * @param string $decision publish, return ou reject.
+ * @param string $comment
+ * @return void
+ */
+function ep_notify_proposal_reviewed(stdClass $ep, stdClass $activity, stdClass $syllabus, $decision, $comment) {
+    global $DB;
+
+    $cm = ep_get_cm_of_instance($ep->id);
+    $author = !empty($syllabus->authorid) ? $DB->get_record('user', ['id' => $syllabus->authorid]) : null;
+    if (!$cm || !$author || (int) $author->id === (int) $syllabus->reviewerid) {
+        return;
+    }
+    ep_send_notification($ep, 'proposalreviewed', $author, [
+        'author' => fullname($author),
+        'ep' => format_string($activity->name),
+        'decision' => get_string('syllabusdecision_' . $decision, 'mod_ep'),
+        'comment' => (string) $comment,
+    ], new moodle_url('/mod/ep/syllabus.php', ['id' => $cm->id, 'activityid' => $activity->id]));
+}
+
+/**
+ * Relance hebdomadaire : pour chaque utilisateur qui a des demandes en attente de sa décision
+ * depuis plus de $olderthan secondes (responsables d'EP, enseignants référents, DEVE), un message
+ * récapitulatif.
+ *
+ * @param stdClass $ep
+ * @param int $olderthan
+ * @return int Nombre de messages envoyés.
+ */
+function ep_send_pending_reminders(stdClass $ep, $olderthan = WEEKSECS) {
+    global $DB;
+
+    $cm = ep_get_cm_of_instance($ep->id);
+    if (!$cm) {
+        return 0;
+    }
+    $context = context_module::instance($cm->id);
+    $limit = time() - $olderthan;
+    $counts = [];
+
+    // Responsables d'EP : inscriptions qui attendent le responsable.
+    $rows = $DB->get_records_sql(
+        "SELECT t.teacherid, COUNT(c.id) AS n
+           FROM {ep_credit} c
+           JOIN {ep_activity_teacher} t ON t.activityid = c.activityid
+          WHERE c.epid = :epid AND c.status = :pending AND c.pendingrole = :owner AND c.timecreated < :limit
+       GROUP BY t.teacherid",
+        ['epid' => $ep->id, 'pending' => EP_STATUS_PENDING, 'owner' => EP_ROLE_OWNER, 'limit' => $limit]
+    );
+    foreach ($rows as $row) {
+        $counts[(int) $row->teacherid] = ($counts[(int) $row->teacherid] ?? 0) + (int) $row->n;
+    }
+
+    // Enseignants référents, lus dans les activités « Gestion des stages » liées.
+    $stageids = array_map(fn($instance) => (int) $instance->stage->id, ep_get_linked_stage_instances($ep));
+    if ($stageids) {
+        [$insql, $inparams] = $DB->get_in_or_equal($stageids, SQL_PARAMS_NAMED, 'st');
+        $rows = $DB->get_records_sql(
+            "SELECT et.teacherid, COUNT(DISTINCT c.id) AS n
+               FROM {ep_credit} c
+               JOIN {stage_entry_teacher} et ON et.studentid = c.userid AND et.stageid $insql
+              WHERE c.epid = :epid AND c.status = :pending AND c.pendingrole = :referent AND c.timecreated < :limit
+           GROUP BY et.teacherid",
+            $inparams + ['epid' => $ep->id, 'pending' => EP_STATUS_PENDING, 'referent' => EP_ROLE_REFERENT, 'limit' => $limit]
+        );
+        foreach ($rows as $row) {
+            $counts[(int) $row->teacherid] = ($counts[(int) $row->teacherid] ?? 0) + (int) $row->n;
+        }
+    }
+
+    // DEVE : demandes qui l'attendent elle-même.
+    $devecount = $DB->count_records_select(
+        'ep_credit',
+        'epid = :epid AND status = :pending AND pendingrole = :deve AND timecreated < :limit',
+        ['epid' => $ep->id, 'pending' => EP_STATUS_PENDING, 'deve' => EP_ROLE_DEVE, 'limit' => $limit]
+    );
+    if ($devecount) {
+        foreach (get_enrolled_users($context, 'mod/ep:validatedeve', 0, 'u.id') as $deve) {
+            $counts[(int) $deve->id] = ($counts[(int) $deve->id] ?? 0) + $devecount;
+        }
+    }
+
+    $sent = 0;
+    $url = new moodle_url('/mod/ep/credits.php', ['id' => $cm->id]);
+    $users = $counts ? $DB->get_records_list('user', 'id', array_keys($counts)) : [];
+    foreach ($counts as $userid => $count) {
+        if (!isset($users[$userid]) || !is_enrolled($context, $userid, '', true)) {
+            continue;
+        }
+        $sent += ep_send_notification($ep, 'pendingreminder', $users[$userid], [
+            'recipient' => fullname($users[$userid]),
+            'count' => $count,
+        ], $url) ? 1 : 0;
+    }
+    return $sent;
 }

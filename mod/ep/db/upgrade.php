@@ -233,5 +233,93 @@ function xmldb_ep_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026110800, 'ep');
     }
 
+    if ($oldversion < 2026110900) {
+        // Propositions d'EP et syllabus, éditions PDF, courriels personnalisables.
+        $table = new xmldb_table('ep');
+        $fields = [
+            new xmldb_field('proposalsdirectpublish', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'stagecmid'),
+            new xmldb_field('pdfheader', XMLDB_TYPE_TEXT, null, null, null, null, null, 'proposalsdirectpublish'),
+            new xmldb_field('pdffooter', XMLDB_TYPE_TEXT, null, null, null, null, null, 'pdfheader'),
+        ];
+        foreach ($fields as $field) {
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+
+        $table = new xmldb_table('ep_activity');
+        $fields = [
+            new xmldb_field('proposedby', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'minects'),
+            new xmldb_field('timepublished', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'proposedby'),
+        ];
+        foreach ($fields as $field) {
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+        $dbman->add_key($table, new xmldb_key('proposedby', XMLDB_KEY_FOREIGN, ['proposedby'], 'user', ['id']));
+
+        $table = new xmldb_table('ep_syllabus');
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('activityid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('version', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '1');
+        $table->add_field('status', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'draft');
+        foreach (['objectives', 'outcomes', 'prerequisitestext', 'content', 'methods', 'assessment', 'resit', 'bibliography'] as $name) {
+            $table->add_field($name, XMLDB_TYPE_TEXT, null, null, null, null, null);
+        }
+        $table->add_field('language', XMLDB_TYPE_CHAR, '50', null, XMLDB_NOTNULL, null, '');
+        $table->add_field('personalhours', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('authorid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+        $table->add_field('reviewerid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+        $table->add_field('reviewcomment', XMLDB_TYPE_TEXT, null, null, null, null, null);
+        $table->add_field('timesubmitted', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('timereviewed', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('activityid', XMLDB_KEY_FOREIGN, ['activityid'], 'ep_activity', ['id']);
+        $table->add_key('authorid', XMLDB_KEY_FOREIGN, ['authorid'], 'user', ['id']);
+        $table->add_key('reviewerid', XMLDB_KEY_FOREIGN, ['reviewerid'], 'user', ['id']);
+        $table->add_index('activityid-status', XMLDB_INDEX_NOTUNIQUE, ['activityid', 'status']);
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        $table = new xmldb_table('ep_session');
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('syllabusid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('sortorder', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('title', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('kind', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'lecture');
+        $table->add_field('duration', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('teacherid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+        $table->add_field('teachername', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, '');
+        $table->add_field('sessiondate', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('syllabusid', XMLDB_KEY_FOREIGN, ['syllabusid'], 'ep_syllabus', ['id']);
+        $table->add_key('teacherid', XMLDB_KEY_FOREIGN, ['teacherid'], 'user', ['id']);
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        $table = new xmldb_table('ep_notification');
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('epid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('msgkey', XMLDB_TYPE_CHAR, '30', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('enabled', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1');
+        $table->add_field('subject', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, '');
+        $table->add_field('body', XMLDB_TYPE_TEXT, null, null, null, null, null);
+        $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('epid', XMLDB_KEY_FOREIGN, ['epid'], 'ep', ['id']);
+        $table->add_index('epid-msgkey', XMLDB_INDEX_UNIQUE, ['epid', 'msgkey']);
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+        }
+
+        upgrade_mod_savepoint(true, 2026110900, 'ep');
+    }
+
     return true;
 }

@@ -184,6 +184,16 @@ final class backup_restore_test extends \advanced_testcase {
         $required = $epgen->create_activity($ep, ['name' => 'Anatomie', 'state' => EP_ACTIVITY_ARCHIVED]);
         ep_set_activity_prerequisites($activity, [$required->id]);
         ep_set_activity_teachers($activity->id, [$teacher->id]);
+        // Syllabus publié avec ses séances, et une version de travail en cours : tous deux suivent
+        // la copie, de même que les courriels personnalisés.
+        $syllabus = ep_start_syllabus_revision($activity, $teacher->id);
+        ep_save_syllabus($syllabus, (object) ['objectives' => 'Maîtriser les sutures.', 'personalhours' => 6], [
+            ['title' => 'Nœuds', 'kind' => 'practical', 'duration' => 2, 'teacherid' => $teacher->id],
+            ['title' => 'Conférence', 'kind' => 'lecture', 'duration' => 1, 'teachername' => 'Dr Invité'],
+        ]);
+        $DB->set_field('ep_syllabus', 'status', 'published', ['id' => $syllabus->id]);
+        ep_start_syllabus_revision($activity, $teacher->id);
+        ep_set_notification_template($ep->id, 'creditdecided', false, 'Objet personnalisé', 'Corps');
         ep_set_year_requirement($ep->id, 3, 6);
 
         // Crédit issu d'une inscription au catalogue, validé par le responsable de l'EP.
@@ -266,6 +276,20 @@ final class backup_restore_test extends \advanced_testcase {
         // Le prérequis désigne l'EP de la copie, pas celui d'origine.
         $this->assertSame([(int) $newrequired->id], ep_get_activity_prerequisites($newactivity->id));
         $this->assertEquals(0, $newactivity->prereqblocking);
+
+        // Syllabus : la version publiée et la version de travail, avec leurs séances.
+        $newpublished = ep_get_syllabus($newactivity->id);
+        $this->assertSame('Maîtriser les sutures.', $newpublished->objectives);
+        $this->assertEquals(6, $newpublished->personalhours);
+        $newsessions = array_values(ep_get_syllabus_sessions($newpublished->id));
+        $this->assertCount(2, $newsessions);
+        $this->assertEquals($teacher->id, $newsessions[0]->teacherid);
+        $this->assertSame('Dr Invité', $newsessions[1]->teachername);
+        $this->assertSame(2, (int) ep_get_working_syllabus($newactivity->id)->version);
+        $this->assertCount(2, ep_get_syllabus_sessions(ep_get_working_syllabus($newactivity->id)->id));
+        $template = ep_get_notification_template($newep->id, 'creditdecided');
+        $this->assertSame(0, $template->enabled);
+        $this->assertSame('Objet personnalisé', $template->subject);
         $this->assertEquals(3, $newactivity->ects);
         $this->assertEquals(12, $newactivity->capacity);
         $this->assertEquals($newacademic->id, $newactivity->typeid);

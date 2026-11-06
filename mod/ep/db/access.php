@@ -72,6 +72,17 @@ $capabilities = [
         ],
     ],
 
+    // Enseignant : proposer un nouvel EP du catalogue et rédiger le syllabus des EP dont il est
+    // responsable ; la publication appartient à la DEVE (mod/ep:manage).
+    'mod/ep:propose' => [
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => [
+            'teacher' => CAP_ALLOW,
+            'editingteacher' => CAP_ALLOW,
+        ],
+    ],
+
     // DEVE : validation finale, saisie et retrait de crédits pour n'importe quel étudiant.
     'mod/ep:validatedeve' => [
         'captype' => 'write',

@@ -102,6 +102,9 @@ define('EP_SOURCE_DEVE', 'deve');
  */
 define('EP_EVIDENCE_FILEAREA', 'evidence');
 
+/** Zone de fichiers du logo des documents PDF de l'activité (itemid 0). */
+define('EP_PDFLOGO_FILEAREA', 'pdflogo');
+
 /**
  * Délai minimal entre deux synchronisations des EP de type stage déclenchées par l'affichage
  * d'une page (voir ep_sync_stage_credits_if_due()) : la tâche planifiée quotidienne fait foi,
@@ -195,7 +198,14 @@ function ep_delete_instance($id) {
         [$insql, $inparams] = $DB->get_in_or_equal($chunk);
         $DB->delete_records_select('ep_activity_teacher', "activityid $insql", $inparams);
         $DB->delete_records_select('ep_activity_prereq', "activityid $insql", $inparams);
+        $syllabusids = $DB->get_fieldset_select('ep_syllabus', 'id', "activityid $insql", $inparams);
+        foreach (array_chunk($syllabusids, 500) as $schunk) {
+            [$sinsql, $sinparams] = $DB->get_in_or_equal($schunk);
+            $DB->delete_records_select('ep_session', "syllabusid $sinsql", $sinparams);
+        }
+        $DB->delete_records_select('ep_syllabus', "activityid $insql", $inparams);
     }
+    $DB->delete_records('ep_notification', ['epid' => $id]);
     $creditids = $DB->get_fieldset_select('ep_credit', 'id', 'epid = ?', [$id]);
     foreach (array_chunk($creditids, 500) as $chunk) {
         [$insql, $inparams] = $DB->get_in_or_equal($chunk);

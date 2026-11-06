@@ -49,7 +49,8 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         // « stagecmid » désigne un course-module mod_stage : la restauration le fait suivre vers la
         // copie de cette activité (voir restore_ep_activity_structure_step::after_restore()).
         $ep = new backup_nested_element('ep', ['id'], [
-            'name', 'intro', 'introformat', 'currentstudyyear', 'mincursusects', 'stagecmid', 'timesynced',
+            'name', 'intro', 'introformat', 'currentstudyyear', 'mincursusects', 'stagecmid',
+            'proposalsdirectpublish', 'pdfheader', 'pdffooter', 'timesynced',
             'timecreated', 'timemodified',
         ]);
 
@@ -67,12 +68,28 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         $activity = new backup_nested_element('epactivity', ['id'], [
             'typeid', 'name', 'description', 'ects', 'minstudyyear', 'maxstudyyear', 'capacity',
             'code', 'state', 'registrationstart', 'registrationend', 'datestart', 'dateend',
-            'grading', 'grademax', 'gradepass', 'minects', 'prereqblocking',
+            'grading', 'grademax', 'gradepass', 'minects', 'proposedby', 'timepublished', 'prereqblocking',
             'sortorder', 'timecreated', 'timemodified',
         ]);
 
         $activityteachers = new backup_nested_element('activityteachers');
         $activityteacher = new backup_nested_element('activityteacher', ['id'], ['teacherid', 'timecreated']);
+
+        $syllabi = new backup_nested_element('syllabi');
+        $syllabus = new backup_nested_element('syllabus', ['id'], [
+            'version', 'status', 'objectives', 'outcomes', 'prerequisitestext', 'content', 'methods', 'assessment',
+            'resit', 'bibliography', 'language', 'personalhours', 'authorid', 'reviewerid', 'reviewcomment',
+            'timesubmitted', 'timereviewed', 'timecreated', 'timemodified',
+        ]);
+        $sessions = new backup_nested_element('sessions');
+        $session = new backup_nested_element('session', ['id'], [
+            'sortorder', 'title', 'kind', 'duration', 'teacherid', 'teachername', 'sessiondate', 'timecreated',
+        ]);
+
+        $notifications = new backup_nested_element('notifications');
+        $notification = new backup_nested_element('notification', ['id'], [
+            'msgkey', 'enabled', 'subject', 'body', 'timemodified',
+        ]);
 
         $prereqs = new backup_nested_element('prereqs');
         $prereq = new backup_nested_element('prereq', ['id'], ['requiredid', 'timecreated']);
@@ -105,6 +122,12 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         $activityteachers->add_child($activityteacher);
         $activity->add_child($prereqs);
         $prereqs->add_child($prereq);
+        $activity->add_child($syllabi);
+        $syllabi->add_child($syllabus);
+        $syllabus->add_child($sessions);
+        $sessions->add_child($session);
+        $ep->add_child($notifications);
+        $notifications->add_child($notification);
 
         $ep->add_child($yearrequirements);
         $yearrequirements->add_child($yearrequirement);
@@ -126,6 +149,10 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         // ignore ceux dont le compte n'est pas présent dans l'archive.
         $activityteacher->set_source_table('ep_activity_teacher', ['activityid' => backup::VAR_PARENTID], 'id');
         $prereq->set_source_table('ep_activity_prereq', ['activityid' => backup::VAR_PARENTID], 'id');
+        // Le syllabus et son programme relèvent du paramétrage du catalogue : toujours sauvegardés.
+        $syllabus->set_source_table('ep_syllabus', ['activityid' => backup::VAR_PARENTID], 'version, id');
+        $session->set_source_table('ep_session', ['syllabusid' => backup::VAR_PARENTID], 'sortorder, id');
+        $notification->set_source_table('ep_notification', ['epid' => backup::VAR_PARENTID], 'msgkey');
 
         if ($userinfo) {
             $credit->set_source_table('ep_credit', ['epid' => backup::VAR_PARENTID], 'id');
@@ -137,11 +164,16 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         $credit->annotate_ids('user', 'userid');
         $credit->annotate_ids('user', 'validatedby');
         $credit->annotate_ids('user', 'addedby');
+        $activity->annotate_ids('user', 'proposedby');
+        $syllabus->annotate_ids('user', 'authorid');
+        $syllabus->annotate_ids('user', 'reviewerid');
+        $session->annotate_ids('user', 'teacherid');
         $decision->annotate_ids('user', 'userid');
 
         // Zones de fichiers. Les justificatifs : un ou plusieurs fichiers par crédit, itemid = id
         // du crédit.
         $ep->annotate_files('mod_ep', 'intro', null);
+        $ep->annotate_files('mod_ep', EP_PDFLOGO_FILEAREA, null);
         if ($userinfo) {
             $credit->annotate_files('mod_ep', EP_EVIDENCE_FILEAREA, 'id');
         }
