@@ -356,5 +356,13 @@ function xmldb_ep_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026111000, 'ep');
     }
 
+    if ($oldversion < 2026111100) {
+        // Journal des imports.
+        if (!$dbman->table_exists('ep_import_log')) {
+            $dbman->install_one_table_from_xmldb_file(__DIR__ . '/install.xml', 'ep_import_log');
+        }
+        upgrade_mod_savepoint(true, 2026111100, 'ep');
+    }
+
     return true;
 }

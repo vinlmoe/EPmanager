@@ -109,6 +109,12 @@ define('EP_SUPPLEMENT_ISSUED_FILEAREA', 'supplementissued');
 /** Zone de fichiers du cachet imprimé sur les suppléments (itemid 0). */
 define('EP_SUPPLEMENT_STAMP_FILEAREA', 'supplementstamp');
 
+/**
+ * Version du format d'export du paramétrage : incrémentée quand la structure change, pour
+ * qu'un fichier plus ancien soit converti ou refusé à l'import plutôt que mal lu.
+ */
+define('EP_SETTINGS_FORMAT', 1);
+
 /** Zone de fichiers du logo des documents PDF de l'activité (itemid 0). */
 define('EP_PDFLOGO_FILEAREA', 'pdflogo');
 
@@ -221,6 +227,7 @@ function ep_delete_instance($id) {
     $DB->delete_records('ep_supplement_category', ['epid' => $id]);
     $DB->delete_records('ep_supplement_text', ['epid' => $id]);
     $DB->delete_records('ep_year_validation', ['epid' => $id]);
+    $DB->delete_records('ep_import_log', ['epid' => $id]);
     $creditids = $DB->get_fieldset_select('ep_credit', 'id', 'epid = ?', [$id]);
     foreach (array_chunk($creditids, 500) as $chunk) {
         [$insql, $inparams] = $DB->get_in_or_equal($chunk);

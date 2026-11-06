@@ -1,0 +1,243 @@
+% Formats des imports et exports d'EP Manager (mod_ep).
+% Compilation : latexmk -pdf formats-import.tex
+\documentclass[11pt,a4paper]{article}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype,booktabs,tabularx,longtable,xcolor,enumitem,hyperref,array}
+\usepackage[margin=2.2cm]{geometry}
+\hypersetup{colorlinks=true, linkcolor=blue!50!black, urlcolor=blue!50!black}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\col}[1]{\texttt{#1}}
+\newcommand{\oblig}{\textbf{oui}}
+\setlist[itemize]{nosep}
+\setlist[enumerate]{nosep}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\title{EP Manager : formats des imports et des exports\\
+  \large Catalogue, séances, crédits, paramétrage, export complet}
+\author{Sébastien Lefebvre}
+\date{Version 0.7.0 du module \code{mod_ep} -- novembre 2026}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\section{Principes communs}
+
+Tous les imports se font depuis le panneau \textbf{Administration} de l'activité, section
+\textbf{Imports, exports et transfert}, sans passer par l'administration du site. Ils
+suivent le même déroulement :
+\begin{enumerate}
+  \item dépôt du fichier ;
+  \item \textbf{prévisualisation} : chaque ligne est lue et contrôlée, les erreurs et
+    avertissements sont listés avec leur numéro de ligne, et le tableau montre ce qui sera
+    créé ou mis à jour. \emph{Rien n'est encore écrit} ;
+  \item \textbf{confirmation} : le fichier déposé est relu et appliqué en une seule
+    transaction, sous le verrou de l'activité. Les lignes en erreur sont écartées, les
+    autres appliquées. La prévisualisation expire au bout de 24~heures.
+\end{enumerate}
+Chaque import confirmé est inscrit au \textbf{journal des imports} (page \emph{Transférer le
+paramétrage}) : date, nature, auteur, nombre d'éléments et compte rendu.
+
+\paragraph{Fichiers CSV.} Une ligne d'en-tête, puis une ligne par élément.
+\begin{itemize}
+  \item Séparateur : point-virgule, virgule ou tabulation, détecté sur la ligne d'en-tête.
+    Un fichier enregistré par Excel en «~CSV (séparateur : point-virgule)~» convient tel
+    quel.
+  \item Encodage : UTF-8, avec ou sans BOM, ou Windows-1252 (Excel sous Windows).
+  \item Les colonnes sont reconnues \textbf{par leur intitulé}, dans n'importe quel ordre,
+    sans tenir compte des accents, de la casse, des espaces ni de la ponctuation :
+    \col{Intitulé}, \code{intitule} et \col{INTITULÉ} désignent la même colonne. Plusieurs
+    intitulés sont acceptés pour chaque colonne, en français et en anglais (tableaux
+    ci-dessous). Une colonne inconnue est signalée et ignorée.
+  \item Un champ entre guillemets peut contenir des retours à la ligne (une rubrique de
+    syllabus sur plusieurs paragraphes, par exemple).
+  \item Nombres : virgule ou point décimal (\code{2,5} ou \code{2.5}) ; les espaces de
+    milliers sont tolérés.
+  \item Dates : \code{jj/mm/aaaa} ou \code{aaaa-mm-jj}, éventuellement suivies d'une heure
+    \code{hh:mm} (ou \code{hhhmm}). Elles sont lues dans le fuseau horaire de la personne
+    qui importe.
+  \item Oui/non : \code{oui}, \code{o}, \code{1}, \code{x}, \code{vrai}, \code{yes}, ou
+    \code{non}, \code{n}, \code{0}, \code{faux}, \code{no}.
+  \item Personnes (responsables, intervenants, étudiants, validateurs) : adresse
+    électronique ou numéro d'identification du compte Moodle. Une adresse portée par deux
+    comptes est ambiguë et n'est rapprochée d'aucun.
+\end{itemize}
+Chaque page d'import affiche le tableau des colonnes reconnues et propose un
+\textbf{modèle} à télécharger (la ligne d'en-tête seule). Des fichiers d'exemple complets se
+trouvent dans le dossier \code{docs/exemples} du dépôt.
+
+\section{Catalogue des EP}\label{sec:catalogue}
+
+Page \code{import_catalog.php}, réservée à la gestion de l'activité
+(\code{mod/ep:manage}). Une ligne par EP du catalogue.
+
+\paragraph{Rapprochement.} Un EP du fichier est rapproché d'un EP existant par son
+\textbf{code}, à défaut par son \textbf{intitulé} (sans tenir compte de la casse). S'il
+existe, il est mis à jour : seules les colonnes présentes dans le fichier modifient ses
+caractéristiques, les autres gardent leur valeur ; sans colonne \code{Code}, un EP rapproché
+par son intitulé garde son code. Sinon, il est créé. Deux lignes du fichier ne peuvent pas
+porter le même code. Rien n'est jamais supprimé.
+
+\begin{longtable}{@{}L{3.2cm}L{4.6cm}L{1.4cm}L{6cm}@{}}
+\toprule
+Colonne & Intitulés acceptés & Oblig. & Valeur \\
+\midrule\endhead
+Code & Code ; Code EP & & 30 caractères au plus, unique dans l'activité \\
+Intitulé & Intitulé ; Nom ; Name ; Title & \oblig & \\
+Type & Type ; Code type ; Type code & \oblig & code d'un type d'EP de l'activité qui
+  passe par le catalogue (voir la page des types) \\
+ECTS & ECTS ; Crédits & \oblig & nombre strictement positif \\
+Année min, max & Année min ; Année minimale ; Min year (et max) & & année d'étude, 0 pour
+  aucune limite \\
+Places & Places ; Capacité ; Capacity & & 0 pour un nombre illimité \\
+État & État ; Etat ; State & & \col{publié} (ou \code{ouvert}), \code{clos} (ou
+  \col{fermé}), \col{archivé}, \code{brouillon}, \col{proposé} ; en anglais
+  \code{published}, \code{closed}, \code{archived}, \code{draft}, \code{proposed} \\
+Inscriptions & Ouverture des inscriptions ; Fermeture des inscriptions & & dates, avec heure
+  éventuelle \\
+Déroulement & Début ; Fin & & dates \\
+Responsables & Responsables ; Owners ; Teachers & & adresses ou numéros, séparés par des
+  virgules ou des espaces ; ils s'ajoutent aux responsables existants \\
+Description & Description & & texte \\
+Évaluation & Évaluation ; Grading & & \code{type} (règle du type), \code{sans note},
+  \code{avec note} (ou \code{note}) ; en anglais \code{none}, \code{graded} \\
+Note maximale, seuil & Note maximale ; Seuil ; Seuil de validation & & nombres \\
+Prérequis & Prérequis ; Prerequisites & & codes ou intitulés d'EP, séparés par des virgules
+  ou des points-virgules ; un EP plus loin dans le fichier peut être cité \\
+ECTS minimum & ECTS minimum ; Min ECTS & & crédits déjà acquis exigés à l'inscription \\
+Prérequis bloquants & Prérequis bloquants & & oui/non \\
+\bottomrule
+\end{longtable}
+
+\paragraph{Syllabus.} Les colonnes suivantes renseignent la fiche de l'EP (rubriques de la
+fiche ECTS) : \code{Objectifs}, \code{Acquis d'apprentissage}, \col{Prérequis (texte)},
+\code{Contenu}, \col{Méthodes}, \code{Conditions d'examen}, \code{Seconde session},
+\code{Bibliographie}, \code{Langue}, \code{Travail personnel} (heures). Pour chaque EP dont au
+moins une de ces cellules est remplie, une \textbf{nouvelle version du syllabus est publiée}
+directement, sans passer par la revue : les cellules remplies remplacent le texte en vigueur,
+les cellules vides le laissent tel quel, et les séances sont reprises. Une version soumise par
+l'enseignant et non encore tranchée est reprise par l'import. Un import rejoué à l'identique
+ne publie pas de nouvelle version.
+
+\section{Séances des syllabus}
+
+Même page, onglet «~séances~» (\code{import_catalog.php?kind=sessions}). Une ligne par
+séance ; les séances d'un même EP se suivent dans l'ordre du fichier. Pour chaque EP cité, le
+programme du syllabus en vigueur est \textbf{remplacé} par les séances du fichier, dans une
+nouvelle version publiée qui reprend les autres rubriques.
+
+\begin{longtable}{@{}L{2.6cm}L{4.6cm}L{1.4cm}L{6.6cm}@{}}
+\toprule
+Colonne & Intitulés acceptés & Oblig. & Valeur \\
+\midrule\endhead
+Code EP & Code ; Code EP & \oblig & code d'un EP du catalogue \\
+Séance & Séance ; Intitulé ; Session ; Title & \oblig & \\
+Nature & Nature ; Kind & & \code{CM} (cours magistral), \code{TD}, \code{TP}, \code{clinique},
+  \code{terrain}, \code{projet}, \code{autre}, ou le libellé affiché par Moodle ; autre par
+  défaut \\
+Durée & Durée ; Duration ; Heures & & heures, décimales permises \\
+Intervenant & Intervenant ; Lecturer ; Teacher & & adresse ou numéro d'un compte du site, sinon
+  nom d'un intervenant extérieur gardé tel quel \\
+Date & Date & & date, avec heure éventuelle \\
+\bottomrule
+\end{longtable}
+
+\section{Crédits}
+
+Page \code{import_credits.php}, réservée à la DEVE (gestion de l'activité et
+\code{mod/ep:validatedeve}) : elle porte des EP au dossier des étudiants, par exemple
+l'historique d'un outil précédent ou des EP suivis dans un autre établissement. Les crédits
+importés ont pour origine la DEVE ; un crédit tranché reçoit une décision dans son historique,
+à la date indiquée.
+
+\begin{longtable}{@{}L{2.8cm}L{5cm}L{1.4cm}L{6cm}@{}}
+\toprule
+Colonne & Intitulés acceptés & Oblig. & Valeur \\
+\midrule\endhead
+Étudiant & Étudiant ; Email ; Courriel ; Adresse de courriel ; Numéro d'identification ;
+  Student & \oblig & adresse ou numéro d'un étudiant \emph{inscrit au cours} \\
+Type & Type ; Code type & \oblig & code d'un type d'EP de l'activité, hors types de stage
+  (leurs crédits viennent de la gestion des stages) \\
+Code EP & Code EP ; EP du catalogue ; Activity code & & code d'un EP du catalogue, pour
+  rattacher le crédit à cet EP \\
+Intitulé & Intitulé ; Name ; Title & & obligatoire sans code EP (sinon, celui de l'EP) \\
+Année & Année ; Année d'étude ; Study year & & 0 à 6 ; année courante de l'activité par
+  défaut \\
+ECTS demandés & ECTS demandés ; ECTS ; Claimed ECTS & \oblig & nombre \\
+ECTS retenus & ECTS retenus ; Retained ECTS & & ECTS demandés par défaut \\
+Note & Note ; Grade & & nombre \\
+Statut & Statut ; Status & & \col{validé} (par défaut, ou \code{acquis}), \code{en attente},
+  \col{refusé} (ou \col{non validé}), \col{annulé} (ou \col{retiré}) \\
+Date de décision & Date de décision ; Date & & date ; jour de l'import par défaut \\
+Validé par & Validé par ; Validateur ; Decided by & & adresse d'un compte du site ; l'auteur de
+  l'import par défaut \\
+Commentaire & Commentaire ; Comment & & \\
+Description & Description & & \\
+\bottomrule
+\end{longtable}
+
+Un crédit en attente entre dans le circuit de validation de son type, à la première étape.
+Un crédit déjà porté au dossier (même étudiant, même type, même intitulé, même année, hors
+crédits annulés) est écarté : un fichier importé deux fois ne double rien.
+
+\section{Notes des participants d'un EP}
+
+Rappel du lot~3 : depuis la liste des participants d'un EP du catalogue, le responsable ou la
+DEVE importe les notes ou les validations (colonnes \code{Email} ou \col{Numéro
+d'identification}, \code{Note} ou \col{Décision}, \code{Commentaire}). La liste exportée de
+l'EP sert de modèle.
+
+\section{Paramétrage (JSON)}
+
+Page \code{settings_transfer.php}. Le paramétrage d'une activité s'exporte dans un fichier
+JSON, s'importe dans une autre activité du même site ou d'un autre site, ou se copie
+directement depuis une autre activité que l'on gère. Il ne contient \textbf{aucune donnée
+d'étudiant}. On choisit les parties à importer :
+\begin{itemize}
+  \item \textbf{réglages généraux} : minimum de crédits du cursus, publication directe des
+    mises à jour de syllabus, en-tête et pied des PDF, circuit et preuves du supplément,
+    préfixe des numéros, champ de la date de naissance ;
+  \item \textbf{types d'EP}, rapprochés par leur code (mis à jour ou créés) ;
+  \item \textbf{minimums annuels} ;
+  \item \textbf{supplément au diplôme} : catégories d'éléments (rapprochées par leur libellé)
+    et textes des rubriques, en français et en anglais ;
+  \item \textbf{modèles de courriels} ;
+  \item \textbf{catalogue} : EP (rapprochés par code puis intitulé), responsables (par
+    adresse), syllabus en vigueur et séances (intervenants par adresse), prérequis.
+\end{itemize}
+L'année courante n'est pas transférée : elle appartient à chaque promotion. Le fichier porte
+un numéro de format ; un fichier d'un autre format est refusé plutôt que mal lu.
+
+\section{Export complet et restauration}
+
+Page \code{archive.php}. L'export complet (gestion de l'activité et consultation de tous les
+dossiers) est une archive ZIP :
+\begin{itemize}
+  \item \code{classeur.xlsx} : classeur lisible dans un tableur, une feuille par sujet
+    (bilan par étudiant, liste détaillée des crédits, catalogue, éléments du supplément,
+    décisions d'année, suppléments émis). Les textes y sont toujours écrits comme du texte :
+    une saisie qui commence par \code{=} ne devient pas une formule ;
+  \item \code{parametrage.json} : le paramétrage, catalogue compris (section précédente) ;
+  \item \code{donnees.json} : les données des étudiants -- crédits et l'historique de leurs
+    décisions, éléments du supplément, décisions d'année, suppléments émis --, les personnes
+    étant désignées par leur adresse et leur numéro d'identification ;
+  \item \code{fichiers/} : justificatifs des crédits, preuves des éléments du supplément,
+    suppléments émis (PDF certifiés).
+\end{itemize}
+La \textbf{restauration} (gestion de l'activité et validation DEVE) relit les deux fichiers
+JSON, jamais le classeur : retoucher le classeur n'a pas d'effet. Elle ajoute à l'activité ce
+que contient l'archive sans rien supprimer ; ce qui y figure déjà est écarté, si bien qu'une
+archive restaurée deux fois ne double rien. Les étudiants sont retrouvés par leur numéro
+d'identification puis leur adresse \emph{parmi les étudiants du cours} ; les données des
+autres sont écartées et signalées. Un crédit d'origine «~stage~» devient un crédit saisi par
+la DEVE (le stage d'origine appartient à l'autre activité). Un supplément émis garde son
+empreinte de vérification ; si son numéro existe déjà sur le site, il reçoit un suffixe
+\code{-R1}, \code{-R2}\ldots
+
+Pour une sauvegarde de cours ou un transfert d'une année à l'autre, la sauvegarde Moodle du
+cours reste l'outil de référence (elle comprend l'activité entière) ; l'export complet sert
+à archiver une promotion hors de Moodle, à la remettre à un jury ou à reprendre des dossiers
+dans une autre activité.
+\end{document}

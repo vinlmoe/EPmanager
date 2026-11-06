@@ -126,6 +126,41 @@ $supplemententries[] = [
 ];
 $sections[] = [get_string('supplement', 'mod_ep'), $supplemententries];
 
+// Imports, exports et transfert : l'import de crédits et la restauration portent des décisions
+// aux dossiers (validation DEVE), l'export complet contient tous les dossiers (consultation).
+$transferentries = [
+    [
+        get_string('settingstransfer', 'mod_ep'),
+        get_string('settingstransfer_desc', 'mod_ep'),
+        new moodle_url('/mod/ep/settings_transfer.php', ['id' => $cm->id]),
+    ],
+    [
+        get_string('importcatalog', 'mod_ep'),
+        get_string('importcatalog_desc', 'mod_ep'),
+        new moodle_url('/mod/ep/import_catalog.php', ['id' => $cm->id, 'kind' => 'catalog']),
+    ],
+    [
+        get_string('importsessions', 'mod_ep'),
+        get_string('importsessions_desc', 'mod_ep'),
+        new moodle_url('/mod/ep/import_catalog.php', ['id' => $cm->id, 'kind' => 'sessions']),
+    ],
+];
+if (has_capability('mod/ep:validatedeve', $context)) {
+    $transferentries[] = [
+        get_string('importcredits', 'mod_ep'),
+        get_string('importcredits_desc', 'mod_ep'),
+        new moodle_url('/mod/ep/import_credits.php', ['id' => $cm->id]),
+    ];
+}
+if (has_any_capability(['mod/ep:viewall', 'mod/ep:validatedeve'], $context)) {
+    $transferentries[] = [
+        get_string('archive', 'mod_ep'),
+        get_string('archive_desc', 'mod_ep'),
+        new moodle_url('/mod/ep/archive.php', ['id' => $cm->id]),
+    ];
+}
+$sections[] = [get_string('adminsectiontransfer', 'mod_ep'), $transferentries];
+
 if (has_capability('mod/ep:viewall', $context)) {
     $sections[] = [get_string('adminsectionfollowup', 'mod_ep'), [
         [

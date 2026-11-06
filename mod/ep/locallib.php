@@ -5625,3 +5625,416 @@ function ep_get_managed_instances(int $excludecmid): array {
     }
     return $targets;
 }
+
+/**
+ * Exporte le paramétrage d'une activité, transférable vers une autre activité du même site ou
+ * d'un autre site : réglages de l'instance, types, minimums annuels, catégories et textes du
+ * supplément, modèles de courriels et, au choix, le catalogue avec ses syllabus publiés et ses
+ * prérequis. Aucune donnée d'étudiant n'y figure ; les responsables d'EP et les intervenants
+ * sont désignés par leur adresse électronique.
+ *
+ * @param stdClass $ep
+ * @param bool $withcatalog Inclure le catalogue.
+ * @return array Structure sérialisable en JSON.
+ */
+function ep_export_settings(stdClass $ep, $withcatalog = true) {
+    global $DB;
+
+    $strip = function ($record, array $drop) {
+        $record = (array) $record;
+        foreach ($drop as $field) {
+            unset($record[$field]);
+        }
+        return $record;
+    };
+    $settings = [
+        'format' => EP_SETTINGS_FORMAT,
+        'exported' => time(),
+        'source' => format_string($ep->name),
+        'instance' => [
+            'currentstudyyear' => (int) $ep->currentstudyyear,
+            'mincursusects' => (float) $ep->mincursusects,
+            'proposalsdirectpublish' => (int) ($ep->proposalsdirectpublish ?? 0),
+            'pdfheader' => (string) ($ep->pdfheader ?? ''),
+            'pdffooter' => (string) ($ep->pdffooter ?? ''),
+            'supplementflow' => (string) ($ep->supplementflow ?? EP_ROLE_DEVE),
+            'supplementevidence' => (int) ($ep->supplementevidence ?? EP_EVIDENCE_REQUIRED),
+            'supplementprefix' => (string) ($ep->supplementprefix ?? ''),
+            'birthdatefield' => (string) ($ep->birthdatefield ?? ''),
+        ],
+        'types' => [],
+        'yearrequirements' => [],
+        'supplementcategories' => [],
+        'supplementtexts' => [],
+        'notifications' => [],
+        'activities' => [],
+    ];
+    foreach (ep_get_types($ep->id) as $type) {
+        $settings['types'][] = $strip($type, ['id', 'epid', 'timecreated', 'timemodified']);
+    }
+    foreach (ep_get_year_requirements($ep->id) as $year => $ects) {
+        $settings['yearrequirements'][] = ['studyyear' => $year, 'requiredects' => $ects];
+    }
+    foreach (ep_get_supplement_categories($ep->id) as $category) {
+        $settings['supplementcategories'][] = $strip($category, ['id', 'epid', 'timecreated', 'timemodified']);
+    }
+    foreach ($DB->get_records('ep_supplement_text', ['epid' => $ep->id]) as $text) {
+        $settings['supplementtexts'][] = ['section' => $text->section, 'lang' => $text->lang, 'content' => $text->content];
+    }
+    foreach ($DB->get_records('ep_notification', ['epid' => $ep->id]) as $notification) {
+        $settings['notifications'][] = $strip($notification, ['id', 'epid', 'timemodified']);
+    }
+
+    if ($withcatalog) {
+        $types = ep_get_types($ep->id);
+        $activities = ep_get_activities($ep->id);
+        $teachers = ep_get_activities_teachers($ep->id);
+        foreach ($activities as $activity) {
+            $row = $strip($activity, ['id', 'epid', 'typeid', 'proposedby', 'timecreated', 'timemodified', 'timepublished']);
+            $row['typecode'] = $types[$activity->typeid]->code ?? '';
+            $row['teachers'] = array_values(array_map(fn($user) => $user->email, $teachers[$activity->id] ?? []));
+            $row['prerequisites'] = [];
+            foreach (ep_get_activity_prerequisites($activity->id) as $requiredid) {
+                $row['prerequisites'][] = [
+                    'code' => $activities[$requiredid]->code ?? '',
+                    'name' => $activities[$requiredid]->name ?? '',
+                ];
+            }
+            $syllabus = ep_get_syllabus($activity->id);
+            if ($syllabus) {
+                $row['syllabus'] = $strip($syllabus, ['id', 'activityid', 'version', 'status', 'authorid', 'reviewerid',
+                    'reviewcomment', 'timesubmitted', 'timereviewed', 'timecreated', 'timemodified']);
+                $sessions = ep_get_syllabus_sessions($syllabus->id);
+                $userids = array_filter(array_map(fn($s) => (int) $s->teacherid, $sessions));
+                $users = $userids ? $DB->get_records_list('user', 'id', $userids, '', 'id, email') : [];
+                $row['syllabus']['sessions'] = [];
+                foreach ($sessions as $session) {
+                    $entry = $strip($session, ['id', 'syllabusid', 'teacherid', 'timecreated']);
+                    $entry['teacheremail'] = $session->teacherid ? ($users[$session->teacherid]->email ?? '') : '';
+                    $row['syllabus']['sessions'][] = $entry;
+                }
+            }
+            $settings['activities'][] = $row;
+        }
+    }
+    return $settings;
+}
+
+/**
+ * Importe un paramétrage exporté par ep_export_settings() dans une activité : réglages de
+ * l'instance, types (rapprochés par leur code : mis à jour, ou créés), minimums annuels,
+ * catégories (rapprochées par leur libellé), textes du supplément, modèles de courriels et, si
+ * demandé, le catalogue (rapproché par code puis par intitulé : mis à jour, ou créé avec son
+ * syllabus publié). Les responsables et intervenants sont retrouvés par leur adresse parmi les
+ * comptes du site ; ceux qui n'y sont pas sont ignorés (l'intervenant garde son nom s'il en a un).
+ *
+ * @param stdClass $ep
+ * @param array $settings
+ * @param array $parts Parties à importer : instance, types, yearrequirements, supplement,
+ *                     notifications, catalog.
+ * @param int $userid Auteur de l'import (auteur des syllabus créés).
+ * @return stdClass Compte rendu : nombre d'éléments créés et mis à jour par partie, avertissements.
+ */
+function ep_import_settings(stdClass $ep, array $settings, array $parts, $userid) {
+    global $DB;
+
+    if ((int) ($settings['format'] ?? 0) !== EP_SETTINGS_FORMAT) {
+        throw new moodle_exception('errorsettingsformat', 'mod_ep');
+    }
+    $report = (object) ['created' => [], 'updated' => [], 'warnings' => []];
+    $count = function ($kind, $created) use ($report) {
+        $key = $created ? 'created' : 'updated';
+        $report->{$key}[$kind] = ($report->{$key}[$kind] ?? 0) + 1;
+    };
+    $lock = ep_get_activity_lock($ep->id);
+    try {
+        $transaction = $DB->start_delegated_transaction();
+
+        if (in_array('instance', $parts, true) && !empty($settings['instance'])) {
+            $fields = ['mincursusects', 'proposalsdirectpublish', 'pdfheader', 'pdffooter', 'supplementflow',
+                'supplementevidence', 'supplementprefix', 'birthdatefield'];
+            $update = (object) ['id' => $ep->id, 'timemodified' => time()];
+            foreach ($fields as $field) {
+                if (array_key_exists($field, $settings['instance'])) {
+                    $update->$field = $settings['instance'][$field];
+                    $ep->$field = $settings['instance'][$field];
+                }
+            }
+            $DB->update_record('ep', $update);
+            $count('instance', false);
+        }
+
+        if (in_array('types', $parts, true)) {
+            foreach ($settings['types'] ?? [] as $row) {
+                $existing = ep_get_type_by_code($ep->id, (string) ($row['code'] ?? ''));
+                $data = (object) $row;
+                $data->id = $existing ? $existing->id : 0;
+                ep_save_type($ep->id, $data);
+                $count('types', !$existing);
+            }
+        }
+
+        if (in_array('yearrequirements', $parts, true)) {
+            foreach ($settings['yearrequirements'] ?? [] as $row) {
+                ep_set_year_requirement($ep->id, (int) $row['studyyear'], (float) $row['requiredects']);
+                $count('yearrequirements', false);
+            }
+        }
+
+        if (in_array('supplement', $parts, true)) {
+            $categories = [];
+            foreach (ep_get_supplement_categories($ep->id) as $category) {
+                $categories[core_text::strtolower($category->name)] = $category->id;
+            }
+            foreach ($settings['supplementcategories'] ?? [] as $row) {
+                $key = core_text::strtolower((string) $row['name']);
+                $data = (object) $row;
+                $data->id = $categories[$key] ?? 0;
+                ep_save_supplement_category($ep->id, $data);
+                $count('supplementcategories', empty($categories[$key]));
+            }
+            foreach ($settings['supplementtexts'] ?? [] as $row) {
+                if (array_key_exists($row['section'], ep_supplement_sections()) && in_array($row['lang'], ['fr', 'en'], true)) {
+                    ep_set_supplement_text($ep->id, $row['section'], $row['lang'], (string) $row['content']);
+                    $count('supplementtexts', false);
+                }
+            }
+        }
+
+        if (in_array('notifications', $parts, true)) {
+            foreach ($settings['notifications'] ?? [] as $row) {
+                if (array_key_exists($row['msgkey'], ep_notification_definitions())) {
+                    ep_set_notification_template(
+                        $ep->id,
+                        $row['msgkey'],
+                        !empty($row['enabled']),
+                        (string) $row['subject'],
+                        (string) $row['body']
+                    );
+                    $count('notifications', false);
+                }
+            }
+        }
+
+        if (in_array('catalog', $parts, true)) {
+            ep_import_settings_catalog($ep, $settings['activities'] ?? [], $userid, $count, $report);
+        }
+
+        $transaction->allow_commit();
+    } finally {
+        $lock->release();
+    }
+    return $report;
+}
+
+/**
+ * Partie « catalogue » de ep_import_settings() : EP, responsables, syllabus publié et séances,
+ * puis prérequis une fois tous les EP connus.
+ *
+ * @param stdClass $ep
+ * @param array $rows
+ * @param int $userid
+ * @param callable $count
+ * @param stdClass $report
+ * @return void
+ */
+function ep_import_settings_catalog(stdClass $ep, array $rows, $userid, callable $count, stdClass $report) {
+    global $DB;
+
+    $types = [];
+    foreach (ep_get_types($ep->id) as $type) {
+        $types[$type->code] = $type;
+    }
+    $bycode = [];
+    $byname = [];
+    foreach (ep_get_activities($ep->id) as $activity) {
+        if ($activity->code !== '') {
+            $bycode[$activity->code] = $activity->id;
+        }
+        $byname[core_text::strtolower($activity->name)] = $activity->id;
+    }
+    $emailcache = [];
+    $finduser = function ($email) use (&$emailcache, $DB) {
+        $email = core_text::strtolower(trim((string) $email));
+        if ($email === '') {
+            return 0;
+        }
+        if (!array_key_exists($email, $emailcache)) {
+            $users = $DB->get_records_select(
+                'user',
+                $DB->sql_equal('email', ':email', false) . ' AND deleted = 0',
+                ['email' => $email],
+                'id',
+                'id',
+                0,
+                2
+            );
+            $emailcache[$email] = count($users) === 1 ? (int) reset($users)->id : 0;
+        }
+        return $emailcache[$email];
+    };
+
+    $imported = [];
+    foreach ($rows as $row) {
+        $type = $types[$row['typecode'] ?? ''] ?? null;
+        if (!$type) {
+            $report->warnings[] = get_string('importsettingsunknowntype', 'mod_ep', (object) [
+                'name' => s($row['name'] ?? ''), 'type' => s($row['typecode'] ?? ''),
+            ]);
+            continue;
+        }
+        $code = (string) ($row['code'] ?? '');
+        $existingid = ($code !== '' ? ($bycode[$code] ?? 0) : 0) ?: ($byname[core_text::strtolower($row['name'] ?? '')] ?? 0);
+        $data = (object) array_diff_key($row, array_flip(['typecode', 'teachers', 'prerequisites', 'syllabus']));
+        $data->id = $existingid;
+        $data->typeid = $type->id;
+        $activityid = ep_save_activity($ep, $data);
+        $count('activities', !$existingid);
+        $imported[] = [$activityid, $row['prerequisites'] ?? []];
+        if ($code !== '') {
+            $bycode[$code] = $activityid;
+        }
+        $byname[core_text::strtolower($data->name)] = $activityid;
+
+        $teacherids = array_filter(array_map($finduser, $row['teachers'] ?? []));
+        if ($teacherids) {
+            ep_set_activity_teachers($activityid, array_merge(array_keys(ep_get_activity_teachers($activityid)), $teacherids));
+        }
+        if (count($teacherids) < count($row['teachers'] ?? [])) {
+            $report->warnings[] = get_string('importsettingsmissingteachers', 'mod_ep', s($data->name));
+        }
+
+        if (!empty($row['syllabus'])) {
+            $activity = $DB->get_record('ep_activity', ['id' => $activityid], '*', MUST_EXIST);
+            $sessions = [];
+            foreach ($row['syllabus']['sessions'] ?? [] as $session) {
+                $session['teacherid'] = $finduser($session['teacheremail'] ?? '');
+                $sessions[] = $session;
+            }
+            // Publié d'office : c'est la version en vigueur dans l'activité d'origine.
+            ep_publish_syllabus_directly(
+                $activity,
+                (object) array_diff_key($row['syllabus'], ['sessions' => true]),
+                $sessions,
+                $userid
+            );
+            $count('syllabi', true);
+        }
+    }
+
+    foreach ($imported as [$activityid, $prerequisites]) {
+        $requiredids = [];
+        foreach ($prerequisites as $required) {
+            $id = (!empty($required['code']) ? ($bycode[$required['code']] ?? 0) : 0)
+                ?: ($byname[core_text::strtolower($required['name'] ?? '')] ?? 0);
+            if ($id) {
+                $requiredids[] = $id;
+            }
+        }
+        if ($requiredids) {
+            ep_set_activity_prerequisites($DB->get_record('ep_activity', ['id' => $activityid]), $requiredids);
+        }
+    }
+}
+
+/**
+ * Publie directement une version du syllabus d'un EP, sans passer par la soumission ni la revue :
+ * c'est le cas d'un catalogue importé par la DEVE. La version de travail (créée au besoin à
+ * partir de la version publiée) reçoit les champs fournis, puis devient la version publiée ; une
+ * version soumise par l'enseignant et non encore tranchée est reprise et publiée de même, car
+ * l'import fait foi. L'état de l'EP n'est pas modifié.
+ *
+ * @param stdClass $activity
+ * @param stdClass $data Champs texte (voir ep_syllabus_text_fields()), language, personalhours :
+ *                       seuls ceux fournis remplacent la version précédente.
+ * @param array|null $sessions Séances (voir ep_set_syllabus_sessions()), ou null pour les garder.
+ * @param int $userid Auteur de l'import.
+ * @return int Identifiant de la version publiée.
+ */
+function ep_publish_syllabus_directly(stdClass $activity, stdClass $data, ?array $sessions, $userid) {
+    global $DB;
+
+    $transaction = $DB->start_delegated_transaction();
+    $syllabus = ep_start_syllabus_revision($activity, $userid);
+    $now = time();
+    $update = (object) ['id' => $syllabus->id, 'status' => 'published', 'reviewerid' => $userid,
+        'reviewcomment' => '', 'timereviewed' => $now, 'timemodified' => $now];
+    foreach (ep_syllabus_text_fields() as $field) {
+        if (property_exists($data, $field)) {
+            $update->$field = (string) $data->$field;
+        }
+    }
+    if (property_exists($data, 'language')) {
+        $update->language = core_text::substr(trim((string) $data->language), 0, 50);
+    }
+    if (property_exists($data, 'personalhours')) {
+        $update->personalhours = max(0, round((float) $data->personalhours, 2));
+    }
+    if ($sessions !== null) {
+        ep_set_syllabus_sessions($syllabus->id, $sessions);
+    }
+    $DB->set_field_select(
+        'ep_syllabus',
+        'status',
+        'superseded',
+        'activityid = :activityid AND status = :published AND id <> :id',
+        ['activityid' => $activity->id, 'published' => 'published', 'id' => $syllabus->id]
+    );
+    $DB->update_record('ep_syllabus', $update);
+    $transaction->allow_commit();
+
+    ep_trigger_syllabus_event(\mod_ep\event\syllabus_reviewed::class, $activity, $syllabus->id, $userid, [
+        'decision' => 'publish',
+    ]);
+    return (int) $syllabus->id;
+}
+
+/**
+ * Inscrit un import au journal de l'activité.
+ *
+ * @param stdClass $ep
+ * @param string $kind catalog, sessions, credits, settings ou archive.
+ * @param int $userid Auteur.
+ * @param int $count Nombre de lignes ou d'éléments traités.
+ * @param stdClass|array $report Compte rendu, conservé en JSON (sans les messages, qui peuvent être
+ *                               nombreux : seul leur nombre est gardé).
+ * @return int Identifiant de l'entrée.
+ */
+function ep_log_import(stdClass $ep, $kind, $userid, $count, $report) {
+    global $DB;
+
+    $summary = [];
+    foreach ((array) $report as $key => $value) {
+        if (is_array($value) && array_keys($value) === array_keys(array_values($value))) {
+            // Liste de messages : seul leur nombre est gardé.
+            $summary[$key] = count($value);
+        } else if (is_array($value)) {
+            $summary[$key] = array_filter($value, fn($v) => is_scalar($v) || $v === null);
+        } else if (is_scalar($value) || $value === null) {
+            $summary[$key] = $value;
+        } else {
+            $summary[$key] = array_filter((array) $value, fn($v) => is_scalar($v) || $v === null);
+        }
+    }
+    return (int) $DB->insert_record('ep_import_log', (object) [
+        'epid' => $ep->id,
+        'kind' => core_text::substr($kind, 0, 20),
+        'userid' => $userid,
+        'itemcount' => (int) $count,
+        'summary' => json_encode($summary, JSON_UNESCAPED_UNICODE),
+        'timecreated' => time(),
+    ]);
+}
+
+/**
+ * Journal des imports d'une activité, du plus récent au plus ancien.
+ *
+ * @param int $epid
+ * @param int $limit
+ * @return array
+ */
+function ep_get_import_log($epid, $limit = 50) {
+    global $DB;
+
+    return $DB->get_records('ep_import_log', ['epid' => $epid], 'timecreated DESC, id DESC', '*', 0, $limit);
+}

@@ -3,6 +3,35 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## 0.7.0 — mod_ep 2026111100 (11 novembre 2026)
+
+Lot 6 : imports et exports.
+
+### mod_ep
+- **Import du catalogue** depuis un CSV (`import_catalog.php`) : EP créés ou mis à jour (par code
+  puis intitulé), responsables, prérequis (même vers un EP plus loin dans le fichier) et
+  rubriques du syllabus, publiées dans une nouvelle version ; **import des séances** des
+  syllabus (nature CM, TD, TP..., durée, intervenant du site ou extérieur, date).
+- **Import de crédits** depuis un CSV (`import_credits.php`, DEVE) : historique d'un outil
+  précédent ou EP suivis ailleurs, crédits tranchés avec leur décision ou en attente dans le
+  circuit de leur type ; doublons écartés.
+- Lecture commune des CSV : UTF-8 ou Excel (Windows-1252), séparateur détecté, colonnes
+  reconnues par leur intitulé en français ou en anglais sans tenir compte des accents ;
+  prévisualisation ligne par ligne avant toute écriture, modèle à télécharger, tableau des
+  colonnes reconnues sur chaque page.
+- **Transfert du paramétrage** (`settings_transfer.php`) : export JSON (réglages, types,
+  minimums, supplément, courriels, catalogue et syllabus), import par parties, copie directe
+  depuis une autre activité gérée ; aucune donnée d'étudiant.
+- **Export complet** (`archive.php`) : archive ZIP avec un classeur Excel lisible, le
+  paramétrage, les données des étudiants et tous les fichiers ; **restauration** dans une
+  autre activité, sans rien supprimer et sans doublon si elle est rejouée.
+- **Journal des imports** (table `ep_import_log`).
+- Panneau d'administration : section « Imports, exports et transfert ».
+- Documentation des formats : `docs/formats-import.tex` et fichiers d'exemple
+  `docs/exemples/`.
+- Tests : lecture CSV, catalogue, séances, crédits, transfert du paramétrage, export et
+  restauration (110 tests).
+
 ## 0.6.0 — mod_ep 2026111000 (10 novembre 2026)
 
 Lot 5 : supplément au diplôme, validation des années, rentrée, transfert d'étudiant.
