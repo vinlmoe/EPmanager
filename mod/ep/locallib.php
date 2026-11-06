@@ -4645,3 +4645,946 @@ function ep_send_pending_reminders(stdClass $ep, $olderthan = WEEKSECS) {
     }
     return $sent;
 }
+
+/**
+ * Écrit des champs d'un enregistrement à condition qu'il soit encore dans l'état attendu : même
+ * principe que ep_update_credit_if(), pour les autres tables du module (éléments du supplément).
+ *
+ * @param string $table
+ * @param stdClass $record Enregistrement, avec les nouvelles valeurs.
+ * @param string[] $fields Champs à écrire.
+ * @param string $where Condition SQL, paramètres nommés.
+ * @param array $whereparams
+ * @return bool False si l'enregistrement n'était plus dans l'état attendu.
+ */
+function ep_update_record_if($table, stdClass $record, array $fields, $where, array $whereparams) {
+    global $DB;
+
+    $transaction = $DB->start_delegated_transaction();
+    $DB->execute("UPDATE {{$table}} SET timemodified = timemodified WHERE id = ?", [$record->id]);
+    $applied = $DB->record_exists_select($table, "id = :recordid AND ($where)", ['recordid' => $record->id] + $whereparams);
+    if ($applied) {
+        $update = (object) ['id' => $record->id];
+        foreach ($fields as $field) {
+            if (property_exists($record, $field)) {
+                $update->$field = $record->$field;
+            }
+        }
+        $DB->update_record($table, $update);
+    }
+    $transaction->allow_commit();
+    return $applied;
+}
+
+/**
+ * Décisions d'année d'une instance.
+ *
+ * @param int $epid
+ * @param int[]|null $userids Limite aux étudiants donnés.
+ * @return array userid => [studyyear => stdClass]
+ */
+function ep_get_year_validations($epid, ?array $userids = null) {
+    global $DB;
+
+    $params = ['epid' => $epid];
+    $where = 'epid = :epid';
+    if ($userids !== null) {
+        if (empty($userids)) {
+            return [];
+        }
+        [$insql, $inparams] = $DB->get_in_or_equal(array_values($userids), SQL_PARAMS_NAMED, 'u');
+        $where .= " AND userid $insql";
+        $params += $inparams;
+    }
+    $validations = [];
+    foreach ($DB->get_records_select('ep_year_validation', $where, $params) as $record) {
+        $validations[(int) $record->userid][(int) $record->studyyear] = $record;
+    }
+    return $validations;
+}
+
+/**
+ * Enregistre la décision de la DEVE sur l'année d'étude d'un étudiant (validée ou non), avec
+ * les ECTS retenus pour cette année au moment de la décision. Une nouvelle décision remplace la
+ * précédente.
+ *
+ * @param stdClass $ep
+ * @param int $userid
+ * @param int $studyyear
+ * @param bool $validated
+ * @param string $comment
+ * @param int $byuserid
+ * @return int Identifiant de la décision.
+ */
+function ep_set_year_validation(stdClass $ep, $userid, $studyyear, $validated, $comment, $byuserid) {
+    global $DB;
+
+    $progress = ep_get_student_progress($ep, $userid);
+    $record = (object) [
+        'epid' => $ep->id,
+        'userid' => $userid,
+        'studyyear' => (int) $studyyear,
+        'decision' => $validated ? 1 : 0,
+        'retainedects' => (float) ($progress->years[(int) $studyyear]->retained ?? 0),
+        'comment' => (string) $comment,
+        'decidedby' => $byuserid,
+        'timedecided' => time(),
+    ];
+    $existing = $DB->get_record('ep_year_validation', ['epid' => $ep->id, 'userid' => $userid, 'studyyear' => (int) $studyyear]);
+    if ($existing) {
+        $record->id = $existing->id;
+        $DB->update_record('ep_year_validation', $record);
+    } else {
+        $record->id = $DB->insert_record('ep_year_validation', $record);
+    }
+    $cm = ep_get_cm_of_instance($ep->id);
+    if ($cm) {
+        \mod_ep\event\year_decided::create([
+            'objectid' => $record->id,
+            'context' => context_module::instance($cm->id),
+            'relateduserid' => $userid,
+            'other' => ['studyyear' => (int) $studyyear, 'decision' => (int) $record->decision],
+        ])->trigger();
+    }
+    return (int) $record->id;
+}
+
+/**
+ * Valide en lot l'année d'étude des étudiants donnés qui en ont atteint le minimum d'ECTS ; ceux
+ * qui ne l'ont pas atteint sont laissés sans décision, sauf si $rejectincomplete est vrai.
+ *
+ * @param stdClass $ep
+ * @param int $studyyear
+ * @param int[] $userids
+ * @param int $byuserid
+ * @param bool $rejectincomplete Enregistrer « année non validée » pour les autres.
+ * @return stdClass {validated, rejected, skipped}
+ */
+function ep_validate_years_in_bulk(stdClass $ep, $studyyear, array $userids, $byuserid, $rejectincomplete = false) {
+    global $DB;
+
+    $result = (object) ['validated' => 0, 'rejected' => 0, 'skipped' => 0];
+    \mod_ep\local\progress_cache::prime((int) $ep->id, $userids);
+    try {
+        $transaction = $DB->start_delegated_transaction();
+        foreach ($userids as $userid) {
+            $progress = ep_get_student_progress($ep, $userid);
+            $row = $progress->years[(int) $studyyear] ?? null;
+            $done = $row ? $row->done : (ep_get_year_requirements($ep->id)[(int) $studyyear] ?? 0) <= 0;
+            if ($done) {
+                ep_set_year_validation($ep, $userid, $studyyear, true, '', $byuserid);
+                $result->validated++;
+            } else if ($rejectincomplete) {
+                ep_set_year_validation($ep, $userid, $studyyear, false, get_string('yearminimumnotreached', 'mod_ep'), $byuserid);
+                $result->rejected++;
+            } else {
+                $result->skipped++;
+            }
+        }
+        $transaction->allow_commit();
+    } finally {
+        \mod_ep\local\progress_cache::clear();
+    }
+    return $result;
+}
+
+/**
+ * Rentrée : l'année d'étude courante de l'activité passe à la suivante (6 au plus). Les
+ * crédits, décisions et suppléments restent en place.
+ *
+ * @param stdClass $ep
+ * @return int Nouvelle année courante.
+ */
+function ep_rollover(stdClass $ep) {
+    global $DB;
+
+    $next = min(6, (int) $ep->currentstudyyear + 1);
+    $DB->set_field('ep', 'currentstudyyear', $next, ['id' => $ep->id]);
+    $DB->set_field('ep', 'timemodified', time(), ['id' => $ep->id]);
+    $ep->currentstudyyear = $next;
+    return $next;
+}
+
+/**
+ * Catégories d'éléments proposées par défaut à une nouvelle instance ; la DEVE les renomme, les
+ * désactive et en ajoute.
+ *
+ * @return array clé de langue => libellé anglais
+ */
+function ep_default_supplement_categories() {
+    return [
+        'suppcat_engagement' => 'Student engagement',
+        'suppcat_representation' => 'Student representation',
+        'suppcat_award' => 'Award or distinction',
+        'suppcat_certification' => 'Certification',
+        'suppcat_mobility' => 'Mobility',
+        'suppcat_publication' => 'Publication or communication',
+    ];
+}
+
+/**
+ * Crée les catégories par défaut d'une instance qui n'en a aucune.
+ *
+ * @param int $epid
+ * @return void
+ */
+function ep_create_default_supplement_categories($epid) {
+    global $DB;
+
+    if ($DB->record_exists('ep_supplement_category', ['epid' => $epid])) {
+        return;
+    }
+    $order = 0;
+    foreach (ep_default_supplement_categories() as $key => $english) {
+        $order += 10;
+        $DB->insert_record('ep_supplement_category', (object) [
+            'epid' => $epid,
+            'name' => get_string($key, 'mod_ep'),
+            'nameen' => $english,
+            'description' => '',
+            'enabled' => 1,
+            'sortorder' => $order,
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+    }
+}
+
+/**
+ * Catégories d'éléments du supplément d'une instance.
+ *
+ * @param int $epid
+ * @param bool $onlyenabled
+ * @return array id => stdClass
+ */
+function ep_get_supplement_categories($epid, $onlyenabled = false) {
+    global $DB;
+
+    $conditions = ['epid' => $epid];
+    if ($onlyenabled) {
+        $conditions['enabled'] = 1;
+    }
+    return $DB->get_records('ep_supplement_category', $conditions, 'sortorder ASC, name ASC');
+}
+
+/**
+ * Enregistre une catégorie (création ou modification).
+ *
+ * @param int $epid
+ * @param stdClass $data name, nameen, description, enabled, sortorder ; id pour une modification.
+ * @return int
+ */
+function ep_save_supplement_category($epid, stdClass $data) {
+    global $DB;
+
+    $record = (object) [
+        'epid' => $epid,
+        'name' => core_text::substr(trim((string) ($data->name ?? '')), 0, 255),
+        'nameen' => core_text::substr(trim((string) ($data->nameen ?? '')), 0, 255),
+        'description' => (string) ($data->description ?? ''),
+        'enabled' => empty($data->enabled) ? 0 : 1,
+        'sortorder' => (int) ($data->sortorder ?? 0),
+        'timemodified' => time(),
+    ];
+    if (!empty($data->id)) {
+        $DB->get_record('ep_supplement_category', ['id' => $data->id, 'epid' => $epid], 'id', MUST_EXIST);
+        $record->id = $data->id;
+        $DB->update_record('ep_supplement_category', $record);
+        return (int) $data->id;
+    }
+    $record->timecreated = time();
+    if (empty($record->sortorder)) {
+        $record->sortorder = 10 + (int) $DB->get_field('ep_supplement_category', 'MAX(sortorder)', ['epid' => $epid]);
+    }
+    return $DB->insert_record('ep_supplement_category', $record);
+}
+
+/**
+ * Crée un élément demandé par un étudiant pour son supplément. Il attend la première étape du
+ * circuit choisi par la DEVE pour l'instance, ou naît validé si ce circuit est vide.
+ *
+ * @param stdClass $ep
+ * @param int $userid
+ * @param stdClass $category
+ * @param stdClass $data title, titleen, description, periodstart, periodend.
+ * @return int Identifiant de l'élément.
+ */
+function ep_create_supplement_item(stdClass $ep, $userid, stdClass $category, stdClass $data) {
+    global $DB;
+
+    $steps = ep_normalise_flow($ep->supplementflow ?? EP_ROLE_DEVE, EP_ACQ_DECLARATION);
+    $now = time();
+    $record = (object) [
+        'epid' => $ep->id,
+        'userid' => $userid,
+        'categoryid' => $category->id,
+        'title' => core_text::substr(trim((string) $data->title), 0, 255),
+        'titleen' => core_text::substr(trim((string) ($data->titleen ?? '')), 0, 255),
+        'description' => (string) ($data->description ?? ''),
+        'periodstart' => (int) ($data->periodstart ?? 0),
+        'periodend' => (int) ($data->periodend ?? 0),
+        'status' => $steps ? EP_STATUS_PENDING : EP_STATUS_VALIDATED,
+        'step' => 0,
+        'pendingrole' => $steps ? $steps[0] : '',
+        'validatedby' => null,
+        'validatetime' => $steps ? null : $now,
+        'validatorcomment' => null,
+        'timecreated' => $now,
+        'timemodified' => $now,
+    ];
+    return $DB->insert_record('ep_supplement_item', $record);
+}
+
+/**
+ * Modifie un élément encore en attente (par son auteur) ; rien n'est écrit s'il a été tranché
+ * entre-temps.
+ *
+ * @param stdClass $item Élément, avec les nouvelles valeurs.
+ * @return bool
+ */
+function ep_update_supplement_item(stdClass $item) {
+    $item->timemodified = time();
+    return ep_update_record_if(
+        'ep_supplement_item',
+        $item,
+        ['categoryid', 'title', 'titleen', 'description', 'periodstart', 'periodend', 'timemodified'],
+        'status = :pending',
+        ['pending' => EP_STATUS_PENDING]
+    );
+}
+
+/**
+ * Indique si un utilisateur peut statuer sur un élément du supplément, à l'étape où il en est :
+ * la DEVE toujours, un enseignant référent de l'étudiant à l'étape « référent ».
+ *
+ * @param stdClass $rights Voir ep_get_user_rights().
+ * @param stdClass $item
+ * @return bool
+ */
+function ep_rights_can_decide_supplement_item(stdClass $rights, stdClass $item) {
+    if ((int) $item->status !== EP_STATUS_PENDING) {
+        return false;
+    }
+    if ($rights->validatedeve) {
+        return true;
+    }
+    return $rights->evaluateteacher && $item->pendingrole === EP_ROLE_REFERENT
+        && in_array((int) $item->userid, $rights->referentids, true);
+}
+
+/**
+ * Décision sur un élément du supplément : validation (à l'étape du rôle, ou définitive pour la
+ * DEVE), ou refus (toujours définitif). Écriture conditionnée à l'étape lue.
+ *
+ * @param stdClass $ep
+ * @param stdClass $item
+ * @param int $byuserid
+ * @param bool $validate
+ * @param string $comment
+ * @param string $role Rôle de l'auteur (referent ou deve).
+ * @return bool False si l'élément n'était plus en attente à cette étape.
+ */
+function ep_decide_supplement_item(stdClass $ep, stdClass $item, $byuserid, $validate, $comment, $role) {
+    $steps = ep_normalise_flow($ep->supplementflow ?? EP_ROLE_DEVE, EP_ACQ_DECLARATION);
+    $next = (int) $item->step + 1;
+    $final = !$validate || $role === EP_ROLE_DEVE || $next >= count($steps);
+
+    $item->timemodified = time();
+    if ($final) {
+        $item->status = $validate ? EP_STATUS_VALIDATED : EP_STATUS_REJECTED;
+        $item->pendingrole = '';
+        $item->validatedby = $byuserid;
+        $item->validatetime = time();
+        $item->validatorcomment = $comment;
+    } else {
+        $item->step = $next;
+        $item->pendingrole = $steps[$next];
+    }
+    $where = 'status = :pending';
+    $params = ['pending' => EP_STATUS_PENDING];
+    if ($role !== EP_ROLE_DEVE) {
+        $where .= ' AND pendingrole = :role';
+        $params['role'] = $role;
+    }
+    $applied = ep_update_record_if(
+        'ep_supplement_item',
+        $item,
+        ['status', 'step', 'pendingrole', 'validatedby', 'validatetime', 'validatorcomment', 'timemodified'],
+        $where,
+        $params
+    );
+    if ($applied && $final) {
+        ep_notify_supplement_item_decided($ep, $item);
+    }
+    return $applied;
+}
+
+/**
+ * Retire un élément : l'étudiant tant qu'il est en attente, la DEVE à tout moment.
+ *
+ * @param stdClass $item
+ * @param int $byuserid
+ * @param string $role student ou deve.
+ * @return bool
+ */
+function ep_cancel_supplement_item(stdClass $item, $byuserid, $role) {
+    $item->status = EP_STATUS_CANCELLED;
+    $item->pendingrole = '';
+    $item->validatedby = $byuserid;
+    $item->validatetime = time();
+    $item->timemodified = time();
+    $where = $role === EP_ROLE_STUDENT ? 'status = :expected' : 'status <> :expected';
+    $expected = $role === EP_ROLE_STUDENT ? EP_STATUS_PENDING : EP_STATUS_CANCELLED;
+    return ep_update_record_if(
+        'ep_supplement_item',
+        $item,
+        ['status', 'pendingrole', 'validatedby', 'validatetime', 'timemodified'],
+        $where,
+        ['expected' => $expected]
+    );
+}
+
+/**
+ * Éléments du supplément d'une instance, filtrés.
+ *
+ * @param int $epid
+ * @param array $filters userid, status, pendingrole, userids (périmètre d'un référent).
+ * @return array id => stdClass
+ */
+function ep_get_supplement_items($epid, array $filters = []) {
+    global $DB;
+
+    $where = ['i.epid = :epid'];
+    $params = ['epid' => $epid];
+    if (!empty($filters['userid'])) {
+        $where[] = 'i.userid = :userid';
+        $params['userid'] = (int) $filters['userid'];
+    }
+    if (isset($filters['status']) && $filters['status'] !== '') {
+        $where[] = 'i.status = :status';
+        $params['status'] = (int) $filters['status'];
+    }
+    if (!empty($filters['pendingrole'])) {
+        $where[] = 'i.pendingrole = :pendingrole';
+        $params['pendingrole'] = $filters['pendingrole'];
+    }
+    if (isset($filters['userids'])) {
+        if (empty($filters['userids'])) {
+            return [];
+        }
+        [$insql, $inparams] = $DB->get_in_or_equal($filters['userids'], SQL_PARAMS_NAMED, 'u');
+        $where[] = "i.userid $insql";
+        $params += $inparams;
+    }
+    return $DB->get_records_sql(
+        "SELECT i.*
+           FROM {ep_supplement_item} i
+           JOIN {user} u ON u.id = i.userid
+          WHERE " . implode(' AND ', $where) . "
+       ORDER BY u.lastname, u.firstname, i.periodstart, i.id",
+        $params
+    );
+}
+
+/**
+ * Prévient l'étudiant de la décision finale sur un élément de son supplément (même modèle de
+ * courriel que pour une demande d'EP).
+ *
+ * @param stdClass $ep
+ * @param stdClass $item
+ * @return void
+ */
+function ep_notify_supplement_item_decided(stdClass $ep, stdClass $item) {
+    global $DB;
+
+    $cm = ep_get_cm_of_instance($ep->id);
+    $student = $DB->get_record('user', ['id' => $item->userid]);
+    if (!$cm || !$student) {
+        return;
+    }
+    $validated = (int) $item->status === EP_STATUS_VALIDATED;
+    ep_send_notification($ep, 'creditdecided', $student, [
+        'student' => fullname($student),
+        'ep' => format_string($item->title),
+        'decision' => get_string($validated ? 'decision_validated' : 'decision_rejected', 'mod_ep'),
+        'ects' => '-',
+        'grade' => '-',
+        'comment' => (string) $item->validatorcomment,
+    ], new moodle_url('/mod/ep/supplement.php', ['id' => $cm->id]));
+}
+
+/**
+ * Rubriques fixes du supplément au diplôme dont la DEVE rédige le texte, avec leur numéro dans
+ * le modèle européen.
+ *
+ * @return array clé => numéro
+ */
+function ep_supplement_sections() {
+    return [
+        'qualification' => '2.1', 'fieldofstudy' => '2.2', 'institution' => '2.3', 'institutionadmin' => '2.4',
+        'languages' => '2.5', 'level' => '3.1', 'length' => '3.2', 'access' => '3.3', 'studymode' => '4.1',
+        'programmeoutcomes' => '4.2', 'gradingscheme' => '4.4', 'classification' => '4.5', 'furtherstudy' => '5.1',
+        'professional' => '5.2', 'additionalinfo' => '6.1', 'othersources' => '6.2', 'signatoryname' => '7.2',
+        'signatorytitle' => '7.3', 'national' => '8',
+    ];
+}
+
+/**
+ * Textes des rubriques fixes d'une instance, dans une langue.
+ *
+ * @param int $epid
+ * @param string $lang fr ou en.
+ * @return array clé => texte (vide si non renseigné)
+ */
+function ep_get_supplement_texts($epid, $lang = 'fr') {
+    global $DB;
+
+    $texts = array_fill_keys(array_keys(ep_supplement_sections()), '');
+    foreach ($DB->get_records('ep_supplement_text', ['epid' => $epid, 'lang' => $lang]) as $record) {
+        if (array_key_exists($record->section, $texts)) {
+            $texts[$record->section] = (string) $record->content;
+        }
+    }
+    return $texts;
+}
+
+/**
+ * Enregistre le texte d'une rubrique fixe.
+ *
+ * @param int $epid
+ * @param string $section
+ * @param string $lang
+ * @param string $content
+ * @return void
+ */
+function ep_set_supplement_text($epid, $section, $lang, $content) {
+    global $DB;
+
+    if (!array_key_exists($section, ep_supplement_sections()) || !in_array($lang, ['fr', 'en'], true)) {
+        throw new coding_exception('Rubrique ou langue inconnue');
+    }
+    $existing = $DB->get_record('ep_supplement_text', ['epid' => $epid, 'section' => $section, 'lang' => $lang]);
+    $record = (object) ['epid' => $epid, 'section' => $section, 'lang' => $lang, 'content' => trim((string) $content),
+        'timemodified' => time()];
+    if ($existing) {
+        $record->id = $existing->id;
+        $DB->update_record('ep_supplement_text', $record);
+    } else {
+        $DB->insert_record('ep_supplement_text', $record);
+    }
+}
+
+/**
+ * Date de naissance d'un étudiant, pour la rubrique 1.3 : le champ de profil désigné par la DEVE
+ * s'il est renseigné, à défaut celle saisie dans une demande de convention de mod_stage.
+ *
+ * @param stdClass $ep
+ * @param int $userid
+ * @return int|null Horodatage, ou null si elle n'est connue nulle part.
+ */
+function ep_get_student_birthdate(stdClass $ep, $userid) {
+    global $CFG, $DB;
+
+    if (!empty($ep->birthdatefield)) {
+        require_once($CFG->dirroot . '/user/profile/lib.php');
+        $profile = profile_user_record($userid, false);
+        $value = $profile->{$ep->birthdatefield} ?? null;
+        if (is_numeric($value) && (int) $value > 0) {
+            return (int) $value;
+        }
+        if (is_string($value) && trim($value) !== '') {
+            $parsed = strtotime(str_replace('/', '-', trim($value)));
+            if ($parsed) {
+                return $parsed;
+            }
+        }
+    }
+    if ($DB->get_manager()->table_exists('stage_convention_detail')) {
+        $value = $DB->get_field_sql(
+            "SELECT MAX(d.studentbirthdate)
+               FROM {stage_convention_detail} d
+               JOIN {stage_entry} e ON e.id = d.entryid
+              WHERE e.userid = :userid AND d.studentbirthdate IS NOT NULL AND d.studentbirthdate <> 0",
+            ['userid' => $userid]
+        );
+        if ($value) {
+            return (int) $value;
+        }
+    }
+    return null;
+}
+
+/**
+ * Rassemble le contenu du supplément au diplôme d'un étudiant : identité (rubrique 1), textes
+ * de l'établissement (rubriques 2 à 8), enseignements personnalisés validés des types qui
+ * figurent au supplément (4.3), décisions d'année, éléments validés (6.1), et ce qui manque pour
+ * l'émettre.
+ *
+ * @param stdClass $ep
+ * @param stdClass $user
+ * @param string $lang fr ou en.
+ * @return stdClass
+ */
+function ep_build_supplement(stdClass $ep, stdClass $user, $lang = 'fr') {
+    global $DB;
+
+    $types = ep_get_types($ep->id);
+    $credits = [];
+    $total = 0.0;
+    $sql = "SELECT c.*, a.code AS activitycode
+              FROM {ep_credit} c
+         LEFT JOIN {ep_activity} a ON a.id = c.activityid
+             WHERE c.epid = :epid AND c.userid = :userid AND c.status = :validated
+          ORDER BY c.studyyear, c.validatetime, c.id";
+    foreach ($DB->get_records_sql($sql, ['epid' => $ep->id, 'userid' => $user->id, 'validated' => EP_STATUS_VALIDATED]) as $c) {
+        $type = $types[$c->typeid] ?? null;
+        if (!$type || empty($type->insupplement)) {
+            continue;
+        }
+        $credits[] = (object) [
+            'name' => $c->name,
+            'code' => (string) $c->activitycode,
+            'type' => $type->name,
+            'studyyear' => (int) $c->studyyear,
+            'ects' => (float) $c->retainedects,
+            'grade' => $c->grade !== null ? (float) $c->grade : null,
+            'grademax' => $c->grade !== null ? ep_credit_grading($c, $type)->grademax : null,
+            'date' => (int) $c->validatetime,
+        ];
+        $total += (float) $c->retainedects;
+    }
+    $progress = ep_get_student_progress($ep, $user->id);
+
+    $categories = ep_get_supplement_categories($ep->id);
+    $items = [];
+    foreach (ep_get_supplement_items($ep->id, ['userid' => $user->id, 'status' => EP_STATUS_VALIDATED]) as $item) {
+        $category = $categories[$item->categoryid] ?? null;
+        $items[] = (object) [
+            'category' => $category ? ($lang === 'en' && $category->nameen !== '' ? $category->nameen : $category->name) : '-',
+            'title' => $lang === 'en' && $item->titleen !== '' ? $item->titleen : $item->title,
+            'description' => (string) $item->description,
+            'periodstart' => (int) $item->periodstart,
+            'periodend' => (int) $item->periodend,
+        ];
+    }
+
+    $years = [];
+    foreach (ep_get_year_validations($ep->id, [$user->id])[$user->id] ?? [] as $year => $validation) {
+        $years[$year] = (object) ['decision' => (int) $validation->decision, 'ects' => (float) $validation->retainedects,
+            'date' => (int) $validation->timedecided];
+    }
+    ksort($years);
+
+    $birthdate = ep_get_student_birthdate($ep, $user->id);
+    $missing = [];
+    if (!$birthdate) {
+        $missing[] = get_string('supplementmissingbirthdate', 'mod_ep');
+    }
+    if (trim((string) $user->idnumber) === '') {
+        $missing[] = get_string('supplementmissingidnumber', 'mod_ep');
+    }
+    $texts = ep_get_supplement_texts($ep->id, $lang);
+    if (trim($texts['signatoryname']) === '') {
+        $missing[] = get_string('supplementmissingsignatory', 'mod_ep');
+    }
+
+    return (object) [
+        'lang' => $lang,
+        'identity' => (object) [
+            'lastname' => $user->lastname,
+            'firstname' => $user->firstname,
+            'birthdate' => $birthdate,
+            'idnumber' => (string) $user->idnumber,
+        ],
+        'texts' => $texts,
+        'credits' => $credits,
+        'totalects' => round($total, 2),
+        'retainedects' => (float) $progress->totalretained,
+        'years' => $years,
+        'items' => $items,
+        'missing' => $missing,
+    ];
+}
+
+/**
+ * Empreinte du contenu certifié d'un supplément : SHA-256 d'une représentation stable des
+ * données, du numéro et de la date d'émission. Imprimée sur le document et conservée avec
+ * l'émission, elle permet de vérifier qu'un document présenté n'a pas été altéré.
+ *
+ * @param stdClass $data Voir ep_build_supplement().
+ * @param string $number
+ * @param int $timeissued
+ * @return string 64 caractères hexadécimaux.
+ */
+function ep_supplement_verifycode(stdClass $data, $number, $timeissued) {
+    $payload = json_encode([
+        'number' => (string) $number,
+        'time' => (int) $timeissued,
+        'data' => $data,
+    ], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+    return hash('sha256', $payload);
+}
+
+/**
+ * Numéro du prochain supplément d'une instance : préfixe choisi par la DEVE (ou « SD »), année,
+ * instance et rang, à appeler sous le verrou de l'activité.
+ *
+ * @param stdClass $ep
+ * @param int $time
+ * @return string
+ */
+function ep_next_supplement_number(stdClass $ep, $time) {
+    global $DB;
+
+    $prefix = trim((string) ($ep->supplementprefix ?? '')) !== '' ? trim($ep->supplementprefix) : 'SD';
+    $rank = 1 + $DB->count_records('ep_supplement_issue', ['epid' => $ep->id]);
+    do {
+        $number = sprintf('%s-%s-%d-%05d', $prefix, date('Y', $time), $ep->id, $rank++);
+    } while ($DB->record_exists('ep_supplement_issue', ['number' => $number]));
+    return $number;
+}
+
+/**
+ * Émet le supplément au diplôme d'un étudiant : numéro, empreinte, document PDF certifié, conservé
+ * dans la zone supplementissued ; l'émission précédente est marquée remplacée. Refusé tant qu'il
+ * manque des informations obligatoires, sauf si $force est vrai.
+ *
+ * @param stdClass $ep
+ * @param context $context Contexte du module.
+ * @param int $userid
+ * @param int $issuerid
+ * @param string $lang
+ * @param bool $force
+ * @return stdClass {issue: stdClass|null, missing: string[]}
+ */
+function ep_issue_supplement(stdClass $ep, context $context, $userid, $issuerid, $lang = 'fr', $force = false) {
+    global $DB;
+
+    $user = $DB->get_record('user', ['id' => $userid], '*', MUST_EXIST);
+    $data = ep_build_supplement($ep, $user, $lang);
+    if ($data->missing && !$force) {
+        return (object) ['issue' => null, 'missing' => $data->missing];
+    }
+
+    $lock = ep_get_activity_lock($ep->id);
+    try {
+        $time = time();
+        $number = ep_next_supplement_number($ep, $time);
+        $verifycode = ep_supplement_verifycode($data, $number, $time);
+        $pdf = new \mod_ep\pdf\supplement_pdf($ep, $context, $lang);
+        $pdf->add_supplement($data, $number, $verifycode, $time, false);
+        $content = $pdf->Output('', 'S');
+
+        $transaction = $DB->start_delegated_transaction();
+        $issue = (object) [
+            'epid' => $ep->id,
+            'userid' => $userid,
+            'number' => $number,
+            'lang' => $lang,
+            'verifycode' => $verifycode,
+            'filehash' => sha1($content),
+            'issuedby' => $issuerid,
+            'timeissued' => $time,
+            'replacedby' => null,
+        ];
+        $issue->id = $DB->insert_record('ep_supplement_issue', $issue);
+        $DB->set_field_select(
+            'ep_supplement_issue',
+            'replacedby',
+            $issue->id,
+            'epid = :epid AND userid = :userid AND id <> :id AND replacedby IS NULL',
+            ['epid' => $ep->id, 'userid' => $userid, 'id' => $issue->id]
+        );
+        get_file_storage()->create_file_from_string([
+            'contextid' => $context->id,
+            'component' => 'mod_ep',
+            'filearea' => EP_SUPPLEMENT_ISSUED_FILEAREA,
+            'itemid' => $issue->id,
+            'filepath' => '/',
+            'filename' => clean_filename('supplement-' . $number . '.pdf'),
+        ], $content);
+        $transaction->allow_commit();
+    } finally {
+        $lock->release();
+    }
+
+    \mod_ep\event\supplement_issued::create([
+        'objectid' => $issue->id,
+        'context' => $context,
+        'relateduserid' => $userid,
+        'other' => ['number' => $number],
+    ])->trigger();
+    return (object) ['issue' => $issue, 'missing' => $data->missing];
+}
+
+/**
+ * Émissions de supplément d'une instance (toutes, ou celles d'un étudiant), de la plus récente à
+ * la plus ancienne.
+ *
+ * @param int $epid
+ * @param int|null $userid
+ * @param bool $onlycurrent Seulement celles qui ne sont pas remplacées.
+ * @return array id => stdClass
+ */
+function ep_get_supplement_issues($epid, $userid = null, $onlycurrent = false) {
+    global $DB;
+
+    $where = 'epid = :epid';
+    $params = ['epid' => $epid];
+    if ($userid) {
+        $where .= ' AND userid = :userid';
+        $params['userid'] = $userid;
+    }
+    if ($onlycurrent) {
+        $where .= ' AND replacedby IS NULL';
+    }
+    return $DB->get_records_select('ep_supplement_issue', $where, $params, 'timeissued DESC, id DESC');
+}
+
+/**
+ * Fichier PDF d'une émission de supplément.
+ *
+ * @param context $context
+ * @param int $issueid
+ * @return stored_file|null
+ */
+function ep_get_supplement_issue_file(context $context, $issueid) {
+    $files = get_file_storage()->get_area_files($context->id, 'mod_ep', EP_SUPPLEMENT_ISSUED_FILEAREA, $issueid, 'id', false);
+    return $files ? reset($files) : null;
+}
+
+/**
+ * Vérifie un supplément présenté : son numéro et son code de vérification doivent correspondre à
+ * une émission du site.
+ *
+ * @param string $number
+ * @param string $code Code imprimé (complet, ou ses 16 premiers caractères).
+ * @return stdClass|null L'émission, si elle correspond.
+ */
+function ep_verify_supplement($number, $code) {
+    global $DB;
+
+    $issue = $DB->get_record('ep_supplement_issue', ['number' => trim((string) $number)]);
+    $code = core_text::strtolower(preg_replace('/[^0-9a-fA-F]/', '', (string) $code));
+    if (!$issue || strlen($code) < 16 || strpos($issue->verifycode, $code) !== 0) {
+        return null;
+    }
+    return $issue;
+}
+
+/**
+ * Transfère le dossier d'un étudiant d'une activité « Enseignement personnalisé » à une autre du
+ * site (redoublement, changement de promotion) : ses crédits avec leurs décisions et justificatifs,
+ * ses éléments de supplément avec leurs preuves, ses décisions d'année. Les types sont rapprochés
+ * par leur code (copiés dans la cible s'ils n'y existent pas), les EP du catalogue par leur code
+ * puis leur intitulé (sinon le crédit garde son intitulé, sans EP), les catégories par leur
+ * libellé (créées au besoin). Les suppléments déjà émis restent dans l'activité d'origine : ce
+ * sont des documents datés.
+ *
+ * @param stdClass $source
+ * @param stdClass $target
+ * @param int $userid
+ * @return stdClass {credits, items, years}
+ */
+function ep_transfer_student(stdClass $source, stdClass $target, $userid) {
+    global $DB;
+
+    $sourcecm = ep_get_cm_of_instance($source->id);
+    $targetcm = ep_get_cm_of_instance($target->id);
+    $sourcecontext = context_module::instance($sourcecm->id);
+    $targetcontext = context_module::instance($targetcm->id);
+    $fs = get_file_storage();
+    $result = (object) ['credits' => 0, 'items' => 0, 'years' => 0];
+
+    $first = min((int) $source->id, (int) $target->id);
+    $second = max((int) $source->id, (int) $target->id);
+    $lock1 = ep_get_activity_lock($first);
+    $lock2 = ep_get_activity_lock($second);
+    try {
+        $transaction = $DB->start_delegated_transaction();
+
+        $targettypes = [];
+        foreach (ep_get_types($target->id) as $type) {
+            $targettypes[$type->code] = $type;
+        }
+        $targetactivities = ep_get_activities($target->id);
+        $typemap = [];
+        foreach (ep_get_types($source->id) as $type) {
+            if (!isset($targettypes[$type->code])) {
+                $copy = clone $type;
+                unset($copy->id);
+                $copy->epid = $target->id;
+                $copy->id = $DB->insert_record('ep_type', $copy);
+                $targettypes[$type->code] = $copy;
+            }
+            $typemap[(int) $type->id] = (int) $targettypes[$type->code]->id;
+        }
+        $activitymap = [];
+        foreach (ep_get_activities($source->id) as $activity) {
+            foreach ($targetactivities as $candidate) {
+                $samecode = $activity->code !== '' && $candidate->code === $activity->code;
+                $samename = $activity->code === '' && $candidate->name === $activity->name;
+                if ($samecode || $samename) {
+                    $activitymap[(int) $activity->id] = (int) $candidate->id;
+                    break;
+                }
+            }
+        }
+
+        foreach ($DB->get_records('ep_credit', ['epid' => $source->id, 'userid' => $userid]) as $credit) {
+            $credit->epid = $target->id;
+            $credit->typeid = $typemap[(int) $credit->typeid] ?? $credit->typeid;
+            $credit->activityid = $credit->activityid ? ($activitymap[(int) $credit->activityid] ?? null) : null;
+            if ((int) $credit->status === EP_STATUS_PENDING && $credit->pendingrole === EP_ROLE_OWNER && !$credit->activityid) {
+                // Sans EP correspondant dans la cible, plus de responsable pour statuer : la DEVE.
+                $credit->pendingrole = EP_ROLE_DEVE;
+            }
+            $DB->update_record('ep_credit', $credit);
+            foreach ($fs->get_area_files($sourcecontext->id, 'mod_ep', EP_EVIDENCE_FILEAREA, $credit->id, 'id', false) as $file) {
+                $fs->create_file_from_storedfile(['contextid' => $targetcontext->id], $file);
+                $file->delete();
+            }
+            $result->credits++;
+        }
+
+        $targetcategories = [];
+        foreach (ep_get_supplement_categories($target->id) as $category) {
+            $targetcategories[core_text::strtolower($category->name)] = (int) $category->id;
+        }
+        $sourcecategories = ep_get_supplement_categories($source->id);
+        foreach ($DB->get_records('ep_supplement_item', ['epid' => $source->id, 'userid' => $userid]) as $item) {
+            $category = $sourcecategories[$item->categoryid] ?? null;
+            $key = $category ? core_text::strtolower($category->name) : '';
+            if (!isset($targetcategories[$key]) && $category) {
+                $copy = clone $category;
+                unset($copy->id);
+                $copy->epid = $target->id;
+                $targetcategories[$key] = $DB->insert_record('ep_supplement_category', $copy);
+            }
+            $item->epid = $target->id;
+            $item->categoryid = $targetcategories[$key] ?? $item->categoryid;
+            $DB->update_record('ep_supplement_item', $item);
+            $proofs = $fs->get_area_files($sourcecontext->id, 'mod_ep', EP_SUPPLEMENT_EVIDENCE_FILEAREA, $item->id, 'id', false);
+            foreach ($proofs as $file) {
+                $fs->create_file_from_storedfile(['contextid' => $targetcontext->id], $file);
+                $file->delete();
+            }
+            $result->items++;
+        }
+
+        foreach ($DB->get_records('ep_year_validation', ['epid' => $source->id, 'userid' => $userid]) as $validation) {
+            $DB->delete_records('ep_year_validation', [
+                'epid' => $target->id, 'userid' => $userid, 'studyyear' => $validation->studyyear,
+            ]);
+            $validation->epid = $target->id;
+            $DB->update_record('ep_year_validation', $validation);
+            $result->years++;
+        }
+
+        $transaction->allow_commit();
+    } finally {
+        $lock2->release();
+        $lock1->release();
+    }
+    return $result;
+}

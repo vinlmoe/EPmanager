@@ -219,6 +219,15 @@ final class backup_restore_test extends \advanced_testcase {
             'filepath' => '/', 'filename' => 'attestation.pdf',
         ], 'attestation');
 
+        // Supplément : une décision d'année, un élément validé et un supplément émis.
+        ep_set_year_validation($ep, $student->id, 3, true, 'Année validée.', get_admin()->id);
+        $DB->set_field('ep', 'supplementflow', '', ['id' => $ep->id]);
+        $ep = $DB->get_record('ep', ['id' => $ep->id]);
+        $categories = ep_get_supplement_categories($ep->id);
+        ep_create_supplement_item($ep, $student->id, reset($categories), (object) ['title' => 'Prix de thèse']);
+        $epcontext = \context_module::instance(get_coursemodule_from_instance('ep', $ep->id)->id);
+        $issue = ep_issue_supplement($ep, $epcontext, $student->id, get_admin()->id, 'fr', true)->issue;
+
         // L'EP est clos après les inscriptions : l'état doit suivre la copie.
         $DB->set_field('ep_activity', 'state', EP_ACTIVITY_CLOSED, ['id' => $activity->id]);
 
@@ -287,6 +296,19 @@ final class backup_restore_test extends \advanced_testcase {
         $this->assertSame('Dr Invité', $newsessions[1]->teachername);
         $this->assertSame(2, (int) ep_get_working_syllabus($newactivity->id)->version);
         $this->assertCount(2, ep_get_syllabus_sessions(ep_get_working_syllabus($newactivity->id)->id));
+        $this->assertCount(6, ep_get_supplement_categories($newep->id));
+        $newitems = ep_get_supplement_items($newep->id);
+        $this->assertCount(1, $newitems);
+        $this->assertSame('Prix de thèse', reset($newitems)->title);
+        $this->assertSame(1, (int) ep_get_year_validations($newep->id)[$student->id][3]->decision);
+        $newissues = ep_get_supplement_issues($newep->id);
+        $this->assertCount(1, $newissues);
+        $newissue = reset($newissues);
+        // Le numéro est unique sur le site : la copie en reçoit un dérivé, le code de vérification est conservé.
+        $this->assertNotSame($issue->number, $newissue->number);
+        $this->assertSame($issue->verifycode, $newissue->verifycode);
+        $newcontext = \context_module::instance(get_coursemodule_from_instance('ep', $newep->id)->id);
+        $this->assertNotNull(ep_get_supplement_issue_file($newcontext, $newissue->id));
         $template = ep_get_notification_template($newep->id, 'creditdecided');
         $this->assertSame(0, $template->enabled);
         $this->assertSame('Objet personnalisé', $template->subject);

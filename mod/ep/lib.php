@@ -102,6 +102,13 @@ define('EP_SOURCE_DEVE', 'deve');
  */
 define('EP_EVIDENCE_FILEAREA', 'evidence');
 
+/** Zone de fichiers des preuves d'un élément du supplément au diplôme (itemid = ep_supplement_item.id). */
+define('EP_SUPPLEMENT_EVIDENCE_FILEAREA', 'supplementevidence');
+/** Zone de fichiers des suppléments au diplôme émis (itemid = ep_supplement_issue.id). */
+define('EP_SUPPLEMENT_ISSUED_FILEAREA', 'supplementissued');
+/** Zone de fichiers du cachet imprimé sur les suppléments (itemid 0). */
+define('EP_SUPPLEMENT_STAMP_FILEAREA', 'supplementstamp');
+
 /** Zone de fichiers du logo des documents PDF de l'activité (itemid 0). */
 define('EP_PDFLOGO_FILEAREA', 'pdflogo');
 
@@ -155,6 +162,9 @@ function ep_add_instance($moduleinstance, $mform = null) {
 
     $epid = $DB->insert_record('ep', $moduleinstance);
 
+    // Catégories d'éléments du supplément au diplôme proposées par défaut.
+    ep_create_default_supplement_categories($epid);
+
     // Les six types d'enseignement personnalisé sont créés avec l'instance : la DEVE n'a plus
     // qu'à les paramétrer (plafonds, ECTS par jour de stage), sans avoir à deviner quels codes de
     // type le reste du module attend.
@@ -206,6 +216,11 @@ function ep_delete_instance($id) {
         $DB->delete_records_select('ep_syllabus', "activityid $insql", $inparams);
     }
     $DB->delete_records('ep_notification', ['epid' => $id]);
+    $DB->delete_records('ep_supplement_item', ['epid' => $id]);
+    $DB->delete_records('ep_supplement_issue', ['epid' => $id]);
+    $DB->delete_records('ep_supplement_category', ['epid' => $id]);
+    $DB->delete_records('ep_supplement_text', ['epid' => $id]);
+    $DB->delete_records('ep_year_validation', ['epid' => $id]);
     $creditids = $DB->get_fieldset_select('ep_credit', 'id', 'epid = ?', [$id]);
     foreach (array_chunk($creditids, 500) as $chunk) {
         [$insql, $inparams] = $DB->get_in_or_equal($chunk);

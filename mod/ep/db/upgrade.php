@@ -322,5 +322,39 @@ function xmldb_ep_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026110900, 'ep');
     }
 
+    if ($oldversion < 2026111000) {
+        // Supplément au diplôme et validation des années.
+        $table = new xmldb_table('ep');
+        $fields = [
+            new xmldb_field('supplementflow', XMLDB_TYPE_CHAR, '50', null, XMLDB_NOTNULL, null, 'deve', 'proposalsdirectpublish'),
+            new xmldb_field('supplementevidence', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '2', 'supplementflow'),
+            new xmldb_field('supplementprefix', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, '', 'supplementevidence'),
+            new xmldb_field('birthdatefield', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, '', 'supplementprefix'),
+        ];
+        foreach ($fields as $field) {
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+        // Les tables nouvelles sont créées d'après install.xml : les étapes suivantes vérifient
+        // l'existence de chaque champ avant de l'ajouter, une table créée ici avec des champs plus
+        // récents ne les fait donc pas échouer.
+        $tables = ['ep_year_validation', 'ep_supplement_category', 'ep_supplement_item', 'ep_supplement_text',
+            'ep_supplement_issue'];
+        foreach ($tables as $name) {
+            if (!$dbman->table_exists($name)) {
+                $dbman->install_one_table_from_xmldb_file(__DIR__ . '/install.xml', $name);
+            }
+        }
+        // Catégories d'éléments par défaut pour les instances existantes.
+        global $CFG;
+        require_once($CFG->dirroot . '/mod/ep/locallib.php');
+        foreach ($DB->get_fieldset_select('ep', 'id', '1 = 1') as $epid) {
+            ep_create_default_supplement_categories($epid);
+        }
+
+        upgrade_mod_savepoint(true, 2026111000, 'ep');
+    }
+
     return true;
 }

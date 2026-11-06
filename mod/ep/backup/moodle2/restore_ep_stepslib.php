@@ -34,6 +34,9 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
     /** @var array Prérequis des EP du catalogue, appliqués une fois tous les EP restaurés. */
     protected $prereqs = [];
 
+    /** @var array Ancienne émission de supplément => ancienne émission qui la remplace. */
+    protected $replacedby = [];
+
     /**
      * Déclare les chemins à restaurer.
      *
@@ -61,6 +64,8 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
             '/activity/ep/epactivities/epactivity/syllabi/syllabus/sessions/session'
         );
         $paths[] = new restore_path_element('ep_notification', '/activity/ep/notifications/notification');
+        $paths[] = new restore_path_element('ep_supplement_category', '/activity/ep/suppcategories/suppcategory');
+        $paths[] = new restore_path_element('ep_supplement_text', '/activity/ep/supptexts/supptext');
         $paths[] = new restore_path_element(
             'ep_year_requirement',
             '/activity/ep/yearrequirements/yearrequirement'
@@ -68,6 +73,9 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
 
         if ($userinfo) {
             $paths[] = new restore_path_element('ep_credit', '/activity/ep/credits/credit');
+            $paths[] = new restore_path_element('ep_supplement_item', '/activity/ep/suppitems/suppitem');
+            $paths[] = new restore_path_element('ep_supplement_issue', '/activity/ep/suppissues/suppissue');
+            $paths[] = new restore_path_element('ep_year_validation', '/activity/ep/yearvalidations/yearvalidation');
             $paths[] = new restore_path_element(
                 'ep_credit_decision',
                 '/activity/ep/credits/credit/decisions/decision'
@@ -200,6 +208,108 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
             $data->teacherid = $teacherid ?: null;
         }
         $DB->insert_record('ep_session', $data);
+    }
+
+    /**
+     * Restaure une catégorie d'éléments du supplément.
+     *
+     * @param array $data
+     */
+    protected function process_ep_supplement_category($data) {
+        global $DB;
+
+        $data = (object) $data;
+        $oldid = $data->id;
+        $data->epid = $this->get_new_parentid('ep');
+        $newitemid = $DB->insert_record('ep_supplement_category', $data);
+        $this->set_mapping('ep_supplement_category', $oldid, $newitemid);
+    }
+
+    /**
+     * Restaure le texte d'une rubrique fixe du supplément.
+     *
+     * @param array $data
+     */
+    protected function process_ep_supplement_text($data) {
+        global $DB;
+
+        $data = (object) $data;
+        unset($data->id);
+        $data->epid = $this->get_new_parentid('ep');
+        $DB->insert_record('ep_supplement_text', $data);
+    }
+
+    /**
+     * Restaure un élément du supplément demandé par un étudiant ; écarté si l'étudiant ou sa
+     * catégorie n'ont pas été restaurés.
+     *
+     * @param array $data
+     */
+    protected function process_ep_supplement_item($data) {
+        global $DB;
+
+        $data = (object) $data;
+        $oldid = $data->id;
+        $userid = $this->get_mappingid('user', $data->userid);
+        $categoryid = $this->get_mappingid('ep_supplement_category', $data->categoryid);
+        if (!$userid || !$categoryid) {
+            return;
+        }
+        $data->epid = $this->get_new_parentid('ep');
+        $data->userid = $userid;
+        $data->categoryid = $categoryid;
+        $data->validatedby = empty($data->validatedby) ? null : ($this->get_mappingid('user', $data->validatedby) ?: null);
+        $newitemid = $DB->insert_record('ep_supplement_item', $data);
+        $this->set_mapping('ep_supplement_item', $oldid, $newitemid, true);
+    }
+
+    /**
+     * Restaure un supplément émis. Son numéro est unique sur le site : une copie sur le même site
+     * reçoit un numéro suffixé, le document conservé gardant le numéro d'origine qu'il porte.
+     *
+     * @param array $data
+     */
+    protected function process_ep_supplement_issue($data) {
+        global $DB;
+
+        $data = (object) $data;
+        $oldid = $data->id;
+        $userid = $this->get_mappingid('user', $data->userid);
+        if (!$userid) {
+            return;
+        }
+        $data->epid = $this->get_new_parentid('ep');
+        $data->userid = $userid;
+        $data->issuedby = empty($data->issuedby) ? null : ($this->get_mappingid('user', $data->issuedby) ?: null);
+        $this->replacedby[$oldid] = (int) ($data->replacedby ?? 0);
+        $data->replacedby = null;
+        $number = $data->number;
+        $suffix = 1;
+        while ($DB->record_exists('ep_supplement_issue', ['number' => $data->number])) {
+            $data->number = core_text::substr($number, 0, 34) . '-C' . $suffix++;
+        }
+        $newitemid = $DB->insert_record('ep_supplement_issue', $data);
+        $this->set_mapping('ep_supplement_issue', $oldid, $newitemid, true);
+    }
+
+    /**
+     * Restaure une décision d'année ; écartée si l'étudiant n'a pas été restauré.
+     *
+     * @param array $data
+     */
+    protected function process_ep_year_validation($data) {
+        global $DB;
+
+        $data = (object) $data;
+        $userid = $this->get_mappingid('user', $data->userid);
+        if (!$userid) {
+            return;
+        }
+        unset($data->id);
+        $data->epid = $this->get_new_parentid('ep');
+        $data->userid = $userid;
+        $data->decidedby = empty($data->decidedby) ? null : ($this->get_mappingid('user', $data->decidedby) ?: null);
+        $DB->insert_record('ep_year_validation', $data);
     }
 
     /**
@@ -356,10 +466,22 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
         // Zones sans itemid, rattachées au contexte du module.
         $this->add_related_files('mod_ep', 'intro', null);
         $this->add_related_files('mod_ep', EP_PDFLOGO_FILEAREA, null);
+        $this->add_related_files('mod_ep', EP_SUPPLEMENT_STAMP_FILEAREA, null);
+
+        // Chaîne des remplacements de suppléments émis, une fois toutes les émissions restaurées.
+        foreach ($this->replacedby as $oldid => $oldreplacement) {
+            $newid = $this->get_mappingid('ep_supplement_issue', $oldid);
+            $newreplacement = $oldreplacement ? $this->get_mappingid('ep_supplement_issue', $oldreplacement) : 0;
+            if ($newid && $newreplacement) {
+                $DB->set_field('ep_supplement_issue', 'replacedby', $newreplacement, ['id' => $newid]);
+            }
+        }
 
         // Justificatifs : un ou plusieurs fichiers par crédit.
         if ($this->get_setting_value('userinfo')) {
             $this->add_related_files('mod_ep', EP_EVIDENCE_FILEAREA, 'ep_credit');
+            $this->add_related_files('mod_ep', EP_SUPPLEMENT_EVIDENCE_FILEAREA, 'ep_supplement_item');
+            $this->add_related_files('mod_ep', EP_SUPPLEMENT_ISSUED_FILEAREA, 'ep_supplement_issue');
         }
     }
 

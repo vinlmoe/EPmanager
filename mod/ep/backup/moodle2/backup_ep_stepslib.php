@@ -50,7 +50,8 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         // copie de cette activité (voir restore_ep_activity_structure_step::after_restore()).
         $ep = new backup_nested_element('ep', ['id'], [
             'name', 'intro', 'introformat', 'currentstudyyear', 'mincursusects', 'stagecmid',
-            'proposalsdirectpublish', 'pdfheader', 'pdffooter', 'timesynced',
+            'proposalsdirectpublish', 'supplementflow', 'supplementevidence', 'supplementprefix', 'birthdatefield',
+            'pdfheader', 'pdffooter', 'timesynced',
             'timecreated', 'timemodified',
         ]);
 
@@ -84,6 +85,26 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         $sessions = new backup_nested_element('sessions');
         $session = new backup_nested_element('session', ['id'], [
             'sortorder', 'title', 'kind', 'duration', 'teacherid', 'teachername', 'sessiondate', 'timecreated',
+        ]);
+
+        $suppcategories = new backup_nested_element('suppcategories');
+        $suppcategory = new backup_nested_element('suppcategory', ['id'], [
+            'name', 'nameen', 'description', 'enabled', 'sortorder', 'timecreated', 'timemodified',
+        ]);
+        $supptexts = new backup_nested_element('supptexts');
+        $supptext = new backup_nested_element('supptext', ['id'], ['section', 'lang', 'content', 'timemodified']);
+        $suppitems = new backup_nested_element('suppitems');
+        $suppitem = new backup_nested_element('suppitem', ['id'], [
+            'userid', 'categoryid', 'title', 'titleen', 'description', 'periodstart', 'periodend', 'status', 'step',
+            'pendingrole', 'validatedby', 'validatetime', 'validatorcomment', 'timecreated', 'timemodified',
+        ]);
+        $suppissues = new backup_nested_element('suppissues');
+        $suppissue = new backup_nested_element('suppissue', ['id'], [
+            'userid', 'number', 'lang', 'verifycode', 'filehash', 'issuedby', 'timeissued', 'replacedby',
+        ]);
+        $yearvalidations = new backup_nested_element('yearvalidations');
+        $yearvalidation = new backup_nested_element('yearvalidation', ['id'], [
+            'userid', 'studyyear', 'decision', 'retainedects', 'comment', 'decidedby', 'timedecided',
         ]);
 
         $notifications = new backup_nested_element('notifications');
@@ -128,6 +149,16 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         $sessions->add_child($session);
         $ep->add_child($notifications);
         $notifications->add_child($notification);
+        $ep->add_child($suppcategories);
+        $suppcategories->add_child($suppcategory);
+        $ep->add_child($supptexts);
+        $supptexts->add_child($supptext);
+        $ep->add_child($suppitems);
+        $suppitems->add_child($suppitem);
+        $ep->add_child($suppissues);
+        $suppissues->add_child($suppissue);
+        $ep->add_child($yearvalidations);
+        $yearvalidations->add_child($yearvalidation);
 
         $ep->add_child($yearrequirements);
         $yearrequirements->add_child($yearrequirement);
@@ -153,10 +184,16 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         $syllabus->set_source_table('ep_syllabus', ['activityid' => backup::VAR_PARENTID], 'version, id');
         $session->set_source_table('ep_session', ['syllabusid' => backup::VAR_PARENTID], 'sortorder, id');
         $notification->set_source_table('ep_notification', ['epid' => backup::VAR_PARENTID], 'msgkey');
+        // Catégories et textes du supplément : paramétrage, toujours sauvegardés.
+        $suppcategory->set_source_table('ep_supplement_category', ['epid' => backup::VAR_PARENTID], 'sortorder, id');
+        $supptext->set_source_table('ep_supplement_text', ['epid' => backup::VAR_PARENTID], 'section, lang');
 
         if ($userinfo) {
             $credit->set_source_table('ep_credit', ['epid' => backup::VAR_PARENTID], 'id');
             $decision->set_source_table('ep_credit_decision', ['creditid' => backup::VAR_PARENTID], 'timecreated, id');
+            $suppitem->set_source_table('ep_supplement_item', ['epid' => backup::VAR_PARENTID], 'id');
+            $suppissue->set_source_table('ep_supplement_issue', ['epid' => backup::VAR_PARENTID], 'id');
+            $yearvalidation->set_source_table('ep_year_validation', ['epid' => backup::VAR_PARENTID], 'id');
         }
 
         // Annotations d'identifiants.
@@ -168,14 +205,23 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         $syllabus->annotate_ids('user', 'authorid');
         $syllabus->annotate_ids('user', 'reviewerid');
         $session->annotate_ids('user', 'teacherid');
+        $suppitem->annotate_ids('user', 'userid');
+        $suppitem->annotate_ids('user', 'validatedby');
+        $suppissue->annotate_ids('user', 'userid');
+        $suppissue->annotate_ids('user', 'issuedby');
+        $yearvalidation->annotate_ids('user', 'userid');
+        $yearvalidation->annotate_ids('user', 'decidedby');
         $decision->annotate_ids('user', 'userid');
 
         // Zones de fichiers. Les justificatifs : un ou plusieurs fichiers par crédit, itemid = id
         // du crédit.
         $ep->annotate_files('mod_ep', 'intro', null);
         $ep->annotate_files('mod_ep', EP_PDFLOGO_FILEAREA, null);
+        $ep->annotate_files('mod_ep', EP_SUPPLEMENT_STAMP_FILEAREA, null);
         if ($userinfo) {
             $credit->annotate_files('mod_ep', EP_EVIDENCE_FILEAREA, 'id');
+            $suppitem->annotate_files('mod_ep', EP_SUPPLEMENT_EVIDENCE_FILEAREA, 'id');
+            $suppissue->annotate_files('mod_ep', EP_SUPPLEMENT_ISSUED_FILEAREA, 'id');
         }
 
         return $this->prepare_activity_structure($ep);
