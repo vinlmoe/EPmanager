@@ -93,10 +93,19 @@ if ($credit && !isset($types[$credit->typeid])) {
     }
 }
 
+// Formats admis : ceux du type le plus permissif parmi les types déclarables (le formulaire
+// est commun à tous les types) ; un type « PDF seulement » ne reçoit donc que des PDF si tous
+// les types l'exigent.
+$accepted = ['.pdf'];
+foreach ($types as $declarable) {
+    if ($declarable->evidencetypes !== 'pdf') {
+        $accepted = ['document', 'image', 'archive'];
+    }
+}
 $fileoptions = [
     'subdirs' => 0,
     'maxfiles' => 10,
-    'accepted_types' => ['document', 'image', 'archive'],
+    'accepted_types' => $accepted,
 ];
 
 $mform = new credit_form(new moodle_url($baseurl, ['creditid' => $creditid]), [

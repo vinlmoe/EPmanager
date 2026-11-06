@@ -59,9 +59,23 @@ class credit_form extends \moodleform {
         // déroutant qu'utile pour trois lignes de consigne.
         $descriptions = [];
         foreach ($types as $type) {
+            $notes = [];
             if (trim((string) $type->description) !== '') {
+                $notes[] = format_text($type->description, FORMAT_PLAIN);
+            }
+            if ((int) $type->evidence === EP_EVIDENCE_REQUIRED) {
+                $notes[] = get_string('evidence', 'mod_ep') . ' : ' . get_string('evidence_required', 'mod_ep')
+                    . ' (' . get_string('evidencetypes_' . $type->evidencetypes, 'mod_ep') . ')';
+            }
+            if ($type->maxclaimedects > 0) {
+                $notes[] = get_string('maxclaimedects', 'mod_ep') . ' : ' . ep_format_ects($type->maxclaimedects);
+            }
+            if (!empty($type->validationflow)) {
+                $notes[] = get_string('validationflow', 'mod_ep') . ' : ' . ep_flow_label($type->validationflow);
+            }
+            if ($notes) {
                 $descriptions[] = \html_writer::tag('dt', format_string($type->name))
-                    . \html_writer::tag('dd', format_text($type->description, FORMAT_PLAIN));
+                    . \html_writer::tag('dd', implode(\html_writer::empty_tag('br'), $notes));
             }
         }
         if (!empty($descriptions)) {
@@ -120,6 +134,21 @@ class credit_form extends \moodleform {
         $errors = parent::validation($data, $files);
         if ((float) $data['claimedects'] <= 0) {
             $errors['claimedects'] = get_string('errorpositiveects', 'mod_ep');
+        }
+        $type = $this->_customdata['types'][$data['typeid']] ?? null;
+        if ($type) {
+            if ($type->maxclaimedects > 0 && (float) $data['claimedects'] > (float) $type->maxclaimedects) {
+                $errors['claimedects'] = get_string('errormaxclaimedects', 'mod_ep', ep_format_ects($type->maxclaimedects));
+            }
+            // Justificatifs obligatoires : au moins un fichier dans la zone de brouillon.
+            if ((int) $type->evidence === EP_EVIDENCE_REQUIRED && empty($data['evidence'])) {
+                $errors['evidence'] = get_string('errorevidencerequired', 'mod_ep');
+            } else if ((int) $type->evidence === EP_EVIDENCE_REQUIRED) {
+                $info = file_get_draft_area_info($data['evidence']);
+                if (empty($info['filecount'])) {
+                    $errors['evidence'] = get_string('errorevidencerequired', 'mod_ep');
+                }
+            }
         }
         return $errors;
     }

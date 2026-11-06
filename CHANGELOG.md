@@ -3,6 +3,43 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## 0.3.0 — mod_ep 2026110700 (7 novembre 2026)
+
+Lot 2 : types d'EP définis par la DEVE, sans programmation.
+
+### mod_ep
+- **Types paramétrés** : le comportement d'un type n'est plus déduit de son code mais de ses
+  paramètres, réglés depuis *Administration > Types d'EP et plafonds* :
+  - mode d'acquisition : inscription à un EP du catalogue, déclaration de l'étudiant,
+    automatique d'après les stages complémentaires, saisie par la DEVE ;
+  - circuit de validation, suite ordonnée d'étapes parmi responsable de l'EP, enseignant
+    référent et DEVE (par exemple « responsable puis DEVE »), ou aucune étape (validé d'office) ;
+  - évaluation sans note, ou avec note (note maximale et seuil de validation) ;
+  - justificatifs sans objet, facultatifs ou obligatoires, en PDF seul ou en documents ;
+  - nombre d'ECTS demandable au plus, plafonds par année et sur le cursus ;
+  - pour les types stage, barème par jour et portée (tous les stages, à l'étranger, en France) :
+    plusieurs types peuvent se partager les stages ;
+  - présence au supplément au diplôme.
+- La DEVE ajoute, modifie, réordonne, active, désactive et supprime les types ; un type qui
+  porte des EP ou des crédits ne se supprime pas.
+- **Circuits à étapes** : chaque crédit en attente connaît son étape et le rôle attendu ; le
+  responsable ou le référent valide son étape et transmet à la suivante, la DEVE tranche à toute
+  étape ; un refus est final. Les files de validation des enseignants ne montrent que ce qui
+  attend leur rôle.
+- **Notes** : pour un type noté, le validateur saisit une note ; au seuil, le crédit est validé,
+  en dessous il est non validé, la note étant conservée.
+- **Historique des décisions** (`ep_credit_decision`) : qui, quand, à quelle étape, note, ECTS,
+  commentaire ; affiché sur la fiche du crédit, sauvegardé avec le cours.
+- Déclaration : justificatifs obligatoires et plafond demandable contrôlés à la saisie ; la
+  consigne de chaque type rappelle justificatifs, plafond et circuit.
+- **Migration** : les six types existants sont convertis à l'identique de leur comportement, les
+  demandes en attente reçoivent leur étape, l'historique des décisions passées est reconstitué.
+  Vérifiée sur un site 0.1.0 réel (`docs/audit/banc/migration_avant.php` puis
+  `migration_apres.php`), schéma identique à une installation neuve. Les sauvegardes antérieures
+  se restaurent avec la même conversion.
+- Tests : circuits, notes, administration des types, migration, portée des types stage
+  (82 tests).
+
 ## 0.2.0 — mod_ep 2026110600, mod_epsynthesis 2026110600 (6 novembre 2026)
 
 Premier lot de la mise à niveau au niveau de StageCompagnon (voir

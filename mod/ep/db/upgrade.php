@@ -23,6 +23,29 @@
  */
 
 /**
+ * Paramètres d'un type tel qu'il existait avant les types paramétrés (drapeaux catalog et
+ * autovalidate, code fixe), exprimés avec les paramètres actuels, à l'identique de son
+ * comportement d'alors. Isolée pour être testable sans rejouer la migration.
+ *
+ * @param stdClass $type Ligne de ep_type avec les anciens champs catalog et autovalidate.
+ * @return array Champs à écrire.
+ */
+function ep_legacy_type_parameters(stdClass $type) {
+    if (!empty($type->autovalidate) || $type->code === 'stage') {
+        return [
+            'acquisition' => 'stage',
+            'validationflow' => '',
+            'evidence' => 0,
+            'stagescope' => 'all',
+        ];
+    }
+    if (!empty($type->catalog)) {
+        return ['acquisition' => 'catalog', 'validationflow' => 'owner', 'evidence' => 0];
+    }
+    return ['acquisition' => 'declaration', 'validationflow' => 'referent', 'evidence' => 1];
+}
+
+/**
  * Applique les évolutions de schéma successives depuis la version installée.
  *
  * @param int $oldversion Version actuellement installée.
@@ -50,6 +73,107 @@ function xmldb_ep_upgrade($oldversion) {
         }
 
         upgrade_mod_savepoint(true, 2026110600, 'ep');
+    }
+
+    if ($oldversion < 2026110700) {
+        // Types paramétrés : le comportement d'un type n'est plus déduit de son code mais de ses
+        // paramètres (mode d'acquisition, circuit de validation, notation, justificatifs). Les
+        // six types existants sont convertis à l'identique de leur comportement.
+        $table = new xmldb_table('ep_type');
+        $fields = [
+            new xmldb_field('acquisition', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'declaration', 'enabled'),
+            new xmldb_field('validationflow', XMLDB_TYPE_CHAR, '50', null, XMLDB_NOTNULL, null, '', 'acquisition'),
+            new xmldb_field('grading', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'none', 'validationflow'),
+            new xmldb_field('grademax', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '20', 'grading'),
+            new xmldb_field('gradepass', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '10', 'grademax'),
+            new xmldb_field('evidence', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'gradepass'),
+            new xmldb_field('evidencetypes', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'documents', 'evidence'),
+            new xmldb_field('maxclaimedects', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0', 'evidencetypes'),
+            new xmldb_field('stagescope', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'all', 'maxclaimedects'),
+            new xmldb_field('insupplement', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'stagescope'),
+        ];
+        foreach ($fields as $field) {
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+        $catalogfield = new xmldb_field('catalog');
+        $autofield = new xmldb_field('autovalidate');
+        if ($dbman->field_exists($table, $catalogfield) && $dbman->field_exists($table, $autofield)) {
+            foreach ($DB->get_records('ep_type') as $type) {
+                $DB->update_record('ep_type', (object) (['id' => $type->id] + ep_legacy_type_parameters($type)));
+            }
+            $dbman->drop_field($table, $catalogfield);
+            $dbman->drop_field($table, $autofield);
+        }
+
+        // Crédits : étape courante, rôle attendu, note.
+        $table = new xmldb_table('ep_credit');
+        $fields = [
+            new xmldb_field('step', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '0', 'status'),
+            new xmldb_field('pendingrole', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, '', 'step'),
+            new xmldb_field('grade', XMLDB_TYPE_NUMBER, '10, 2', null, null, null, null, 'pendingrole'),
+        ];
+        foreach ($fields as $field) {
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+        $index = new xmldb_index('epid-pendingrole', XMLDB_INDEX_NOTUNIQUE, ['epid', 'pendingrole']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+        // Les demandes en attente attendent le responsable (inscription au catalogue) ou le
+        // référent (déclaration), comme avant la migration.
+        $DB->execute(
+            "UPDATE {ep_credit} SET pendingrole = :owner WHERE status = :pending AND activityid IS NOT NULL",
+            ['owner' => 'owner', 'pending' => 0]
+        );
+        $DB->execute(
+            "UPDATE {ep_credit} SET pendingrole = :referent WHERE status = :pending AND activityid IS NULL",
+            ['referent' => 'referent', 'pending' => 0]
+        );
+
+        // Historique des décisions, reconstitué pour les crédits déjà tranchés.
+        $table = new xmldb_table('ep_credit_decision');
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+        $table->add_field('creditid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('step', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('role', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, '');
+        $table->add_field('decision', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, '');
+        $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+        $table->add_field('grade', XMLDB_TYPE_NUMBER, '10, 2', null, null, null, null);
+        $table->add_field('retainedects', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0');
+        $table->add_field('comment', XMLDB_TYPE_TEXT, null, null, null, null, null);
+        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $table->add_key('creditid', XMLDB_KEY_FOREIGN, ['creditid'], 'ep_credit', ['id']);
+        $table->add_key('userid', XMLDB_KEY_FOREIGN, ['userid'], 'user', ['id']);
+        if (!$dbman->table_exists($table)) {
+            $dbman->create_table($table);
+            $decisions = [-2 => 'cancelled', -1 => 'rejected', 1 => 'validated'];
+            $rs = $DB->get_recordset_select(
+                'ep_credit',
+                'status <> 0 AND validatetime IS NOT NULL AND source <> :stage',
+                ['stage' => 'stage']
+            );
+            foreach ($rs as $credit) {
+                $DB->insert_record('ep_credit_decision', (object) [
+                    'creditid' => $credit->id,
+                    'step' => 0,
+                    'role' => $credit->activityid ? 'owner' : 'referent',
+                    'decision' => $decisions[(int) $credit->status] ?? 'validated',
+                    'userid' => $credit->validatedby ?: null,
+                    'grade' => null,
+                    'retainedects' => $credit->retainedects,
+                    'comment' => $credit->validatorcomment,
+                    'timecreated' => $credit->validatetime,
+                ]);
+            }
+            $rs->close();
+        }
+
+        upgrade_mod_savepoint(true, 2026110700, 'ep');
     }
 
     return true;

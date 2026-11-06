@@ -55,6 +55,10 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
 
         if ($userinfo) {
             $paths[] = new restore_path_element('ep_credit', '/activity/ep/credits/credit');
+            $paths[] = new restore_path_element(
+                'ep_credit_decision',
+                '/activity/ep/credits/credit/decisions/decision'
+            );
         }
 
         return $this->prepare_activity_structure($paths);
@@ -93,6 +97,18 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
         $data = (object) $data;
         $oldid = $data->id;
         $data->epid = $this->get_new_parentid('ep');
+
+        // Sauvegarde antérieure aux types paramétrés (drapeaux catalog et autovalidate) : le type
+        // est converti à l'identique de son comportement d'alors.
+        if (!isset($data->acquisition)) {
+            require_once(__DIR__ . '/../../db/upgrade.php');
+            foreach (ep_legacy_type_parameters($data) as $field => $value) {
+                $data->$field = $value;
+            }
+        }
+        unset($data->catalog, $data->autovalidate);
+        $data = ep_type_record($data->epid, (array) $data);
+        unset($data->id);
 
         $newitemid = $DB->insert_record('ep_type', $data);
         $this->set_mapping('ep_type', $oldid, $newitemid);
@@ -197,10 +213,34 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
         $data->validatedby = empty($data->validatedby) ? null
             : ($this->get_mappingid('user', $data->validatedby) ?: null);
 
+        // Sauvegarde antérieure aux circuits à étapes : une demande en attente attend le
+        // responsable (inscription) ou le référent (déclaration).
+        if (!isset($data->pendingrole)) {
+            $data->step = 0;
+            $data->pendingrole = (int) $data->status === EP_STATUS_PENDING
+                ? ($data->activityid ? EP_ROLE_OWNER : EP_ROLE_REFERENT) : '';
+        }
+
         // Le crédit porte des fichiers (les justificatifs) : la correspondance doit le déclarer
         // pour qu'after_execute() puisse les rattacher.
         $newitemid = $DB->insert_record('ep_credit', $data);
         $this->set_mapping('ep_credit', $oldid, $newitemid, true);
+    }
+
+    /**
+     * Restaure une décision de l'historique d'un crédit ; l'auteur est dissocié s'il n'est pas
+     * dans l'archive.
+     *
+     * @param array $data
+     */
+    protected function process_ep_credit_decision($data) {
+        global $DB;
+
+        $data = (object) $data;
+        unset($data->id);
+        $data->creditid = $this->get_new_parentid('ep_credit');
+        $data->userid = empty($data->userid) ? null : ($this->get_mappingid('user', $data->userid) ?: null);
+        $DB->insert_record('ep_credit_decision', $data);
     }
 
     /**

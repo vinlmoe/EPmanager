@@ -71,9 +71,11 @@ final class progress_test extends \advanced_testcase {
 
         // Seul le type stage est attribué sans vérification d'un enseignant, et seul le type
         // académique interne passe par le catalogue.
-        $this->assertEquals(1, ep_get_type_by_code($this->ep->id, EP_TYPE_STAGE)->autovalidate);
-        $this->assertEquals(0, ep_get_type_by_code($this->ep->id, EP_TYPE_ENGAGEMENT)->autovalidate);
-        $this->assertEquals(1, ep_get_type_by_code($this->ep->id, EP_TYPE_ACADEMIC)->catalog);
+        $this->assertTrue(ep_type_is_automatic(ep_get_type_by_code($this->ep->id, EP_TYPE_STAGE)));
+        $this->assertFalse(ep_type_is_automatic(ep_get_type_by_code($this->ep->id, EP_TYPE_ENGAGEMENT)));
+        $this->assertTrue(ep_type_is_catalog(ep_get_type_by_code($this->ep->id, EP_TYPE_ACADEMIC)));
+        $this->assertSame(EP_ROLE_OWNER, ep_get_type_by_code($this->ep->id, EP_TYPE_ACADEMIC)->validationflow);
+        $this->assertSame(EP_ROLE_REFERENT, ep_get_type_by_code($this->ep->id, EP_TYPE_SPORT)->validationflow);
     }
 
     /**

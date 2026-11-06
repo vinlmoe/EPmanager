@@ -42,15 +42,31 @@ class mod_ep_generator extends testing_module_generator {
             throw new coding_exception('Type inconnu : ' . $code);
         }
 
-        foreach (['maxects', 'maxectsperyear', 'ectsperday', 'enabled'] as $field) {
-            if (array_key_exists($field, $settings)) {
-                $type->$field = $settings[$field];
+        foreach ($settings as $field => $value) {
+            if (property_exists($type, $field) && $field !== 'id' && $field !== 'epid') {
+                $type->$field = $value;
             }
         }
         $type->timemodified = time();
         $DB->update_record('ep_type', $type);
 
-        return $type;
+        return $DB->get_record('ep_type', ['id' => $type->id], '*', MUST_EXIST);
+    }
+
+    /**
+     * Crée un type supplémentaire, avec les mêmes valeurs par défaut que l'interface.
+     *
+     * @param stdClass|int $ep
+     * @param array $params code, name, acquisition, validationflow, grading, evidence...
+     * @return stdClass Le type créé.
+     */
+    public function create_type($ep, array $params = []) {
+        global $DB;
+
+        $epid = is_object($ep) ? $ep->id : $ep;
+        $params += ['name' => 'Type ' . ($DB->count_records('ep_type', ['epid' => $epid]) + 1)];
+        $id = ep_save_type($epid, (object) $params);
+        return $DB->get_record('ep_type', ['id' => $id], '*', MUST_EXIST);
     }
 
     /**

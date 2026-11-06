@@ -120,7 +120,8 @@ if ($action === 'edit') {
             'visible' => $activity->visible,
         ]);
     } else {
-        $defaulttype = ep_get_type_by_code($ep->id, EP_TYPE_ACADEMIC);
+        // Premier type qui s'acquiert par le catalogue, dans l'ordre choisi par la DEVE.
+        $defaulttype = reset($types) ?: null;
         $mform->set_data([
             'id' => $cm->id,
             'activityid' => 0,

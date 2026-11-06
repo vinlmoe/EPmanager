@@ -94,7 +94,7 @@ foreach ($sections as [$sectiontitle, $entries]) {
 // Rappel de l'origine des EP de type stage : c'est la question la plus posée à la mise en route,
 // et la réponse ne se trouve nulle part ailleurs dans l'interface.
 $linked = ep_get_linked_stage_instances($ep);
-$stagetype = ep_get_type_by_code($ep->id, EP_TYPE_STAGE);
+$stagetypes = ep_get_stage_types($ep->id);
 echo $OUTPUT->heading(get_string('stagelinkheading', 'mod_ep'), 4);
 if (empty($linked)) {
     echo $OUTPUT->notification(get_string('stagelinknone', 'mod_ep'), 'warning');
@@ -104,9 +104,20 @@ if (empty($linked)) {
         $names[] = format_string($instance->stage->name);
     }
     echo html_writer::tag('p', get_string('stagelinklist', 'mod_ep', implode(', ', $names)));
-    echo html_writer::tag('p', $stagetype && $stagetype->ectsperday > 0
-        ? get_string('stagelinkrate', 'mod_ep', ep_format_ects($stagetype->ectsperday))
-        : get_string('stagelinknorate', 'mod_ep'), ['class' => 'text-muted']);
+    // Plusieurs types peuvent être alimentés par les stages, chacun avec sa portée et son barème.
+    $rates = [];
+    foreach ($stagetypes as $stagetype) {
+        $rates[] = get_string('stagescoperate', 'mod_ep', (object) [
+            'name' => format_string($stagetype->name),
+            'scope' => get_string('stagescope_' . $stagetype->stagescope, 'mod_ep'),
+            'rate' => ep_format_ects($stagetype->ectsperday),
+        ]);
+    }
+    echo html_writer::tag(
+        'p',
+        $rates ? get_string('stagelinkrates', 'mod_ep', implode(' ; ', $rates)) : get_string('stagelinknorate', 'mod_ep'),
+        ['class' => 'text-muted']
+    );
 }
 
 echo $OUTPUT->footer();

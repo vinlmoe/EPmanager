@@ -34,6 +34,36 @@ define('EP_STATUS_VALIDATED', 1);
 /** Nombre de lignes par page pour les listes paginées (DEVE / enseignants). */
 define('EP_LIST_PERPAGE', 40);
 
+/** Acquisition par inscription à un EP du catalogue, qui porte ses ECTS. */
+define('EP_ACQ_CATALOG', 'catalog');
+/** Acquisition par déclaration de l'étudiant, avec justificatifs. */
+define('EP_ACQ_DECLARATION', 'declaration');
+/** Acquisition automatique d'après les stages complémentaires validés dans mod_stage. */
+define('EP_ACQ_STAGE', 'stage');
+/** Acquisition par saisie de la DEVE (à la main ou par import), sans demande de l'étudiant. */
+define('EP_ACQ_DEVE', 'deve');
+
+/** Étape de validation : le responsable de l'EP du catalogue. */
+define('EP_ROLE_OWNER', 'owner');
+/** Étape de validation : l'enseignant référent de l'étudiant. */
+define('EP_ROLE_REFERENT', 'referent');
+/** Étape de validation : la DEVE. */
+define('EP_ROLE_DEVE', 'deve');
+/** Auteur d'un retrait : l'étudiant lui-même. */
+define('EP_ROLE_STUDENT', 'student');
+
+/** Évaluation sans note : validé ou non validé. */
+define('EP_GRADING_NONE', 'none');
+/** Évaluation par une note, comparée au seuil du type ou de l'EP. */
+define('EP_GRADING_GRADE', 'grade');
+
+/** Justificatifs sans objet pour ce type. */
+define('EP_EVIDENCE_NONE', 0);
+/** Justificatifs facultatifs. */
+define('EP_EVIDENCE_OPTIONAL', 1);
+/** Justificatifs obligatoires : au moins un fichier. */
+define('EP_EVIDENCE_REQUIRED', 2);
+
 /** EP académique interne : inscription à un EP du catalogue, validée par son responsable. */
 define('EP_TYPE_ACADEMIC', 'academic');
 /** EP de type stage : attribué automatiquement d'après les stages complémentaires (EP) de mod_stage. */
@@ -152,6 +182,11 @@ function ep_delete_instance($id) {
     if ($activityids) {
         [$insql, $inparams] = $DB->get_in_or_equal($activityids);
         $DB->delete_records_select('ep_activity_teacher', "activityid $insql", $inparams);
+    }
+    $creditids = $DB->get_fieldset_select('ep_credit', 'id', 'epid = ?', [$id]);
+    foreach (array_chunk($creditids, 500) as $chunk) {
+        [$insql, $inparams] = $DB->get_in_or_equal($chunk);
+        $DB->delete_records_select('ep_credit_decision', "creditid $insql", $inparams);
     }
     $DB->delete_records('ep_credit', ['epid' => $id]);
     $DB->delete_records('ep_activity', ['epid' => $id]);

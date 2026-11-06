@@ -55,8 +55,10 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
 
         $types = new backup_nested_element('types');
         $type = new backup_nested_element('type', ['id'], [
-            'code', 'name', 'description', 'enabled', 'catalog', 'autovalidate',
-            'maxects', 'maxectsperyear', 'ectsperday', 'sortorder', 'timecreated', 'timemodified',
+            'code', 'name', 'description', 'enabled', 'acquisition', 'validationflow', 'grading',
+            'grademax', 'gradepass', 'evidence', 'evidencetypes', 'maxclaimedects', 'stagescope',
+            'insupplement', 'maxects', 'maxectsperyear', 'ectsperday', 'sortorder', 'timecreated',
+            'timemodified',
         ]);
 
         // Le nom « activity » est celui de l'élément racine que prepare_activity_structure()
@@ -78,8 +80,13 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         $credits = new backup_nested_element('credits');
         $credit = new backup_nested_element('credit', ['id'], [
             'userid', 'typeid', 'activityid', 'studyyear', 'name', 'description',
-            'claimedects', 'retainedects', 'status', 'source', 'sourceref',
+            'claimedects', 'retainedects', 'status', 'step', 'pendingrole', 'grade', 'source', 'sourceref',
             'validatedby', 'validatetime', 'validatorcomment', 'timecreated', 'timemodified',
+        ]);
+
+        $decisions = new backup_nested_element('decisions');
+        $decision = new backup_nested_element('decision', ['id'], [
+            'step', 'role', 'decision', 'userid', 'grade', 'retainedects', 'comment', 'timecreated',
         ]);
 
         // Arbre : les types précèdent le catalogue puis les crédits, de sorte que la restauration
@@ -97,6 +104,8 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
 
         $ep->add_child($credits);
         $credits->add_child($credit);
+        $credit->add_child($decisions);
+        $decisions->add_child($decision);
 
         // Sources.
         $ep->set_source_table('ep', ['id' => backup::VAR_ACTIVITYID]);
@@ -112,12 +121,14 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
 
         if ($userinfo) {
             $credit->set_source_table('ep_credit', ['epid' => backup::VAR_PARENTID], 'id');
+            $decision->set_source_table('ep_credit_decision', ['creditid' => backup::VAR_PARENTID], 'timecreated, id');
         }
 
         // Annotations d'identifiants.
         $activityteacher->annotate_ids('user', 'teacherid');
         $credit->annotate_ids('user', 'userid');
         $credit->annotate_ids('user', 'validatedby');
+        $decision->annotate_ids('user', 'userid');
 
         // Zones de fichiers. Les justificatifs : un ou plusieurs fichiers par crédit, itemid = id
         // du crédit.

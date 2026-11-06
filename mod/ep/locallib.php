@@ -186,32 +186,43 @@ function ep_studyyear_selectable_options(stdClass $ep) {
 // Types d'enseignement personnalisé.
 
 /**
- * Définition des six types d'enseignement personnalisé créés avec chaque instance. Le code est
- * l'identifiant stable auquel le reste du module se réfère (EP_TYPE_*) ; le libellé, les plafonds
- * et le barème restent modifiables par la DEVE (voir types.php).
+ * Définition des six types d'enseignement personnalisé créés avec chaque instance, exprimée avec
+ * les mêmes paramètres que ceux que la DEVE règle ensuite (voir types.php) : rien ne distingue un
+ * type par défaut d'un type ajouté, sinon son code et son libellé initial.
  *
- * 'catalog' : les crédits de ce type viennent d'une inscription à un EP du catalogue interne, qui
- * porte son propre nombre d'ECTS, et sont validés par le responsable de cet EP.
- * 'autovalidate' : les crédits de ce type sont attribués sans vérification d'un enseignant — le
- * cas du type stage, alimenté par des stages que la DEVE a déjà validés dans mod_stage.
- *
- * @return array code => array{catalog: int, autovalidate: int, sortorder: int}
+ * @return array code => paramètres (acquisition, validationflow, evidence, sortorder...)
  */
 function ep_default_type_definitions() {
+    $declared = [
+        'acquisition' => EP_ACQ_DECLARATION,
+        'validationflow' => EP_ROLE_REFERENT,
+        'evidence' => EP_EVIDENCE_OPTIONAL,
+    ];
     return [
-        EP_TYPE_ACADEMIC => ['catalog' => 1, 'autovalidate' => 0, 'sortorder' => 10],
-        EP_TYPE_STAGE => ['catalog' => 0, 'autovalidate' => 1, 'sortorder' => 20],
-        EP_TYPE_ENGAGEMENT => ['catalog' => 0, 'autovalidate' => 0, 'sortorder' => 30],
-        EP_TYPE_PROFESSIONAL => ['catalog' => 0, 'autovalidate' => 0, 'sortorder' => 40],
-        EP_TYPE_SPORT => ['catalog' => 0, 'autovalidate' => 0, 'sortorder' => 50],
-        EP_TYPE_EXTERNAL => ['catalog' => 0, 'autovalidate' => 0, 'sortorder' => 60],
+        EP_TYPE_ACADEMIC => [
+            'acquisition' => EP_ACQ_CATALOG,
+            'validationflow' => EP_ROLE_OWNER,
+            'evidence' => EP_EVIDENCE_NONE,
+            'sortorder' => 10,
+        ],
+        EP_TYPE_STAGE => [
+            'acquisition' => EP_ACQ_STAGE,
+            'validationflow' => '',
+            'evidence' => EP_EVIDENCE_NONE,
+            'sortorder' => 20,
+        ],
+        EP_TYPE_ENGAGEMENT => $declared + ['sortorder' => 30],
+        EP_TYPE_PROFESSIONAL => $declared + ['sortorder' => 40],
+        EP_TYPE_SPORT => $declared + ['sortorder' => 50],
+        EP_TYPE_EXTERNAL => $declared + ['sortorder' => 60],
     ];
 }
 
 /**
  * Crée les types manquants d'une instance. Appelée à la création de l'instance, et de nouveau à
  * l'ouverture de la page de paramétrage : une instance restaurée depuis une sauvegarde, ou créée
- * par une version antérieure, retrouve ainsi ses types sans intervention.
+ * par une version antérieure, retrouve ainsi ses types sans intervention. Une instance qui a
+ * déjà des types n'en reçoit aucun : la DEVE a pu en supprimer volontairement.
  *
  * @param int $epid
  * @return void
@@ -219,28 +230,14 @@ function ep_default_type_definitions() {
 function ep_create_default_types($epid) {
     global $DB;
 
-    $existing = $DB->get_records_menu('ep_type', ['epid' => $epid], '', 'code, id');
-    $now = time();
-
+    if ($DB->record_exists('ep_type', ['epid' => $epid])) {
+        return;
+    }
     foreach (ep_default_type_definitions() as $code => $definition) {
-        if (isset($existing[$code])) {
-            continue;
-        }
-        $DB->insert_record('ep_type', (object) [
-            'epid' => $epid,
+        $DB->insert_record('ep_type', ep_type_record($epid, $definition + [
             'code' => $code,
             'name' => get_string('type_' . $code, 'mod_ep'),
-            'description' => '',
-            'enabled' => 1,
-            'catalog' => $definition['catalog'],
-            'autovalidate' => $definition['autovalidate'],
-            'maxects' => 0,
-            'maxectsperyear' => 0,
-            'ectsperday' => 0,
-            'sortorder' => $definition['sortorder'],
-            'timecreated' => $now,
-            'timemodified' => $now,
-        ]);
+        ]));
     }
 }
 
@@ -340,7 +337,7 @@ function ep_get_user_active_registrations($epid, $userid) {
 }
 
 /**
- * Type d'une instance repéré par son code (EP_TYPE_*).
+ * Type d'une instance repéré par son code.
  *
  * @param int $epid
  * @param string $code
@@ -353,32 +350,25 @@ function ep_get_type_by_code($epid, $code) {
 }
 
 /**
- * Types dans lesquels un étudiant peut déclarer lui-même un EP : ceux qui sont activés, qui ne
- * passent pas par le catalogue (l'inscription s'y fait depuis le catalogue) et qui ne sont pas
- * attribués automatiquement (déclarer un stage à la main doublonnerait l'attribution automatique).
+ * Types dans lesquels un étudiant peut déclarer lui-même un EP : ceux qui sont activés et qui
+ * s'acquièrent par déclaration.
  *
  * @param int $epid
  * @return array id => stdClass
  */
 function ep_get_declarable_types($epid) {
-    return array_filter(ep_get_types($epid, true), function ($type) {
-        return empty($type->catalog) && empty($type->autovalidate);
-    });
+    return array_filter(ep_get_types($epid, true), 'ep_type_is_declarable');
 }
 
 /**
- * Types auxquels un EP du catalogue peut être rattaché : ceux qui sont activés et qui ne sont pas
- * attribués automatiquement. Rattacher un EP du catalogue à un type automatique donnerait ses
- * ECTS à l'étudiant dès son inscription, sans que le responsable ait rien à valider — exactement
- * ce que le catalogue est censé éviter.
+ * Types auxquels un EP du catalogue peut être rattaché : ceux qui sont activés et qui
+ * s'acquièrent par inscription au catalogue.
  *
  * @param int $epid
  * @return array id => stdClass
  */
 function ep_get_catalogable_types($epid) {
-    return array_filter(ep_get_types($epid, true), function ($type) {
-        return empty($type->autovalidate);
-    });
+    return array_filter(ep_get_types($epid, true), 'ep_type_is_catalog');
 }
 
 /**
@@ -677,13 +667,15 @@ function ep_get_student_credits($epid, $userid) {
 }
 
 /**
- * Crée un crédit. Un crédit dont le type est attribué automatiquement (autovalidate) naît validé,
- * sans validateur : c'est précisément ce qui le distingue des autres, personne n'a à le vérifier.
+ * Crée un crédit. Un crédit dont le type n'a aucune étape de validation naît validé, sans
+ * validateur (sauf si la DEVE le saisit elle-même) ; les autres naissent en attente de la
+ * première étape du circuit.
  *
  * @param stdClass $ep
  * @param int $userid
  * @param stdClass $type
- * @param array $data name, description, claimedects, studyyear, activityid, source, sourceref.
+ * @param array $data name, description, claimedects, studyyear, activityid, source, sourceref,
+ *                    validatedby (saisie DEVE), grade.
  * @return int Identifiant du crédit créé.
  */
 function ep_create_credit(stdClass $ep, $userid, stdClass $type, array $data) {
@@ -691,7 +683,8 @@ function ep_create_credit(stdClass $ep, $userid, stdClass $type, array $data) {
 
     $now = time();
     $claimed = round((float) ($data['claimedects'] ?? 0), 2);
-    $auto = !empty($type->autovalidate);
+    $steps = ep_flow_steps($type->validationflow);
+    $auto = empty($steps);
     $source = (string) ($data['source'] ?? EP_SOURCE_STUDENT);
 
     $record = (object) [
@@ -705,9 +698,12 @@ function ep_create_credit(stdClass $ep, $userid, stdClass $type, array $data) {
         'claimedects' => $claimed,
         'retainedects' => $auto ? $claimed : 0,
         'status' => $auto ? EP_STATUS_VALIDATED : EP_STATUS_PENDING,
+        'step' => 0,
+        'pendingrole' => $auto ? '' : $steps[0],
+        'grade' => isset($data['grade']) ? round((float) $data['grade'], 2) : null,
         'source' => $source,
         'sourceref' => (int) ($data['sourceref'] ?? 0),
-        'validatedby' => null,
+        'validatedby' => $auto && !empty($data['validatedby']) ? (int) $data['validatedby'] : null,
         'validatetime' => $auto ? $now : null,
         'validatorcomment' => null,
         'timecreated' => $now,
@@ -771,37 +767,79 @@ function ep_register_to_activity(stdClass $ep, stdClass $activity, $userid, $stu
 }
 
 /**
- * Valide un crédit et arrête les ECTS retenus. Les plafonds par type ne sont pas appliqués ici :
- * ce qui est validé reste acquis, c'est au décompte (voir ep_get_student_progress()) de ne
- * compter que ce que le plafond autorise, de façon à ce qu'un relèvement ultérieur du plafond
- * fasse ressortir des ECTS déjà validés sans avoir à les revalider un par un.
+ * Valide un crédit à l'étape courante de son circuit. Le responsable de l'EP ou l'enseignant
+ * référent ne peuvent valider qu'à leur étape ; leur validation fait passer le crédit à l'étape
+ * suivante, ou le valide s'il n'y en a pas. La DEVE valide à n'importe quelle étape, et sa
+ * validation est toujours finale.
  *
- * La décision n'est écrite que si le crédit est toujours en attente (voir ep_update_credit_if()) :
- * un refus ou un retrait enregistré entre-temps par un autre intervenant n'est pas écrasé.
+ * Les plafonds par type ne sont pas appliqués ici : ce qui est validé reste acquis, c'est au
+ * décompte (voir ep_get_student_progress()) de ne compter que ce que le plafond autorise, de
+ * façon à ce qu'un relèvement ultérieur du plafond fasse ressortir des ECTS déjà validés sans
+ * avoir à les revalider un par un.
+ *
+ * La décision n'est écrite que si le crédit est toujours en attente, à l'étape attendue (voir
+ * ep_update_credit_if()) : un refus, un retrait ou une décision enregistrés entre-temps par un
+ * autre intervenant ne sont pas écrasés.
  *
  * @param stdClass $credit
  * @param int $byuserid
  * @param float $retainedects
  * @param string $comment
- * @return bool False si le crédit n'était plus en attente : rien n'a été écrit.
+ * @param string|null $role Rôle de l'auteur (owner, referent, deve) ; par défaut, le rôle attendu
+ *                          à l'étape courante.
+ * @param float|null $grade Note attribuée, pour un crédit noté.
+ * @return bool False si le crédit n'était plus en attente à cette étape : rien n'a été écrit.
  */
-function ep_validate_credit(stdClass $credit, $byuserid, $retainedects, $comment = '') {
-    $credit->status = EP_STATUS_VALIDATED;
-    $credit->retainedects = max(0, round((float) $retainedects, 2));
-    $credit->validatedby = $byuserid;
-    $credit->validatetime = time();
-    $credit->validatorcomment = $comment;
-    $credit->timemodified = time();
+function ep_validate_credit(stdClass $credit, $byuserid, $retainedects, $comment = '', $role = null, $grade = null) {
+    $role = $role ?: ($credit->pendingrole ?: EP_ROLE_DEVE);
+    $decidedstep = (int) $credit->step;
+    $type = ep_get_credit_type($credit);
+    $steps = $type ? ep_flow_steps($type->validationflow) : [];
+    $next = (int) $credit->step + 1;
+    $final = $role === EP_ROLE_DEVE || $next >= count($steps);
 
+    $credit->retainedects = max(0, round((float) $retainedects, 2));
+    $credit->timemodified = time();
+    if ($grade !== null) {
+        $credit->grade = round((float) $grade, 2);
+    }
+    if ($final) {
+        $credit->status = EP_STATUS_VALIDATED;
+        $credit->step = max($next, count($steps));
+        $credit->pendingrole = '';
+        $credit->validatedby = $byuserid;
+        $credit->validatetime = time();
+        $credit->validatorcomment = $comment;
+    } else {
+        $credit->step = $next;
+        $credit->pendingrole = $steps[$next];
+    }
+
+    $where = 'status = :pending AND source <> :stage';
+    $params = ['pending' => EP_STATUS_PENDING, 'stage' => EP_SOURCE_STAGE];
+    if ($role !== EP_ROLE_DEVE) {
+        $where .= ' AND pendingrole = :role';
+        $params['role'] = $role;
+    }
     $applied = ep_update_credit_if(
         $credit,
-        ['status', 'retainedects', 'validatedby', 'validatetime', 'validatorcomment', 'timemodified'],
-        'status = :pending AND source <> :stage',
-        ['pending' => EP_STATUS_PENDING, 'stage' => EP_SOURCE_STAGE]
+        [
+            'status', 'step', 'pendingrole', 'grade', 'retainedects', 'validatedby', 'validatetime',
+            'validatorcomment', 'timemodified',
+        ],
+        $where,
+        $params
     );
     if ($applied) {
+        // L'étape décidée est celle d'avant l'écriture (le crédit porte désormais la suivante).
+        $decision = clone $credit;
+        $decision->step = $decidedstep;
+        ep_add_credit_decision($decision, $role, 'validated', $byuserid, $grade, $credit->retainedects, $comment);
         ep_trigger_credit_event(\mod_ep\event\credit_validated::class, $credit, [
             'retainedects' => (float) $credit->retainedects,
+            'role' => $role,
+            'final' => $final,
+            'step' => $decision->step,
         ]);
     }
     return $applied;
@@ -809,29 +847,51 @@ function ep_validate_credit(stdClass $credit, $byuserid, $retainedects, $comment
 
 /**
  * Refuse un crédit, avec le motif communiqué à l'étudiant. Comme la validation, le refus n'est
- * écrit que si le crédit est toujours en attente.
+ * écrit que si le crédit est toujours en attente à l'étape attendue ; un refus est toujours
+ * final, quelle que soit l'étape.
  *
  * @param stdClass $credit
  * @param int $byuserid
  * @param string $comment
- * @param string $role 'teacher' (responsable de l'EP, enseignant référent) ou 'deve'.
+ * @param string|null $role Rôle de l'auteur ; par défaut, le rôle attendu à l'étape courante.
+ * @param float|null $grade Note attribuée, pour un crédit noté non validé.
  * @return bool False si le crédit n'était plus en attente : rien n'a été écrit.
  */
-function ep_reject_credit(stdClass $credit, $byuserid, $comment, $role = 'teacher') {
+function ep_reject_credit(stdClass $credit, $byuserid, $comment, $role = null, $grade = null) {
+    $role = $role ?: ($credit->pendingrole ?: EP_ROLE_DEVE);
+    // L'ancien appel passait 'teacher' : c'est le rôle attendu à l'étape qui est retenu.
+    if ($role === 'teacher') {
+        $role = $credit->pendingrole ?: EP_ROLE_REFERENT;
+    }
+    $step = (int) $credit->step;
+
     $credit->status = EP_STATUS_REJECTED;
+    $credit->pendingrole = '';
     $credit->retainedects = 0;
+    if ($grade !== null) {
+        $credit->grade = round((float) $grade, 2);
+    }
     $credit->validatedby = $byuserid;
     $credit->validatetime = time();
     $credit->validatorcomment = $comment;
     $credit->timemodified = time();
 
+    $where = 'status = :pending AND source <> :stage';
+    $params = ['pending' => EP_STATUS_PENDING, 'stage' => EP_SOURCE_STAGE];
+    if ($role !== EP_ROLE_DEVE) {
+        $where .= ' AND pendingrole = :role';
+        $params['role'] = $role;
+    }
     $applied = ep_update_credit_if(
         $credit,
-        ['status', 'retainedects', 'validatedby', 'validatetime', 'validatorcomment', 'timemodified'],
-        'status = :pending AND source <> :stage',
-        ['pending' => EP_STATUS_PENDING, 'stage' => EP_SOURCE_STAGE]
+        ['status', 'pendingrole', 'grade', 'retainedects', 'validatedby', 'validatetime', 'validatorcomment', 'timemodified'],
+        $where,
+        $params
     );
     if ($applied) {
+        $decision = clone $credit;
+        $decision->step = $step;
+        ep_add_credit_decision($decision, $role, 'rejected', $byuserid, $grade, 0, $comment);
         ep_trigger_credit_event(\mod_ep\event\credit_rejected::class, $credit, ['role' => $role]);
     }
     return $applied;
@@ -852,15 +912,16 @@ function ep_reject_credit(stdClass $credit, $byuserid, $comment, $role = 'teache
  * @param string $role 'student' ou 'deve'.
  * @return bool False si le crédit n'était plus dans l'état attendu : rien n'a été écrit.
  */
-function ep_cancel_credit(stdClass $credit, $byuserid, $comment = '', $role = 'deve') {
+function ep_cancel_credit(stdClass $credit, $byuserid, $comment = '', $role = EP_ROLE_DEVE) {
     $credit->status = EP_STATUS_CANCELLED;
+    $credit->pendingrole = '';
     $credit->retainedects = 0;
     $credit->validatedby = $byuserid;
     $credit->validatetime = time();
     $credit->validatorcomment = $comment;
     $credit->timemodified = time();
 
-    if ($role === 'student') {
+    if ($role === EP_ROLE_STUDENT) {
         $where = 'status = :pending AND source <> :stage';
         $params = ['pending' => EP_STATUS_PENDING, 'stage' => EP_SOURCE_STAGE];
     } else {
@@ -869,11 +930,12 @@ function ep_cancel_credit(stdClass $credit, $byuserid, $comment = '', $role = 'd
     }
     $applied = ep_update_credit_if(
         $credit,
-        ['status', 'retainedects', 'validatedby', 'validatetime', 'validatorcomment', 'timemodified'],
+        ['status', 'pendingrole', 'retainedects', 'validatedby', 'validatetime', 'validatorcomment', 'timemodified'],
         $where,
         $params
     );
     if ($applied) {
+        ep_add_credit_decision($credit, $role, 'cancelled', $byuserid, null, 0, $comment);
         ep_trigger_credit_event(\mod_ep\event\credit_cancelled::class, $credit, ['role' => $role]);
     }
     return $applied;
@@ -1046,13 +1108,152 @@ function ep_update_declaration(stdClass $credit) {
 }
 
 /**
- * Détermine qui a le droit de statuer sur un crédit donné.
+ * Type d'un crédit, lu dans le cache de promotion s'il est armé, sinon en base.
  *
- * Un crédit issu du catalogue relève de son responsable, et de lui seul : c'est lui qui sait si
- * l'étudiant a suivi son EP. Un crédit déclaré hors catalogue (engagement, expérience
- * professionnelle, sport, académique externe) relève de l'enseignant référent de l'étudiant, tel
- * qu'il est déjà défini dans l'activité « Gestion des stages » du même cours. Dans les deux cas,
- * la DEVE (mod/ep:validatedeve) peut statuer, notamment quand aucun référent n'est attribué.
+ * @param stdClass $credit
+ * @return stdClass|false
+ */
+function ep_get_credit_type(stdClass $credit) {
+    global $DB;
+
+    $types = \mod_ep\local\progress_cache::types((int) $credit->epid);
+    if ($types !== null && isset($types[$credit->typeid])) {
+        return $types[$credit->typeid];
+    }
+    return $DB->get_record('ep_type', ['id' => $credit->typeid]);
+}
+
+/**
+ * Barème applicable à un crédit : celui de son EP du catalogue s'il en fixe un, sinon celui de
+ * son type.
+ *
+ * @param stdClass $credit
+ * @param stdClass|null $type Type du crédit (lu si absent).
+ * @return stdClass {grading, grademax, gradepass}
+ */
+function ep_credit_grading(stdClass $credit, $type = null) {
+    global $DB;
+
+    $type = $type ?: ep_get_credit_type($credit);
+    $grading = (object) [
+        'grading' => $type ? $type->grading : EP_GRADING_NONE,
+        'grademax' => $type ? (float) $type->grademax : 20.0,
+        'gradepass' => $type ? (float) $type->gradepass : 10.0,
+    ];
+    if (!empty($credit->activityid)) {
+        $activity = $DB->get_record('ep_activity', ['id' => $credit->activityid]);
+        if ($activity && isset($activity->grading) && $activity->grading !== '' && $activity->grading !== 'type') {
+            $grading->grading = $activity->grading;
+            $grading->grademax = (float) $activity->grademax;
+            $grading->gradepass = (float) $activity->gradepass;
+        }
+    }
+    return $grading;
+}
+
+/**
+ * Enregistre une décision dans l'historique d'un crédit (une ligne par étape du circuit).
+ *
+ * @param stdClass $credit
+ * @param string $role Rôle de l'auteur (owner, referent, deve, student).
+ * @param string $decision validated, rejected ou cancelled.
+ * @param int|null $userid
+ * @param float|null $grade
+ * @param float $retainedects
+ * @param string $comment
+ * @return int Identifiant de la décision.
+ */
+function ep_add_credit_decision(stdClass $credit, $role, $decision, $userid, $grade, $retainedects, $comment) {
+    global $DB;
+
+    return $DB->insert_record('ep_credit_decision', (object) [
+        'creditid' => $credit->id,
+        'step' => (int) $credit->step,
+        'role' => $role,
+        'decision' => $decision,
+        'userid' => $userid ?: null,
+        'grade' => $grade === null ? null : round((float) $grade, 2),
+        'retainedects' => round((float) $retainedects, 2),
+        'comment' => (string) $comment,
+        'timecreated' => time(),
+    ]);
+}
+
+/**
+ * Historique des décisions d'un crédit, de la plus ancienne à la plus récente.
+ *
+ * @param int $creditid
+ * @return array id => stdClass
+ */
+function ep_get_credit_decisions($creditid) {
+    global $DB;
+
+    return $DB->get_records('ep_credit_decision', ['creditid' => $creditid], 'timecreated ASC, id ASC');
+}
+
+/**
+ * Note un crédit : la note décide de la validation, selon le barème applicable (celui de l'EP du
+ * catalogue, sinon celui du type). Une note au moins égale au seuil valide le crédit pour les
+ * ECTS demandés ; en dessous, le crédit est non validé, la note étant conservée dans les deux cas.
+ *
+ * @param stdClass $credit
+ * @param int $byuserid
+ * @param float $grade
+ * @param string $comment
+ * @param string|null $role Voir ep_validate_credit().
+ * @return bool False si le crédit n'était plus en attente à cette étape, ou si la note est hors
+ *              barème.
+ */
+function ep_grade_credit(stdClass $credit, $byuserid, $grade, $comment = '', $role = null) {
+    $grading = ep_credit_grading($credit);
+    $grade = round((float) $grade, 2);
+    if ($grade < 0 || $grade > $grading->grademax) {
+        return false;
+    }
+    if ($grade >= $grading->gradepass) {
+        return ep_validate_credit($credit, $byuserid, $credit->claimedects, $comment, $role, $grade);
+    }
+    return ep_reject_credit($credit, $byuserid, $comment, $role, $grade);
+}
+
+/**
+ * Rôle sous lequel un utilisateur statue sur un crédit : la DEVE si elle en a la capacité, sinon
+ * le rôle attendu à l'étape courante (qu'il détient, voir ep_rights_can_validate()).
+ *
+ * @param stdClass $rights
+ * @param stdClass $credit
+ * @return string
+ */
+function ep_rights_deciding_role(stdClass $rights, stdClass $credit) {
+    return $rights->validatedeve ? EP_ROLE_DEVE : ep_credit_pending_role($credit);
+}
+
+/**
+ * Rôle attendu pour statuer sur un crédit. Un crédit lu avant les circuits à étapes, ou construit
+ * à la main, n'a pas de rôle enregistré : il relève alors du responsable de son EP du catalogue,
+ * ou du référent de l'étudiant pour une déclaration, comme avant les types paramétrés.
+ *
+ * @param stdClass $credit
+ * @return string
+ */
+function ep_credit_pending_role(stdClass $credit) {
+    if (!empty($credit->pendingrole)) {
+        return $credit->pendingrole;
+    }
+    if (isset($credit->status) && (int) $credit->status === EP_STATUS_PENDING && property_exists($credit, 'pendingrole')) {
+        return '';
+    }
+    return !empty($credit->activityid) ? EP_ROLE_OWNER : EP_ROLE_REFERENT;
+}
+
+/**
+ * Détermine qui a le droit de statuer sur un crédit donné, à l'étape où il en est.
+ *
+ * À l'étape « responsable », seul un responsable de l'EP du catalogue concerné peut statuer :
+ * c'est lui qui sait si l'étudiant a suivi son EP. À l'étape « référent », seul un enseignant
+ * référent de l'étudiant, tel qu'il est défini dans l'activité « Gestion des stages » du même
+ * cours. La DEVE (mod/ep:validatedeve) peut statuer à toute étape, notamment quand aucun référent
+ * n'est attribué.
  *
  * Un crédit attribué automatiquement n'est validable par personne : il n'y a rien à vérifier, et
  * une validation manuelle serait de toute façon écrasée à la synchronisation suivante.
@@ -1078,10 +1279,14 @@ function ep_can_validate_credit(stdClass $ep, stdClass $credit, context $context
         return false;
     }
 
-    if (!empty($credit->activityid)) {
-        return ep_is_activity_teacher($credit->activityid, $userid);
+    $pendingrole = ep_credit_pending_role($credit);
+    if ($pendingrole === EP_ROLE_OWNER) {
+        return !empty($credit->activityid) && ep_is_activity_teacher($credit->activityid, $userid);
     }
-    return in_array((int) $credit->userid, ep_get_referent_students($ep, $userid), true);
+    if ($pendingrole === EP_ROLE_REFERENT) {
+        return in_array((int) $credit->userid, ep_get_referent_students($ep, $userid), true);
+    }
+    return false;
 }
 
 /**
@@ -1699,10 +1904,14 @@ function ep_rights_can_validate(stdClass $rights, stdClass $credit) {
     if (!$rights->evaluateteacher) {
         return false;
     }
-    if (!empty($credit->activityid)) {
-        return in_array((int) $credit->activityid, $rights->responsibleids, true);
+    $pendingrole = ep_credit_pending_role($credit);
+    if ($pendingrole === EP_ROLE_OWNER) {
+        return !empty($credit->activityid) && in_array((int) $credit->activityid, $rights->responsibleids, true);
     }
-    return in_array((int) $credit->userid, $rights->referentids, true);
+    if ($pendingrole === EP_ROLE_REFERENT) {
+        return in_array((int) $credit->userid, $rights->referentids, true);
+    }
+    return false;
 }
 
 /**
@@ -2050,10 +2259,27 @@ function ep_render_credit_summary(stdClass $credit, $type = null, $student = nul
     $rows[] = [get_string('creditname', 'mod_ep'), format_string($credit->name)];
     $rows[] = [get_string('studyyear', 'mod_ep'), ep_studyyear_label($credit->studyyear)];
     $rows[] = [get_string('claimedects', 'mod_ep'), ep_format_ects($credit->claimedects)];
-    $rows[] = [
-        get_string('status', 'mod_ep'),
-        ep_render_credit_status($credit->status),
-    ];
+    $statuscell = ep_render_credit_status($credit->status);
+    if ((int) $credit->status === EP_STATUS_PENDING && $credit->pendingrole !== '') {
+        $statuscell .= ' ' . html_writer::span(
+            get_string('awaitingrole', 'mod_ep', ep_role_label($credit->pendingrole)),
+            'text-muted small'
+        );
+    }
+    $rows[] = [get_string('status', 'mod_ep'), $statuscell];
+    if ($type && !empty($type->validationflow)) {
+        $rows[] = [get_string('validationflow', 'mod_ep'), ep_flow_label($type->validationflow)];
+    }
+    if ($credit->grade !== null) {
+        $grading = ep_credit_grading($credit, $type ?: null);
+        $rows[] = [
+            get_string('grade', 'mod_ep'),
+            get_string('gradeoutof', 'mod_ep', (object) [
+                'grade' => ep_format_ects($credit->grade),
+                'max' => ep_format_ects($grading->grademax),
+            ]),
+        ];
+    }
     if ((int) $credit->status === EP_STATUS_VALIDATED) {
         $rows[] = [get_string('retainedects', 'mod_ep'), ep_format_ects($credit->retainedects)];
     }
@@ -2084,7 +2310,49 @@ function ep_render_credit_summary(stdClass $credit, $type = null, $student = nul
     $table->attributes['class'] = 'generaltable ep-credit-summary';
     $table->data = $rows;
 
-    return html_writer::table($table);
+    return html_writer::table($table) . ep_render_credit_decisions($credit);
+}
+
+/**
+ * Rend l'historique des décisions d'un crédit (une ligne par étape : qui, quand, quoi, note,
+ * ECTS, commentaire), ou rien s'il n'y en a pas encore.
+ *
+ * @param stdClass $credit
+ * @return string HTML
+ */
+function ep_render_credit_decisions(stdClass $credit) {
+    global $DB, $OUTPUT;
+
+    $decisions = ep_get_credit_decisions($credit->id);
+    if (empty($decisions)) {
+        return '';
+    }
+    $userids = array_filter(array_map(fn($d) => (int) $d->userid, $decisions));
+    $users = $userids ? $DB->get_records_list('user', 'id', $userids) : [];
+
+    $rows = [];
+    foreach ($decisions as $decision) {
+        $user = $users[$decision->userid] ?? null;
+        $rows[] = [
+            userdate($decision->timecreated, get_string('strftimedatetimeshort')),
+            ep_role_label($decision->role),
+            $user ? fullname($user) : '-',
+            get_string('decision_' . $decision->decision, 'mod_ep'),
+            $decision->grade !== null ? ep_format_ects($decision->grade) : '-',
+            $decision->decision === 'validated' ? ep_format_ects($decision->retainedects) : '-',
+            $decision->comment !== null && trim($decision->comment) !== ''
+                ? format_text($decision->comment, FORMAT_PLAIN) : '-',
+        ];
+    }
+    return $OUTPUT->heading(get_string('decisionhistory', 'mod_ep'), 5) . ep_render_paged_table([
+        get_string('decidedon', 'mod_ep'),
+        get_string('role', 'mod_ep'),
+        get_string('decidedby', 'mod_ep'),
+        get_string('decision', 'mod_ep'),
+        get_string('grade', 'mod_ep'),
+        get_string('retainedects', 'mod_ep'),
+        get_string('validatorcomment', 'mod_ep'),
+    ], $rows);
 }
 
 /**
@@ -2327,6 +2595,11 @@ function ep_print_student_dashboard(stdClass $ep, $userid, stdClass $cm, stdClas
  * Corps de la synchronisation des crédits de type stage, à appeler sous le verrou de l'activité
  * (voir ep_sync_stage_credits()).
  *
+ * Plusieurs types peuvent être alimentés par les stages, avec chacun sa portée (tous les stages,
+ * ceux à l'étranger, ceux en France) et son barème : un stage va au premier type, dans l'ordre
+ * d'affichage, dont la portée le couvre. Sans type actif doté d'un barème, aucun crédit n'est
+ * créé et les crédits existants sont retirés.
+ *
  * @param stdClass $ep
  * @return stdClass {created, updated, deleted}
  */
@@ -2335,20 +2608,31 @@ function ep_sync_stage_credits_locked(stdClass $ep) {
 
     $result = (object) ['created' => 0, 'updated' => 0, 'deleted' => 0];
 
-    $type = ep_get_type_by_code($ep->id, EP_TYPE_STAGE);
+    $stagetypes = ep_get_stage_types($ep->id);
     $existing = $DB->get_records('ep_credit', ['epid' => $ep->id, 'source' => EP_SOURCE_STAGE]);
     $byref = [];
     foreach ($existing as $credit) {
         $byref[(int) $credit->sourceref] = $credit;
     }
 
-    $entries = [];
-    if ($type && !empty($type->enabled) && $type->ectsperday > 0) {
-        $entries = ep_get_eligible_stage_entries($ep);
-    }
+    $entries = !empty($stagetypes) ? ep_get_eligible_stage_entries($ep) : [];
 
     $now = time();
     foreach ($entries as $entry) {
+        $type = null;
+        foreach ($stagetypes as $candidate) {
+            if (
+                $candidate->stagescope === 'all'
+                    || ($candidate->stagescope === 'abroad' && !empty($entry->abroad))
+                    || ($candidate->stagescope === 'domestic' && empty($entry->abroad))
+            ) {
+                $type = $candidate;
+                break;
+            }
+        }
+        if (!$type) {
+            continue;
+        }
         $ects = round((float) $entry->retainedduration * (float) $type->ectsperday, 2);
         $name = get_string('stagecreditname', 'mod_ep', (object) [
             'theme' => $entry->themename !== null ? format_string($entry->themename) : '-',
@@ -2377,6 +2661,7 @@ function ep_sync_stage_credits_locked(stdClass $ep) {
             $credit->claimedects = $ects;
             $credit->retainedects = $ects;
             $credit->status = EP_STATUS_VALIDATED;
+            $credit->pendingrole = '';
             $credit->validatetime = $now;
             $credit->timemodified = $now;
             $DB->update_record('ep_credit', $credit);
@@ -2401,6 +2686,7 @@ function ep_sync_stage_credits_locked(stdClass $ep) {
     // Ce qui reste dans $byref ne correspond plus à un stage complémentaire validé : le crédit
     // n'a plus lieu d'être.
     foreach ($byref as $orphan) {
+        $DB->delete_records('ep_credit_decision', ['creditid' => $orphan->id]);
         $DB->delete_records('ep_credit', ['id' => $orphan->id]);
         ep_trigger_credit_event(\mod_ep\event\credit_synced::class, $orphan, [
             'action' => 'deleted',
@@ -2511,10 +2797,9 @@ function ep_count_enrolled_students(context $context, $search = '', ?array $rest
  * ep_get_filtered_credits()).
  *
  * Périmètre d'un enseignant : en mode « view », les crédits de ses étudiants (comme référent) et
- * ceux des EP dont il est responsable ; en mode « decide », seulement ce sur quoi il a à statuer,
- * c'est-à-dire les déclarations hors catalogue de ses étudiants et les inscriptions aux EP dont il
- * est responsable (un référent n'a pas à statuer sur une inscription à un EP dont il n'est pas
- * responsable, même s'il est référent de l'étudiant). Les deux ensembles vides signifient qu'il
+ * ceux des EP dont il est responsable ; en mode « decide », seulement ce sur quoi il a à statuer
+ * à l'étape courante du circuit : les crédits de ses étudiants qui attendent le référent et les
+ * inscriptions à ses EP qui attendent le responsable. Les deux ensembles vides signifient qu'il
  * n'a rien à voir ici, et non qu'il peut tout voir : null est alors renvoyé.
  *
  * @param int $epid
@@ -2566,13 +2851,21 @@ function ep_filtered_credits_sql(
         $scope = [];
         if (!empty($restrictuserids)) {
             [$insql, $inparams] = $DB->get_in_or_equal($restrictuserids, SQL_PARAMS_NAMED, 'ru');
-            $scope[] = $scopemode === 'decide' ? "(c.activityid IS NULL AND c.userid $insql)" : "c.userid $insql";
+            $scope[] = $scopemode === 'decide'
+                ? "(c.pendingrole = :rolereferent AND c.userid $insql)"
+                : "c.userid $insql";
             $params += $inparams;
         }
         if (!empty($restrictactivityids)) {
             [$insql, $inparams] = $DB->get_in_or_equal($restrictactivityids, SQL_PARAMS_NAMED, 'ra');
-            $scope[] = "c.activityid $insql";
+            $scope[] = $scopemode === 'decide'
+                ? "(c.pendingrole = :roleowner AND c.activityid $insql)"
+                : "c.activityid $insql";
             $params += $inparams;
+        }
+        if ($scopemode === 'decide') {
+            $params['rolereferent'] = EP_ROLE_REFERENT;
+            $params['roleowner'] = EP_ROLE_OWNER;
         }
         if (empty($scope)) {
             return null;
@@ -2653,4 +2946,358 @@ function ep_count_credits_awaiting($ep, stdClass $rights) {
         return ep_count_filtered_credits($ep->id, $filters);
     }
     return ep_count_filtered_credits($ep->id, $filters, $rights->referentids, $rights->responsibleids, 'decide');
+}
+
+/**
+ * Valeurs par défaut d'un type, complétées par les paramètres donnés : sert à la création des
+ * types par défaut comme à celle d'un type ajouté par la DEVE.
+ *
+ * @param int $epid
+ * @param array $params Paramètres connus (code, name, acquisition...).
+ * @return stdClass Enregistrement prêt à insérer.
+ */
+function ep_type_record($epid, array $params) {
+    $now = time();
+    $record = (object) array_merge([
+        'epid' => $epid,
+        'code' => '',
+        'name' => '',
+        'description' => '',
+        'enabled' => 1,
+        'acquisition' => EP_ACQ_DECLARATION,
+        'validationflow' => EP_ROLE_REFERENT,
+        'grading' => EP_GRADING_NONE,
+        'grademax' => 20,
+        'gradepass' => 10,
+        'evidence' => EP_EVIDENCE_OPTIONAL,
+        'evidencetypes' => 'documents',
+        'maxclaimedects' => 0,
+        'stagescope' => 'all',
+        'insupplement' => 1,
+        'maxects' => 0,
+        'maxectsperyear' => 0,
+        'ectsperday' => 0,
+        'sortorder' => 0,
+        'timecreated' => $now,
+        'timemodified' => $now,
+    ], $params);
+    $record->validationflow = implode(',', ep_normalise_flow($record->validationflow, $record->acquisition));
+    return $record;
+}
+
+/**
+ * Modes d'acquisition proposés à la DEVE.
+ *
+ * @return array code => libellé
+ */
+function ep_acquisition_options() {
+    return [
+        EP_ACQ_CATALOG => get_string('acquisition_catalog', 'mod_ep'),
+        EP_ACQ_DECLARATION => get_string('acquisition_declaration', 'mod_ep'),
+        EP_ACQ_STAGE => get_string('acquisition_stage', 'mod_ep'),
+        EP_ACQ_DEVE => get_string('acquisition_deve', 'mod_ep'),
+    ];
+}
+
+/**
+ * Étapes d'un circuit de validation, dans l'ordre.
+ *
+ * @param string $flow Étapes séparées par des virgules.
+ * @return string[] Rôles (EP_ROLE_OWNER, EP_ROLE_REFERENT, EP_ROLE_DEVE), sans doublon.
+ */
+function ep_flow_steps($flow) {
+    $steps = [];
+    foreach (explode(',', (string) $flow) as $step) {
+        $step = trim($step);
+        if (in_array($step, [EP_ROLE_OWNER, EP_ROLE_REFERENT, EP_ROLE_DEVE], true) && !in_array($step, $steps, true)) {
+            $steps[] = $step;
+        }
+    }
+    return $steps;
+}
+
+/**
+ * Met un circuit de validation en accord avec le mode d'acquisition : un type attribué
+ * automatiquement ou saisi par la DEVE n'a pas de circuit (le crédit naît validé), l'étape
+ * « responsable de l'EP » n'a de sens que pour le catalogue.
+ *
+ * @param string|array $flow
+ * @param string $acquisition
+ * @return string[] Étapes retenues.
+ */
+function ep_normalise_flow($flow, $acquisition) {
+    $steps = is_array($flow) ? $flow : ep_flow_steps($flow);
+    if ($acquisition === EP_ACQ_STAGE || $acquisition === EP_ACQ_DEVE) {
+        return [];
+    }
+    if ($acquisition !== EP_ACQ_CATALOG) {
+        $steps = array_values(array_diff($steps, [EP_ROLE_OWNER]));
+    }
+    return array_values($steps);
+}
+
+/**
+ * Circuits de validation proposés à la DEVE pour un mode d'acquisition.
+ *
+ * @param string $acquisition
+ * @return array flow => libellé
+ */
+function ep_flow_options($acquisition) {
+    $options = ['' => get_string('flow_none', 'mod_ep')];
+    if ($acquisition === EP_ACQ_STAGE || $acquisition === EP_ACQ_DEVE) {
+        return $options;
+    }
+    $candidates = [
+        EP_ROLE_OWNER,
+        EP_ROLE_REFERENT,
+        EP_ROLE_DEVE,
+        EP_ROLE_OWNER . ',' . EP_ROLE_DEVE,
+        EP_ROLE_REFERENT . ',' . EP_ROLE_DEVE,
+        EP_ROLE_OWNER . ',' . EP_ROLE_REFERENT,
+        EP_ROLE_OWNER . ',' . EP_ROLE_REFERENT . ',' . EP_ROLE_DEVE,
+    ];
+    foreach ($candidates as $flow) {
+        $steps = ep_normalise_flow($flow, $acquisition);
+        if (empty($steps) || implode(',', $steps) !== $flow) {
+            continue;
+        }
+        $options[$flow] = implode(' → ', array_map('ep_role_label', $steps));
+    }
+    return $options;
+}
+
+/**
+ * Libellé d'un rôle du circuit de validation.
+ *
+ * @param string $role
+ * @return string
+ */
+function ep_role_label($role) {
+    $known = [EP_ROLE_OWNER, EP_ROLE_REFERENT, EP_ROLE_DEVE, EP_ROLE_STUDENT];
+    return in_array($role, $known, true) ? get_string('role_' . $role, 'mod_ep') : '-';
+}
+
+/**
+ * Libellé lisible d'un circuit de validation.
+ *
+ * @param string $flow
+ * @return string
+ */
+function ep_flow_label($flow) {
+    $steps = ep_flow_steps($flow);
+    if (empty($steps)) {
+        return get_string('flow_none', 'mod_ep');
+    }
+    return implode(' → ', array_map('ep_role_label', $steps));
+}
+
+/**
+ * Indique si les crédits d'un type naissent validés : aucune étape de validation.
+ *
+ * @param stdClass $type
+ * @return bool
+ */
+function ep_type_is_automatic(stdClass $type) {
+    return empty(ep_flow_steps($type->validationflow));
+}
+
+/**
+ * Indique si un type se prend par inscription au catalogue.
+ *
+ * @param stdClass $type
+ * @return bool
+ */
+function ep_type_is_catalog(stdClass $type) {
+    return $type->acquisition === EP_ACQ_CATALOG;
+}
+
+/**
+ * Indique si un type se déclare par l'étudiant.
+ *
+ * @param stdClass $type
+ * @return bool
+ */
+function ep_type_is_declarable(stdClass $type) {
+    return $type->acquisition === EP_ACQ_DECLARATION;
+}
+
+/**
+ * Indique si un type est alimenté automatiquement par les stages de mod_stage.
+ *
+ * @param stdClass $type
+ * @return bool
+ */
+function ep_type_is_stage(stdClass $type) {
+    return $type->acquisition === EP_ACQ_STAGE;
+}
+
+/**
+ * Indique si un type est noté (la note décide de la validation).
+ *
+ * @param stdClass $type
+ * @return bool
+ */
+function ep_type_is_graded(stdClass $type) {
+    return $type->grading === EP_GRADING_GRADE;
+}
+
+/**
+ * Formats de fichiers admis pour les justificatifs d'un type, dans la forme attendue par le
+ * gestionnaire de fichiers.
+ *
+ * @param stdClass $type
+ * @return array
+ */
+function ep_type_evidence_accepted_types(stdClass $type) {
+    return $type->evidencetypes === 'pdf' ? ['.pdf'] : ['document', 'image', 'archive'];
+}
+
+/**
+ * Options de justificatifs proposées à la DEVE.
+ *
+ * @return array int => libellé
+ */
+function ep_evidence_options() {
+    return [
+        EP_EVIDENCE_NONE => get_string('evidence_none', 'mod_ep'),
+        EP_EVIDENCE_OPTIONAL => get_string('evidence_optional', 'mod_ep'),
+        EP_EVIDENCE_REQUIRED => get_string('evidence_required', 'mod_ep'),
+    ];
+}
+
+/**
+ * Types alimentés par les stages de mod_stage, activés et dotés d'un barème, dans l'ordre
+ * d'affichage : un stage va au premier dont la portée (tous, à l'étranger, en France) le couvre.
+ *
+ * @param int $epid
+ * @return array id => stdClass
+ */
+function ep_get_stage_types($epid) {
+    return array_filter(ep_get_types($epid, true), function ($type) {
+        return ep_type_is_stage($type) && $type->ectsperday > 0;
+    });
+}
+
+/**
+ * Types dont la DEVE peut saisir un crédit à la main : tous sauf les types automatiques.
+ *
+ * @param int $epid
+ * @return array id => stdClass
+ */
+function ep_get_deve_entry_types($epid) {
+    return array_filter(ep_get_types($epid, true), function ($type) {
+        return !ep_type_is_stage($type);
+    });
+}
+
+/**
+ * Propose un code court unique dans l'instance à partir d'un libellé : lettres et chiffres
+ * ASCII, 20 caractères au plus, suffixé d'un numéro si le code existe déjà.
+ *
+ * @param int $epid
+ * @param string $name
+ * @param int $excludeid Type en cours d'édition, dont le code peut être conservé.
+ * @return string
+ */
+function ep_suggest_type_code($epid, $name, $excludeid = 0) {
+    global $DB;
+
+    $base = core_text::strtolower(core_text::specialtoascii($name));
+    $base = preg_replace('/[^a-z0-9]+/', '', $base);
+    // 18 caractères au plus : le code en admet 20, deux sont réservés au suffixe de dédoublonnage.
+    $base = core_text::substr($base ?: 'type', 0, 18);
+    $code = $base;
+    $suffix = 1;
+    while (true) {
+        $existing = $DB->get_record('ep_type', ['epid' => $epid, 'code' => $code], 'id');
+        if (!$existing || (int) $existing->id === (int) $excludeid) {
+            return $code;
+        }
+        $suffix++;
+        $code = $base . $suffix;
+    }
+}
+
+/**
+ * Enregistre un type (création ou modification), après mise en cohérence de ses paramètres.
+ *
+ * @param int $epid
+ * @param stdClass $data Champs du formulaire ; id présent pour une modification.
+ * @return int Identifiant du type.
+ */
+function ep_save_type($epid, stdClass $data) {
+    global $DB;
+
+    $existing = !empty($data->id) ? $DB->get_record('ep_type', ['id' => $data->id, 'epid' => $epid], '*', MUST_EXIST) : null;
+    $record = ep_type_record($epid, (array) $data + ($existing ? (array) $existing : []));
+    $record->epid = $epid;
+    $record->name = trim((string) $record->name);
+    $record->code = ep_suggest_type_code($epid, $record->code !== '' ? $record->code : $record->name, $existing->id ?? 0);
+    $record->enabled = empty($record->enabled) ? 0 : 1;
+    $record->insupplement = empty($record->insupplement) ? 0 : 1;
+    $record->grading = $record->grading === EP_GRADING_GRADE ? EP_GRADING_GRADE : EP_GRADING_NONE;
+    $record->grademax = max(1, round((float) $record->grademax, 2));
+    $record->gradepass = min($record->grademax, max(0, round((float) $record->gradepass, 2)));
+    $record->evidence = in_array((int) $record->evidence, [0, 1, 2], true) ? (int) $record->evidence : EP_EVIDENCE_OPTIONAL;
+    $record->evidencetypes = $record->evidencetypes === 'pdf' ? 'pdf' : 'documents';
+    $record->stagescope = in_array($record->stagescope, ['all', 'abroad', 'domestic'], true) ? $record->stagescope : 'all';
+    foreach (['maxects', 'maxectsperyear', 'maxclaimedects'] as $field) {
+        $record->$field = max(0, round((float) $record->$field, 2));
+    }
+    $record->ectsperday = ep_type_is_stage($record) ? max(0, round((float) $record->ectsperday, 3)) : 0;
+    $record->timemodified = time();
+
+    if ($existing) {
+        $record->id = $existing->id;
+        $record->timecreated = $existing->timecreated;
+        $DB->update_record('ep_type', $record);
+        return (int) $existing->id;
+    }
+    unset($record->id);
+    if (empty($record->sortorder)) {
+        $record->sortorder = 10 + (int) $DB->get_field('ep_type', 'MAX(sortorder)', ['epid' => $epid]);
+    }
+    return $DB->insert_record('ep_type', $record);
+}
+
+/**
+ * Indique si un type peut être supprimé : aucun crédit ni EP du catalogue ne s'y réfère. Un type
+ * utilisé se désactive, il ne se supprime pas.
+ *
+ * @param int $typeid
+ * @return bool
+ */
+function ep_type_is_deletable($typeid) {
+    global $DB;
+
+    return !$DB->record_exists('ep_credit', ['typeid' => $typeid])
+        && !$DB->record_exists('ep_activity', ['typeid' => $typeid]);
+}
+
+/**
+ * Déplace un type d'un cran vers le haut ou vers le bas dans l'ordre d'affichage, en
+ * renumérotant tous les types de l'instance de 10 en 10.
+ *
+ * @param stdClass $type
+ * @param int $direction -1 vers le haut, +1 vers le bas.
+ * @return void
+ */
+function ep_move_type(stdClass $type, $direction) {
+    global $DB;
+
+    $types = array_values(ep_get_types($type->epid));
+    $index = null;
+    foreach ($types as $i => $candidate) {
+        if ((int) $candidate->id === (int) $type->id) {
+            $index = $i;
+        }
+    }
+    $target = $index + ($direction < 0 ? -1 : 1);
+    if ($index === null || $target < 0 || $target >= count($types)) {
+        return;
+    }
+    [$types[$index], $types[$target]] = [$types[$target], $types[$index]];
+    foreach ($types as $i => $candidate) {
+        $DB->set_field('ep_type', 'sortorder', ($i + 1) * 10, ['id' => $candidate->id]);
+    }
 }
