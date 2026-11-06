@@ -19,7 +19,8 @@
  * liste filtrable de tout le périmètre — combiné sur toutes les activités « Enseignement
  * personnalisé » liées où l'utilisateur connecté a quelque chose à suivre. Page d'atterrissage de
  * l'activité (voir view.php, qui y redirige) ; dashboard.php la complète par le pilotage des
- * étudiants dont il est référent.
+ * étudiants dont il est référent, todo.php par le reste de ce qui attend une action de sa part
+ * (participants, syllabus, supplément au diplôme), dont le résumé figure en tête de page.
  *
  * @package   mod_epsynthesis
  * @copyright 2026 Sébastien Lefebvre
@@ -52,12 +53,12 @@ $PAGE->set_title(format_string($epsynthesis->name) . ' - ' . get_string('validat
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
+$activelinks = epsynthesis_get_active_links($epsynthesis->id, $USER->id);
+$todocounts = epsynthesis_count_todo($activelinks, $USER->id);
+
 echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($epsynthesis->name));
-echo html_writer::link(
-    new moodle_url('/mod/epsynthesis/dashboard.php', ['id' => $cm->id]),
-    get_string('pilotage', 'mod_ep')
-);
+echo epsynthesis_render_navlinks($cm, 'entries', $todocounts);
 
 if ($epsynthesis->intro) {
     echo $OUTPUT->box(format_module_intro('epsynthesis', $epsynthesis, $cm->id), 'generalbox mod_introbox');
@@ -65,7 +66,9 @@ if ($epsynthesis->intro) {
 
 echo epsynthesis_render_managelinks_notice($epsynthesis, $cm, $context);
 
-$activelinks = epsynthesis_get_active_links($epsynthesis->id, $USER->id);
+// Page d'atterrissage : ce qui attend l'utilisateur en dehors des demandes de crédits (participants,
+// syllabus, supplément au diplôme) y est résumé, le détail étant sur todo.php.
+echo epsynthesis_render_todo_summary($cm, $todocounts);
 
 if (empty($activelinks)) {
     echo $OUTPUT->notification(get_string('noscope', 'mod_epsynthesis'), 'info');

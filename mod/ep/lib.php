@@ -243,6 +243,92 @@ function ep_delete_instance($id) {
 }
 
 /**
+ * Éléments du formulaire de réinitialisation du cours : ce qui peut être effacé pour accueillir
+ * une nouvelle promotion. Le paramétrage (types, minimums, catalogue, syllabus, supplément,
+ * courriels) est toujours conservé.
+ *
+ * @param MoodleQuickForm $mform
+ * @return void
+ */
+function ep_reset_course_form_definition(&$mform) {
+    $mform->addElement('header', 'epheader', get_string('modulenameplural', 'mod_ep'));
+    $mform->addElement('advcheckbox', 'reset_ep_credits', get_string('resetcredits', 'mod_ep'));
+    $mform->addElement('advcheckbox', 'reset_ep_years', get_string('resetyears', 'mod_ep'));
+    $mform->addElement('advcheckbox', 'reset_ep_supplement', get_string('resetsupplement', 'mod_ep'));
+    $mform->addHelpButton('reset_ep_supplement', 'resetsupplement', 'mod_ep');
+    $mform->addElement('advcheckbox', 'reset_ep_importlog', get_string('resetimportlog', 'mod_ep'));
+}
+
+/**
+ * Valeurs par défaut du formulaire de réinitialisation : les dossiers de la promotion sont
+ * effacés, les suppléments au diplôme émis (documents certifiés) et le journal des imports sont
+ * conservés sauf demande explicite.
+ *
+ * @param stdClass $course
+ * @return array
+ */
+function ep_reset_course_form_defaults($course) {
+    return ['reset_ep_credits' => 1, 'reset_ep_years' => 1, 'reset_ep_supplement' => 0, 'reset_ep_importlog' => 0];
+}
+
+/**
+ * Réinitialise les données des utilisateurs des activités du cours, selon les choix du
+ * formulaire de réinitialisation.
+ *
+ * @param stdClass $data Données du formulaire (courseid, reset_ep_*).
+ * @return array Statut, une ligne par élément effacé.
+ */
+function ep_reset_userdata($data) {
+    global $DB;
+
+    $component = get_string('modulenameplural', 'mod_ep');
+    $status = [];
+    $instances = $DB->get_records('ep', ['course' => $data->courseid], '', 'id');
+    if (!$instances) {
+        return $status;
+    }
+    $fs = get_file_storage();
+    $contexts = [];
+    foreach ($instances as $instance) {
+        $cm = get_coursemodule_from_instance('ep', $instance->id, $data->courseid, false, IGNORE_MISSING);
+        if ($cm) {
+            $contexts[$instance->id] = context_module::instance($cm->id);
+        }
+    }
+
+    if (!empty($data->reset_ep_credits)) {
+        foreach ($contexts as $epid => $context) {
+            $fs->delete_area_files($context->id, 'mod_ep', EP_EVIDENCE_FILEAREA);
+            $DB->delete_records_select('ep_credit_decision', 'creditid IN (SELECT id FROM {ep_credit} WHERE epid = ?)', [$epid]);
+            $DB->delete_records('ep_credit', ['epid' => $epid]);
+        }
+        $status[] = ['component' => $component, 'item' => get_string('resetcredits', 'mod_ep'), 'error' => false];
+    }
+    if (!empty($data->reset_ep_years)) {
+        foreach (array_keys($contexts) as $epid) {
+            $DB->delete_records('ep_year_validation', ['epid' => $epid]);
+        }
+        $status[] = ['component' => $component, 'item' => get_string('resetyears', 'mod_ep'), 'error' => false];
+    }
+    if (!empty($data->reset_ep_supplement)) {
+        foreach ($contexts as $epid => $context) {
+            $fs->delete_area_files($context->id, 'mod_ep', EP_SUPPLEMENT_EVIDENCE_FILEAREA);
+            $fs->delete_area_files($context->id, 'mod_ep', EP_SUPPLEMENT_ISSUED_FILEAREA);
+            $DB->delete_records('ep_supplement_item', ['epid' => $epid]);
+            $DB->delete_records('ep_supplement_issue', ['epid' => $epid]);
+        }
+        $status[] = ['component' => $component, 'item' => get_string('resetsupplement', 'mod_ep'), 'error' => false];
+    }
+    if (!empty($data->reset_ep_importlog)) {
+        foreach (array_keys($contexts) as $epid) {
+            $DB->delete_records('ep_import_log', ['epid' => $epid]);
+        }
+        $status[] = ['component' => $component, 'item' => get_string('resetimportlog', 'mod_ep'), 'error' => false];
+    }
+    return $status;
+}
+
+/**
  * Returns a small object with summary information about what a user has done with a given
  * particular instance of this module.
  *

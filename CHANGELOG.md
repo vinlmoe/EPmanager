@@ -3,6 +3,35 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## 0.8.0 — mod_ep 2026111200, mod_epsynthesis 2026111200 (12 novembre 2026)
+
+Lot 7 : synthèse enseignant, données personnelles, réinitialisation du cours.
+
+### mod_epsynthesis
+- **Page « À traiter »** (`todo.php`), combinée sur toutes les promotions liées : EP dont
+  l'enseignant est responsable avec des inscrits en attente de sa décision, propositions et
+  révisions de syllabus à reprendre ou en attente de la DEVE, éléments du supplément au diplôme
+  à trancher comme référent (décision directe dans la page). Compteur dans la navigation commune
+  et résumé sur la page d'accueil de la synthèse. Requêtes groupées, liste paginée.
+- Correction : `view.php` utilisait l'instance sans l'avoir chargée.
+
+### mod_ep
+- **Données personnelles** : le fournisseur de confidentialité couvre toutes les tables
+  (crédits et historique des décisions, éléments du supplément, décisions d'année, suppléments
+  émis, responsables, syllabus, séances, journal des imports) et toutes les zones de fichiers.
+  L'export distingue le dossier de l'étudiant et les actions du personnel, sans nommer les autres
+  personnes ; l'effacement supprime le dossier de l'étudiant et désolidarise les décisions et
+  documents qu'un personnel a produits pour d'autres.
+- **Réinitialisation du cours** : effacement au choix des dossiers des étudiants, des décisions
+  d'année, des éléments et suppléments émis (non coché par défaut : documents certifiés) et du
+  journal des imports ; le paramétrage et le catalogue sont conservés.
+- Le commentaire du référent sur un élément du supplément est conservé pour la DEVE.
+- Chaînes manquantes des aides « Type » et « ECTS » du formulaire d'EP.
+- Schéma : plus de valeur par défaut vide sur les champs texte obligatoires (sans effet sur les
+  données).
+- Tests : confidentialité (métadonnées, contextes, export, effacements), réinitialisation
+  (116 tests mod_ep, 6 tests mod_epsynthesis).
+
 ## 0.7.0 — mod_ep 2026111100 (11 novembre 2026)
 
 Lot 6 : imports et exports.

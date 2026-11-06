@@ -23,9 +23,9 @@
             COMMENT="Circuit de validation des éléments que l'étudiant demande à ajouter à son supplément (vide, referent, deve, referent,deve)"/>
         <FIELD NAME="supplementevidence" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="2" SEQUENCE="false"
             COMMENT="Preuves des éléments ajoutés : 0 sans objet, 1 facultatives, 2 obligatoires (PDF)"/>
-        <FIELD NAME="supplementprefix" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="" SEQUENCE="false"
+        <FIELD NAME="supplementprefix" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false"
             COMMENT="Préfixe des numéros des suppléments émis (SD par défaut)"/>
-        <FIELD NAME="birthdatefield" TYPE="char" LENGTH="100" NOTNULL="true" DEFAULT="" SEQUENCE="false"
+        <FIELD NAME="birthdatefield" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false"
             COMMENT="Nom court du champ de profil personnalisé qui porte la date de naissance (rubrique 1.3)"/>
         <FIELD NAME="pdfheader" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="En-tête des documents PDF de l'activité"/>
         <FIELD NAME="pdffooter" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Pied de page des documents PDF de l'activité"/>
@@ -53,7 +53,7 @@
         <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"/>
         <FIELD NAME="acquisition" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="declaration" SEQUENCE="false"
             COMMENT="Comment un crédit de ce type arrive : catalog (inscription à un EP du catalogue), declaration (déclaré par l'étudiant avec justificatifs), stage (attribué automatiquement d'après les stages complémentaires validés dans mod_stage), deve (saisi par la DEVE ou importé)"/>
-        <FIELD NAME="validationflow" TYPE="char" LENGTH="50" NOTNULL="true" DEFAULT="" SEQUENCE="false"
+        <FIELD NAME="validationflow" TYPE="char" LENGTH="50" NOTNULL="true" SEQUENCE="false"
             COMMENT="Étapes de validation, dans l'ordre, séparées par des virgules, parmi owner (responsable de l'EP du catalogue), referent (enseignant référent de l'étudiant) et deve ; vide = validé d'office à la demande"/>
         <FIELD NAME="grading" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="none" SEQUENCE="false"
             COMMENT="none : validé ou non validé par le validateur ; grade : une note décide, selon grademax et gradepass"/>
@@ -103,7 +103,7 @@
         <FIELD NAME="maxstudyyear" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="capacity" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="Nombre de places (0 = illimité) : les inscriptions en attente comptent, pour ne pas ouvrir plus de places que ce que le responsable pourra valider"/>
-        <FIELD NAME="code" TYPE="char" LENGTH="30" NOTNULL="true" DEFAULT="" SEQUENCE="false"
+        <FIELD NAME="code" TYPE="char" LENGTH="30" NOTNULL="true" SEQUENCE="false"
             COMMENT="Code de l'EP, unique dans l'instance s'il est renseigné : identifie l'EP dans les imports et les exports"/>
         <FIELD NAME="state" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="published" SEQUENCE="false"
             COMMENT="draft (brouillon d'une proposition), proposed (soumis à la DEVE), published (au catalogue, inscriptions ouvertes selon la période), closed (au catalogue, inscriptions closes), archived (retiré du catalogue, inscriptions conservées)"/>
@@ -115,7 +115,7 @@
             COMMENT="Début du déroulement de l'EP (information)"/>
         <FIELD NAME="dateend" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="Fin du déroulement de l'EP (information)"/>
-        <FIELD NAME="grading" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="" SEQUENCE="false"
+        <FIELD NAME="grading" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false"
             COMMENT="Évaluation propre à l'EP : vide = celle de son type, none = sans note, grade = avec note (grademax, gradepass)"/>
         <FIELD NAME="grademax" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="20" SEQUENCE="false"/>
         <FIELD NAME="gradepass" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="10" SEQUENCE="false"/>
@@ -199,7 +199,7 @@
             COMMENT="-2 annulé, -1 refusé, 0 en attente de validation, 1 validé"/>
         <FIELD NAME="step" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="Étape courante du circuit de validation du type (0 = première), tant que le crédit est en attente"/>
-        <FIELD NAME="pendingrole" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="" SEQUENCE="false"
+        <FIELD NAME="pendingrole" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false"
             COMMENT="Rôle attendu à l'étape courante (owner, referent, deve), vide une fois le crédit tranché"/>
         <FIELD NAME="grade" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="false" SEQUENCE="false"
             COMMENT="Note obtenue, pour un type ou un EP noté"/>
@@ -241,9 +241,9 @@
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="creditid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="step" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
-        <FIELD NAME="role" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="" SEQUENCE="false"
+        <FIELD NAME="role" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false"
             COMMENT="owner, referent, deve ou student (retrait par l'étudiant)"/>
-        <FIELD NAME="decision" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="" SEQUENCE="false"
+        <FIELD NAME="decision" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false"
             COMMENT="validated, rejected ou cancelled"/>
         <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="grade" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="false" SEQUENCE="false"/>
@@ -290,7 +290,7 @@
         <FIELD NAME="assessment" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Conditions d'examen : modalités et critères d'évaluation, seuil"/>
         <FIELD NAME="resit" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Seconde session, rattrapage"/>
         <FIELD NAME="bibliography" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Lectures et ressources recommandées"/>
-        <FIELD NAME="language" TYPE="char" LENGTH="50" NOTNULL="true" DEFAULT="" SEQUENCE="false" COMMENT="Langue d'enseignement"/>
+        <FIELD NAME="language" TYPE="char" LENGTH="50" NOTNULL="true" SEQUENCE="false" COMMENT="Langue d'enseignement"/>
         <FIELD NAME="personalhours" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="Heures de travail personnel de l'étudiant, en plus des séances"/>
         <FIELD NAME="authorid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Auteur de cette version"/>
@@ -322,7 +322,7 @@
             COMMENT="lecture (cours magistral), tutorial (travaux dirigés), practical (travaux pratiques), clinical (clinique), fieldwork (terrain), project (projet), other"/>
         <FIELD NAME="duration" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Durée en heures"/>
         <FIELD NAME="teacherid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Intervenant, s'il a un compte"/>
-        <FIELD NAME="teachername" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT="" SEQUENCE="false" COMMENT="Intervenant sans compte (extérieur)"/>
+        <FIELD NAME="teachername" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Intervenant sans compte (extérieur)"/>
         <FIELD NAME="sessiondate" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
       </FIELDS>
@@ -340,7 +340,7 @@
         <FIELD NAME="msgkey" TYPE="char" LENGTH="30" NOTNULL="true" SEQUENCE="false"
             COMMENT="creditdecided, proposalsubmitted, proposalreviewed, pendingreminder, supplementissued"/>
         <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"/>
-        <FIELD NAME="subject" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT="" SEQUENCE="false"/>
+        <FIELD NAME="subject" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="body" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
       </FIELDS>
@@ -381,7 +381,7 @@
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="epid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
-        <FIELD NAME="nameen" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT="" SEQUENCE="false" COMMENT="Libellé anglais, pour un supplément édité en anglais"/>
+        <FIELD NAME="nameen" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Libellé anglais, pour un supplément édité en anglais"/>
         <FIELD NAME="description" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Consigne affichée à l'étudiant"/>
         <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"/>
         <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
@@ -401,13 +401,13 @@
         <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="categoryid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="title" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
-        <FIELD NAME="titleen" TYPE="char" LENGTH="255" NOTNULL="true" DEFAULT="" SEQUENCE="false"/>
+        <FIELD NAME="titleen" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="description" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="periodstart" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="periodend" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="-2 retiré, -1 refusé, 0 en attente, 1 validé"/>
         <FIELD NAME="step" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
-        <FIELD NAME="pendingrole" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="" SEQUENCE="false"/>
+        <FIELD NAME="pendingrole" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="validatedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="validatetime" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="validatorcomment" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
@@ -454,7 +454,7 @@
         <FIELD NAME="lang" TYPE="char" LENGTH="5" NOTNULL="true" DEFAULT="fr" SEQUENCE="false"/>
         <FIELD NAME="verifycode" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"
             COMMENT="Empreinte SHA-256 du contenu certifié (données du supplément, numéro, date) : imprimée sur le document, elle permet de vérifier qu'il n'a pas été altéré"/>
-        <FIELD NAME="filehash" TYPE="char" LENGTH="40" NOTNULL="true" DEFAULT="" SEQUENCE="false" COMMENT="Empreinte du fichier PDF conservé"/>
+        <FIELD NAME="filehash" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false" COMMENT="Empreinte du fichier PDF conservé"/>
         <FIELD NAME="issuedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="timeissued" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="replacedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Émission qui remplace celle-ci"/>

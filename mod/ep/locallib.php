@@ -5002,10 +5002,17 @@ function ep_decide_supplement_item(stdClass $ep, stdClass $item, $byuserid, $val
         $item->pendingrole = '';
         $item->validatedby = $byuserid;
         $item->validatetime = time();
-        $item->validatorcomment = $comment;
+        // Une décision finale sans commentaire garde celui de l'étape précédente (le référent).
+        if (trim((string) $comment) !== '' || empty($item->validatorcomment)) {
+            $item->validatorcomment = $comment;
+        }
     } else {
         $item->step = $next;
         $item->pendingrole = $steps[$next];
+        // Le commentaire d'une étape intermédiaire est gardé pour l'étape suivante.
+        if (trim((string) $comment) !== '') {
+            $item->validatorcomment = $comment;
+        }
     }
     $where = 'status = :pending';
     $params = ['pending' => EP_STATUS_PENDING];

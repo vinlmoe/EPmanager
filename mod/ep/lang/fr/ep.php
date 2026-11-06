@@ -122,8 +122,10 @@ $string['tasksyncstagecredits'] = 'Attribution des ECTS d\'EP issus des stages c
 
 // Catalogue.
 $string['catalogactivity'] = 'EP';
+$string['catalogactivitytype'] = 'Type';
 $string['catalogactivitytype_help'] = "Type auquel rattacher cet EP : c'est lui qui détermine le plafond d'ECTS "
     . "applicable à l'étudiant. Il s'agit normalement du type académique interne.";
+$string['catalogactivityects'] = 'Crédits (ECTS)';
 $string['catalogactivityects_help'] = "Nombre d'ECTS attribués à l'étudiant lorsque le responsable valide son "
     . "inscription. Il est propre à cet EP : l'étudiant ne le choisit pas.";
 $string['catalogactivityvisible_help'] = "Un EP masqué n'accepte plus de nouvelle inscription mais conserve celles "
@@ -327,20 +329,6 @@ $string['errorwrongyear'] = 'Cet EP n\'est pas ouvert à cette année d\'étude.
 $string['errorevidencemissing'] = 'Ce justificatif est introuvable.';
 
 // Confidentialité.
-$string['privacy:metadata:ep_credit'] = "Les enseignements personnalisés portés au crédit d'un étudiant : "
-    . "inscriptions au catalogue, déclarations et attributions automatiques.";
-$string['privacy:metadata:ep_credit:userid'] = 'Étudiant à qui l\'enseignement personnalisé est porté au crédit.';
-$string['privacy:metadata:ep_credit:name'] = 'Intitulé de l\'enseignement personnalisé.';
-$string['privacy:metadata:ep_credit:description'] = 'Description et justification saisies par l\'étudiant.';
-$string['privacy:metadata:ep_credit:claimedects'] = 'Nombre d\'ECTS demandés.';
-$string['privacy:metadata:ep_credit:retainedects'] = 'Nombre d\'ECTS retenus après validation.';
-$string['privacy:metadata:ep_credit:status'] = 'État de la demande (en attente, validée, refusée, retirée).';
-$string['privacy:metadata:ep_credit:validatedby'] = 'Utilisateur ayant validé, refusé ou retiré la demande.';
-$string['privacy:metadata:ep_credit:validatorcomment'] = 'Commentaire du validateur.';
-$string['privacy:metadata:ep_credit:timecreated'] = 'Date de la demande.';
-$string['privacy:metadata:ep_activity_teacher'] = "Enseignants désignés responsables d'un EP du catalogue.";
-$string['privacy:metadata:ep_activity_teacher:teacherid'] = 'Enseignant responsable.';
-$string['privacy:metadata:core_files'] = 'Justificatifs déposés à l\'appui d\'une demande.';
 $string['privacy:path:credits'] = 'Enseignements personnalisés';
 
 // Accès simultanés et confirmations.
@@ -886,3 +874,80 @@ $string['settingspart_catalog'] = 'Catalogue, syllabus et prérequis';
 $string['settingsimportdone'] = 'Paramétrage importé. Créés : {$a->created}. Mis à jour : {$a->updated}.';
 $string['settingsnone'] = 'aucun';
 $string['settingssourcename'] = 'Exporté depuis « {$a->source} » le {$a->date}.';
+
+// Confidentialité (lot 7).
+$string['privacy:metadata:ep_credit'] = 'Les EP portés au crédit d\'un étudiant : inscriptions au catalogue, déclarations, attributions automatiques, imports.';
+$string['privacy:metadata:ep_credit:userid'] = 'Étudiant à qui l\'EP est porté au crédit.';
+$string['privacy:metadata:ep_credit:name'] = 'Intitulé de l\'EP.';
+$string['privacy:metadata:ep_credit:description'] = 'Description et justification saisies par l\'étudiant.';
+$string['privacy:metadata:ep_credit:studyyear'] = 'Année d\'étude au titre de laquelle l\'EP est compté.';
+$string['privacy:metadata:ep_credit:claimedects'] = 'Nombre d\'ECTS demandés.';
+$string['privacy:metadata:ep_credit:retainedects'] = 'Nombre d\'ECTS retenus après validation.';
+$string['privacy:metadata:ep_credit:grade'] = 'Note obtenue.';
+$string['privacy:metadata:ep_credit:status'] = 'État de la demande (en attente, validée, refusée, retirée).';
+$string['privacy:metadata:ep_credit:validatedby'] = 'Utilisateur ayant pris la décision finale.';
+$string['privacy:metadata:ep_credit:addedby'] = 'Utilisateur ayant porté l\'EP au dossier (enseignant ou DEVE).';
+$string['privacy:metadata:ep_credit:validatorcomment'] = 'Commentaire du validateur.';
+$string['privacy:metadata:ep_credit:timecreated'] = 'Date de la demande.';
+$string['privacy:metadata:ep_credit_decision'] = 'Historique des décisions prises sur un EP porté au crédit, une par étape du circuit de validation.';
+$string['privacy:metadata:ep_credit_decision:userid'] = 'Utilisateur ayant pris la décision.';
+$string['privacy:metadata:ep_credit_decision:role'] = 'Rôle au titre duquel la décision a été prise.';
+$string['privacy:metadata:ep_credit_decision:decision'] = 'Décision (validée, refusée, retirée).';
+$string['privacy:metadata:ep_credit_decision:grade'] = 'Note saisie.';
+$string['privacy:metadata:ep_credit_decision:retainedects'] = 'ECTS retenus.';
+$string['privacy:metadata:ep_credit_decision:comment'] = 'Commentaire.';
+$string['privacy:metadata:ep_credit_decision:timecreated'] = 'Date de la décision.';
+$string['privacy:metadata:ep_activity'] = 'EP du catalogue.';
+$string['privacy:metadata:ep_activity:proposedby'] = 'Enseignant ayant proposé l\'EP.';
+$string['privacy:metadata:ep_activity_teacher'] = 'Enseignants désignés responsables d\'un EP du catalogue.';
+$string['privacy:metadata:ep_activity_teacher:teacherid'] = 'Enseignant responsable.';
+$string['privacy:metadata:ep_syllabus'] = 'Versions du syllabus d\'un EP du catalogue.';
+$string['privacy:metadata:ep_syllabus:authorid'] = 'Auteur de la version.';
+$string['privacy:metadata:ep_syllabus:reviewerid'] = 'Membre de la DEVE l\'ayant examinée.';
+$string['privacy:metadata:ep_syllabus:reviewcomment'] = 'Commentaire de l\'examen.';
+$string['privacy:metadata:ep_syllabus:timesubmitted'] = 'Date de soumission.';
+$string['privacy:metadata:ep_syllabus:timereviewed'] = 'Date de l\'examen.';
+$string['privacy:metadata:ep_session'] = 'Séances du programme d\'un EP.';
+$string['privacy:metadata:ep_session:teacherid'] = 'Intervenant de la séance.';
+$string['privacy:metadata:ep_year_validation'] = 'Décisions sur les années d\'étude d\'un étudiant.';
+$string['privacy:metadata:ep_year_validation:userid'] = 'Étudiant.';
+$string['privacy:metadata:ep_year_validation:studyyear'] = 'Année d\'étude.';
+$string['privacy:metadata:ep_year_validation:decision'] = 'Année validée ou non.';
+$string['privacy:metadata:ep_year_validation:retainedects'] = 'ECTS retenus pour l\'année au moment de la décision.';
+$string['privacy:metadata:ep_year_validation:comment'] = 'Commentaire.';
+$string['privacy:metadata:ep_year_validation:decidedby'] = 'Utilisateur ayant pris la décision.';
+$string['privacy:metadata:ep_year_validation:timedecided'] = 'Date de la décision.';
+$string['privacy:metadata:ep_supplement_item'] = 'Activités complémentaires demandées par un étudiant pour son supplément au diplôme.';
+$string['privacy:metadata:ep_supplement_item:userid'] = 'Étudiant.';
+$string['privacy:metadata:ep_supplement_item:title'] = 'Intitulé.';
+$string['privacy:metadata:ep_supplement_item:titleen'] = 'Intitulé en anglais.';
+$string['privacy:metadata:ep_supplement_item:description'] = 'Description.';
+$string['privacy:metadata:ep_supplement_item:periodstart'] = 'Début de la période.';
+$string['privacy:metadata:ep_supplement_item:periodend'] = 'Fin de la période.';
+$string['privacy:metadata:ep_supplement_item:status'] = 'État de la demande.';
+$string['privacy:metadata:ep_supplement_item:validatedby'] = 'Utilisateur ayant pris la décision finale.';
+$string['privacy:metadata:ep_supplement_item:validatorcomment'] = 'Commentaire du validateur.';
+$string['privacy:metadata:ep_supplement_item:timecreated'] = 'Date de la demande.';
+$string['privacy:metadata:ep_supplement_issue'] = 'Suppléments au diplôme émis au nom d\'un étudiant.';
+$string['privacy:metadata:ep_supplement_issue:userid'] = 'Étudiant.';
+$string['privacy:metadata:ep_supplement_issue:number'] = 'Numéro du document.';
+$string['privacy:metadata:ep_supplement_issue:lang'] = 'Langue.';
+$string['privacy:metadata:ep_supplement_issue:verifycode'] = 'Code de vérification imprimé sur le document.';
+$string['privacy:metadata:ep_supplement_issue:issuedby'] = 'Membre de la DEVE l\'ayant émis.';
+$string['privacy:metadata:ep_supplement_issue:timeissued'] = 'Date d\'émission.';
+$string['privacy:metadata:ep_import_log'] = 'Journal des imports faits dans l\'activité.';
+$string['privacy:metadata:ep_import_log:userid'] = 'Auteur de l\'import.';
+$string['privacy:metadata:ep_import_log:kind'] = 'Nature de l\'import.';
+$string['privacy:metadata:ep_import_log:itemcount'] = 'Nombre d\'éléments traités.';
+$string['privacy:metadata:ep_import_log:timecreated'] = 'Date de l\'import.';
+$string['privacy:metadata:core_files'] = 'Justificatifs des demandes, preuves des éléments du supplément et suppléments au diplôme émis (PDF).';
+$string['privacy:metadata:core_message'] = 'Notifications envoyées sur les décisions, les propositions, les relances et les suppléments émis.';
+$string['privacy:path:supplementitems'] = 'Éléments du supplément au diplôme';
+$string['privacy:path:years'] = 'Années d\'étude';
+$string['privacy:path:supplements'] = 'Suppléments au diplôme émis';
+$string['privacy:path:staff'] = 'Actions en tant que personnel';
+$string['resetcredits'] = 'Supprimer les dossiers des étudiants (inscriptions, demandes, EP portés au crédit, décisions, justificatifs)';
+$string['resetyears'] = 'Supprimer les décisions sur les années d\'étude';
+$string['resetsupplement'] = 'Supprimer les éléments du supplément au diplôme et les suppléments émis';
+$string['resetsupplement_help'] = 'Les suppléments émis sont des documents certifiés : une fois supprimés, leur code n\'est plus reconnu par la page de vérification. Téléchargez d\'abord l\'export complet de l\'activité s\'ils doivent être conservés.';
+$string['resetimportlog'] = 'Supprimer le journal des imports';

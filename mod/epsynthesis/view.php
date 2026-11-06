@@ -30,6 +30,7 @@ $id = required_param('id', PARAM_INT);
 
 $cm = get_coursemodule_from_id('epsynthesis', $id, 0, false, MUST_EXIST);
 $course = get_course($cm->course);
+$epsynthesis = $DB->get_record('epsynthesis', ['id' => $cm->instance], '*', MUST_EXIST);
 
 require_login($course, true, $cm);
 $context = context_module::instance($cm->id);

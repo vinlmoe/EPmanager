@@ -122,8 +122,10 @@ $string['tasksyncstagecredits'] = 'Award personalised learning credits from comp
 
 // Catalogue.
 $string['catalogactivity'] = 'Unit';
+$string['catalogactivitytype'] = 'Type';
 $string['catalogactivitytype_help'] = 'Type this unit belongs to: it determines the credit cap that applies to '
     . 'the student. This is normally the internal academic type.';
+$string['catalogactivityects'] = 'Credits (ECTS)';
 $string['catalogactivityects_help'] = 'Number of credits awarded to the student once the person in charge '
     . 'validates their enrolment. It belongs to the unit: the student does not choose it.';
 $string['catalogactivityvisible_help'] = 'A hidden unit accepts no new enrolment but keeps the ones already '
@@ -327,20 +329,6 @@ $string['errorwrongyear'] = 'This unit is not open to that study year.';
 $string['errorevidencemissing'] = 'This supporting document cannot be found.';
 
 // Privacy.
-$string['privacy:metadata:ep_credit'] = 'The personalised learning credited to a student: catalogue enrolments, '
-    . 'declarations and automatic awards.';
-$string['privacy:metadata:ep_credit:userid'] = 'Student the personalised learning is credited to.';
-$string['privacy:metadata:ep_credit:name'] = 'Title of the personalised learning.';
-$string['privacy:metadata:ep_credit:description'] = 'Description and justification entered by the student.';
-$string['privacy:metadata:ep_credit:claimedects'] = 'Number of credits requested.';
-$string['privacy:metadata:ep_credit:retainedects'] = 'Number of credits retained after validation.';
-$string['privacy:metadata:ep_credit:status'] = 'State of the request (pending, validated, rejected, withdrawn).';
-$string['privacy:metadata:ep_credit:validatedby'] = 'User who validated, rejected or withdrew the request.';
-$string['privacy:metadata:ep_credit:validatorcomment'] = "Validator's comment.";
-$string['privacy:metadata:ep_credit:timecreated'] = 'Date of the request.';
-$string['privacy:metadata:ep_activity_teacher'] = 'Teachers named in charge of a catalogue unit.';
-$string['privacy:metadata:ep_activity_teacher:teacherid'] = 'Teacher in charge.';
-$string['privacy:metadata:core_files'] = 'Supporting documents submitted with a request.';
 $string['privacy:path:credits'] = 'Personalised learning';
 
 // Concurrent access and confirmations.
@@ -886,3 +874,80 @@ $string['settingspart_catalog'] = 'Catalogue, syllabi and prerequisites';
 $string['settingsimportdone'] = 'Settings imported. Created: {$a->created}. Updated: {$a->updated}.';
 $string['settingsnone'] = 'none';
 $string['settingssourcename'] = 'Exported from "{$a->source}" on {$a->date}.';
+
+// Confidentialité (lot 7).
+$string['privacy:metadata:ep_credit'] = 'Personalised learning credited to a student: catalogue enrolments, declarations, automatic awards, imports.';
+$string['privacy:metadata:ep_credit:userid'] = 'Student the unit is credited to.';
+$string['privacy:metadata:ep_credit:name'] = 'Title of the unit.';
+$string['privacy:metadata:ep_credit:description'] = 'Description and justification entered by the student.';
+$string['privacy:metadata:ep_credit:studyyear'] = 'Study year the unit is counted in.';
+$string['privacy:metadata:ep_credit:claimedects'] = 'Number of credits requested.';
+$string['privacy:metadata:ep_credit:retainedects'] = 'Number of credits retained after validation.';
+$string['privacy:metadata:ep_credit:grade'] = 'Grade obtained.';
+$string['privacy:metadata:ep_credit:status'] = 'State of the request (pending, validated, rejected, withdrawn).';
+$string['privacy:metadata:ep_credit:validatedby'] = 'User who made the final decision.';
+$string['privacy:metadata:ep_credit:addedby'] = 'User who added the unit to the record (teacher or DEVE).';
+$string['privacy:metadata:ep_credit:validatorcomment'] = 'Validator\'s comment.';
+$string['privacy:metadata:ep_credit:timecreated'] = 'Date of the request.';
+$string['privacy:metadata:ep_credit_decision'] = 'History of the decisions taken on a credited unit, one per step of the validation workflow.';
+$string['privacy:metadata:ep_credit_decision:userid'] = 'User who took the decision.';
+$string['privacy:metadata:ep_credit_decision:role'] = 'Role in which the decision was taken.';
+$string['privacy:metadata:ep_credit_decision:decision'] = 'Decision (validated, rejected, withdrawn).';
+$string['privacy:metadata:ep_credit_decision:grade'] = 'Grade entered.';
+$string['privacy:metadata:ep_credit_decision:retainedects'] = 'Credits retained.';
+$string['privacy:metadata:ep_credit_decision:comment'] = 'Comment.';
+$string['privacy:metadata:ep_credit_decision:timecreated'] = 'Date of the decision.';
+$string['privacy:metadata:ep_activity'] = 'Catalogue units.';
+$string['privacy:metadata:ep_activity:proposedby'] = 'Teacher who proposed the unit.';
+$string['privacy:metadata:ep_activity_teacher'] = 'Teachers named in charge of a catalogue unit.';
+$string['privacy:metadata:ep_activity_teacher:teacherid'] = 'Teacher in charge.';
+$string['privacy:metadata:ep_syllabus'] = 'Versions of the syllabus of a catalogue unit.';
+$string['privacy:metadata:ep_syllabus:authorid'] = 'Author of the version.';
+$string['privacy:metadata:ep_syllabus:reviewerid'] = 'DEVE member who reviewed it.';
+$string['privacy:metadata:ep_syllabus:reviewcomment'] = 'Reviewer\'s comment.';
+$string['privacy:metadata:ep_syllabus:timesubmitted'] = 'Date of submission.';
+$string['privacy:metadata:ep_syllabus:timereviewed'] = 'Date of review.';
+$string['privacy:metadata:ep_session'] = 'Sessions of the programme of a unit.';
+$string['privacy:metadata:ep_session:teacherid'] = 'Lecturer of the session.';
+$string['privacy:metadata:ep_year_validation'] = 'Decisions on a student\'s study years.';
+$string['privacy:metadata:ep_year_validation:userid'] = 'Student.';
+$string['privacy:metadata:ep_year_validation:studyyear'] = 'Study year.';
+$string['privacy:metadata:ep_year_validation:decision'] = 'Year validated or not.';
+$string['privacy:metadata:ep_year_validation:retainedects'] = 'Credits retained for that year at the time of the decision.';
+$string['privacy:metadata:ep_year_validation:comment'] = 'Comment.';
+$string['privacy:metadata:ep_year_validation:decidedby'] = 'User who took the decision.';
+$string['privacy:metadata:ep_year_validation:timedecided'] = 'Date of the decision.';
+$string['privacy:metadata:ep_supplement_item'] = 'Additional activities requested by a student for their diploma supplement.';
+$string['privacy:metadata:ep_supplement_item:userid'] = 'Student.';
+$string['privacy:metadata:ep_supplement_item:title'] = 'Title.';
+$string['privacy:metadata:ep_supplement_item:titleen'] = 'Title in English.';
+$string['privacy:metadata:ep_supplement_item:description'] = 'Description.';
+$string['privacy:metadata:ep_supplement_item:periodstart'] = 'Start of the period.';
+$string['privacy:metadata:ep_supplement_item:periodend'] = 'End of the period.';
+$string['privacy:metadata:ep_supplement_item:status'] = 'State of the request.';
+$string['privacy:metadata:ep_supplement_item:validatedby'] = 'User who made the final decision.';
+$string['privacy:metadata:ep_supplement_item:validatorcomment'] = 'Validator\'s comment.';
+$string['privacy:metadata:ep_supplement_item:timecreated'] = 'Date of the request.';
+$string['privacy:metadata:ep_supplement_issue'] = 'Diploma supplements issued to a student.';
+$string['privacy:metadata:ep_supplement_issue:userid'] = 'Student.';
+$string['privacy:metadata:ep_supplement_issue:number'] = 'Number of the document.';
+$string['privacy:metadata:ep_supplement_issue:lang'] = 'Language.';
+$string['privacy:metadata:ep_supplement_issue:verifycode'] = 'Verification code printed on the document.';
+$string['privacy:metadata:ep_supplement_issue:issuedby'] = 'DEVE member who issued it.';
+$string['privacy:metadata:ep_supplement_issue:timeissued'] = 'Date of issue.';
+$string['privacy:metadata:ep_import_log'] = 'Log of the imports made in the activity.';
+$string['privacy:metadata:ep_import_log:userid'] = 'User who made the import.';
+$string['privacy:metadata:ep_import_log:kind'] = 'Kind of import.';
+$string['privacy:metadata:ep_import_log:itemcount'] = 'Number of items processed.';
+$string['privacy:metadata:ep_import_log:timecreated'] = 'Date of the import.';
+$string['privacy:metadata:core_files'] = 'Supporting documents of the requests, evidence of the supplement items and issued diploma supplements (PDF).';
+$string['privacy:metadata:core_message'] = 'Notifications sent about decisions, proposals, reminders and issued supplements.';
+$string['privacy:path:supplementitems'] = 'Diploma supplement items';
+$string['privacy:path:years'] = 'Study years';
+$string['privacy:path:supplements'] = 'Issued diploma supplements';
+$string['privacy:path:staff'] = 'Actions as staff';
+$string['resetcredits'] = 'Delete the students\' records (enrolments, requests, credited units, decisions, supporting documents)';
+$string['resetyears'] = 'Delete the decisions on study years';
+$string['resetsupplement'] = 'Delete the diploma supplement items and the issued supplements';
+$string['resetsupplement_help'] = 'Issued supplements are certified documents: once deleted, their verification code is no longer recognised by the verification page. Download the full export of the activity first if they must be kept.';
+$string['resetimportlog'] = 'Delete the import log';

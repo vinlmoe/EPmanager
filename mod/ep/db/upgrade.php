@@ -82,7 +82,7 @@ function xmldb_ep_upgrade($oldversion) {
         $table = new xmldb_table('ep_type');
         $fields = [
             new xmldb_field('acquisition', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'declaration', 'enabled'),
-            new xmldb_field('validationflow', XMLDB_TYPE_CHAR, '50', null, XMLDB_NOTNULL, null, '', 'acquisition'),
+            new xmldb_field('validationflow', XMLDB_TYPE_CHAR, '50', null, XMLDB_NOTNULL, null, null, 'acquisition'),
             new xmldb_field('grading', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'none', 'validationflow'),
             new xmldb_field('grademax', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '20', 'grading'),
             new xmldb_field('gradepass', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '10', 'grademax'),
@@ -111,7 +111,7 @@ function xmldb_ep_upgrade($oldversion) {
         $table = new xmldb_table('ep_credit');
         $fields = [
             new xmldb_field('step', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '0', 'status'),
-            new xmldb_field('pendingrole', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, '', 'step'),
+            new xmldb_field('pendingrole', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, null, 'step'),
             new xmldb_field('grade', XMLDB_TYPE_NUMBER, '10, 2', null, null, null, null, 'pendingrole'),
         ];
         foreach ($fields as $field) {
@@ -139,8 +139,8 @@ function xmldb_ep_upgrade($oldversion) {
         $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
         $table->add_field('creditid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
         $table->add_field('step', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '0');
-        $table->add_field('role', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, '');
-        $table->add_field('decision', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, '');
+        $table->add_field('role', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, null);
+        $table->add_field('decision', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, null);
         $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
         $table->add_field('grade', XMLDB_TYPE_NUMBER, '10, 2', null, null, null, null);
         $table->add_field('retainedects', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0');
@@ -182,13 +182,13 @@ function xmldb_ep_upgrade($oldversion) {
         // archivé (ses inscriptions restent au dossier).
         $table = new xmldb_table('ep_activity');
         $fields = [
-            new xmldb_field('code', XMLDB_TYPE_CHAR, '30', null, XMLDB_NOTNULL, null, '', 'capacity'),
+            new xmldb_field('code', XMLDB_TYPE_CHAR, '30', null, XMLDB_NOTNULL, null, null, 'capacity'),
             new xmldb_field('state', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'published', 'code'),
             new xmldb_field('registrationstart', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'state'),
             new xmldb_field('registrationend', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'registrationstart'),
             new xmldb_field('datestart', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'registrationend'),
             new xmldb_field('dateend', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'datestart'),
-            new xmldb_field('grading', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, '', 'dateend'),
+            new xmldb_field('grading', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, null, 'dateend'),
             new xmldb_field('grademax', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '20', 'grading'),
             new xmldb_field('gradepass', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '10', 'grademax'),
             new xmldb_field('minects', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0', 'gradepass'),
@@ -268,7 +268,7 @@ function xmldb_ep_upgrade($oldversion) {
         foreach ($textfields as $name) {
             $table->add_field($name, XMLDB_TYPE_TEXT, null, null, null, null, null);
         }
-        $table->add_field('language', XMLDB_TYPE_CHAR, '50', null, XMLDB_NOTNULL, null, '');
+        $table->add_field('language', XMLDB_TYPE_CHAR, '50', null, XMLDB_NOTNULL, null, null);
         $table->add_field('personalhours', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0');
         $table->add_field('authorid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
         $table->add_field('reviewerid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
@@ -294,7 +294,7 @@ function xmldb_ep_upgrade($oldversion) {
         $table->add_field('kind', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'lecture');
         $table->add_field('duration', XMLDB_TYPE_NUMBER, '10, 2', null, XMLDB_NOTNULL, null, '0');
         $table->add_field('teacherid', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
-        $table->add_field('teachername', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, '');
+        $table->add_field('teachername', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, null);
         $table->add_field('sessiondate', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
         $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
         $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
@@ -309,7 +309,7 @@ function xmldb_ep_upgrade($oldversion) {
         $table->add_field('epid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
         $table->add_field('msgkey', XMLDB_TYPE_CHAR, '30', null, XMLDB_NOTNULL, null, null);
         $table->add_field('enabled', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1');
-        $table->add_field('subject', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, '');
+        $table->add_field('subject', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, null);
         $table->add_field('body', XMLDB_TYPE_TEXT, null, null, null, null, null);
         $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
         $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
@@ -328,8 +328,8 @@ function xmldb_ep_upgrade($oldversion) {
         $fields = [
             new xmldb_field('supplementflow', XMLDB_TYPE_CHAR, '50', null, XMLDB_NOTNULL, null, 'deve', 'proposalsdirectpublish'),
             new xmldb_field('supplementevidence', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '2', 'supplementflow'),
-            new xmldb_field('supplementprefix', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, '', 'supplementevidence'),
-            new xmldb_field('birthdatefield', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, '', 'supplementprefix'),
+            new xmldb_field('supplementprefix', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null, 'supplementevidence'),
+            new xmldb_field('birthdatefield', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, null, 'supplementprefix'),
         ];
         foreach ($fields as $field) {
             if (!$dbman->field_exists($table, $field)) {

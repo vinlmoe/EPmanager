@@ -425,3 +425,508 @@ function epsynthesis_get_pilotage_rows(array $activelinks) {
     }
     return $rows;
 }
+
+/**
+ * Rend la barre de navigation commune aux écrans de la synthèse (validation, pilotage, « À
+ * traiter »), l'écran courant mis en évidence. Le lien « À traiter » porte le nombre de ce qui
+ * attend une action de l'utilisateur quand il est connu et non nul.
+ *
+ * @param stdClass $cm Course-module de la synthèse.
+ * @param string $current Écran courant : 'entries', 'dashboard' ou 'todo'.
+ * @param stdClass|null $counts Voir epsynthesis_count_todo() ; null si non calculé.
+ * @return string HTML
+ */
+function epsynthesis_render_navlinks(stdClass $cm, $current, ?stdClass $counts = null) {
+    $todolabel = ($counts && $counts->total > 0)
+        ? get_string('todowithcount', 'mod_epsynthesis', $counts->total)
+        : get_string('todo', 'mod_epsynthesis');
+    $pages = [
+        'entries' => get_string('validation', 'mod_ep'),
+        'dashboard' => get_string('pilotage', 'mod_ep'),
+        'todo' => $todolabel,
+    ];
+
+    $html = '';
+    foreach ($pages as $page => $label) {
+        $attributes = ['class' => 'btn btn-secondary mr-1 mb-1'];
+        if ($page === $current) {
+            $attributes = ['class' => 'btn btn-primary mr-1 mb-1', 'aria-current' => 'page'];
+        }
+        $html .= html_writer::link(new moodle_url('/mod/epsynthesis/' . $page . '.php', ['id' => $cm->id]), $label, $attributes);
+    }
+    return html_writer::div($html, 'epsynthesis-navlinks mb-3');
+}
+
+/**
+ * Droits « enseignant » de l'utilisateur dans une activité liée : ceux calculés par
+ * ep_get_user_rights(), sans ce que donnent les capacités de la DEVE. « À traiter » ne recense que
+ * ce qui revient à l'utilisateur comme responsable d'EP ou comme enseignant référent ; ce qu'il
+ * peut trancher en tant que DEVE se traite dans l'activité d'origine, avec ses écrans de gestion.
+ *
+ * @param stdClass $rights Voir ep_get_user_rights().
+ * @return stdClass Copie des droits, sans validatedeve ni viewall.
+ */
+function epsynthesis_teacher_rights(stdClass $rights) {
+    $teacher = clone $rights;
+    $teacher->validatedeve = false;
+    $teacher->viewall = false;
+    return $teacher;
+}
+
+/**
+ * Index des activités actives par identifiant d'instance mod_ep : les lignes lues en une requête
+ * sur toutes les activités ne portent que l'epid, d'où il faut retrouver le cours et le
+ * course-module d'origine.
+ *
+ * @param array $activelinks Voir epsynthesis_get_active_links().
+ * @return array epid => entrée de $activelinks
+ */
+function epsynthesis_links_by_epid(array $activelinks) {
+    $byepid = [];
+    foreach ($activelinks as $link) {
+        $byepid[(int) $link->ep->id] = $link;
+    }
+    return $byepid;
+}
+
+/**
+ * Clause WHERE (sur {ep_credit} c) des inscriptions qui attendent une décision de l'utilisateur
+ * en tant que responsable d'EP du catalogue : en attente, à l'étape « responsable », sur un EP
+ * dont il est responsable dans l'une des activités actives. Les identifiants d'EP du catalogue
+ * étant propres à une instance, la liste suffit à cibler la bonne activité.
+ *
+ * @param array $activelinks Voir epsynthesis_get_active_links().
+ * @return array{0: string, 1: array}|null [clause, paramètres], ou null si l'utilisateur n'est
+ *                                         responsable d'aucun EP.
+ */
+function epsynthesis_todo_participants_sql(array $activelinks) {
+    global $DB;
+
+    $activityids = [];
+    foreach ($activelinks as $link) {
+        foreach ($link->rights->responsibleids as $activityid) {
+            $activityids[] = (int) $activityid;
+        }
+    }
+    if (empty($activityids)) {
+        return null;
+    }
+
+    [$insql, $params] = $DB->get_in_or_equal($activityids, SQL_PARAMS_NAMED, 'tdact');
+    // Même périmètre que ep_get_credits_awaiting() en mode « decide », restreint à l'étape
+    // « responsable » : l'étape « référent » d'un EP du catalogue relève de entries.php.
+    $where = "c.activityid $insql AND c.status = :tdpending AND c.pendingrole = :tdowner AND c.source <> :tdstage";
+    $params += [
+        'tdpending' => EP_STATUS_PENDING,
+        'tdowner' => EP_ROLE_OWNER,
+        'tdstage' => EP_SOURCE_STAGE,
+    ];
+    return [$where, $params];
+}
+
+/**
+ * Clause WHERE (sur {ep_syllabus} s JOIN {ep_activity} a) des versions de travail de syllabus qui
+ * concernent l'utilisateur : celles des EP qu'il a proposés ou dont il est responsable, dans les
+ * activités actives — le périmètre « mes propositions » de mod/ep/proposals.php (voir
+ * ep_get_proposals()), sans ce que la DEVE a à examiner.
+ *
+ * @param array $activelinks Voir epsynthesis_get_active_links().
+ * @param int $userid
+ * @param string[] $statuses Statuts de syllabus retenus.
+ * @return array{0: string, 1: array}|null [clause, paramètres], ou null sans activité active.
+ */
+function epsynthesis_todo_syllabi_sql(array $activelinks, $userid, array $statuses = ['draft', 'submitted', 'returned']) {
+    global $DB;
+
+    if (empty($activelinks) || empty($statuses)) {
+        return null;
+    }
+    $epids = [];
+    foreach ($activelinks as $link) {
+        $epids[] = (int) $link->ep->id;
+    }
+    [$epsql, $params] = $DB->get_in_or_equal($epids, SQL_PARAMS_NAMED, 'tdep');
+    [$stsql, $stparams] = $DB->get_in_or_equal($statuses, SQL_PARAMS_NAMED, 'tdst');
+    $where = "a.epid $epsql AND s.status $stsql
+              AND (a.proposedby = :tdproposer
+                   OR EXISTS (SELECT 1 FROM {ep_activity_teacher} t
+                               WHERE t.activityid = a.id AND t.teacherid = :tdteacher))";
+    $params += $stparams + ['tdproposer' => $userid, 'tdteacher' => $userid];
+    return [$where, $params];
+}
+
+/**
+ * Clause WHERE (sur {ep_supplement_item} i) des éléments du supplément au diplôme que
+ * l'utilisateur peut trancher comme enseignant référent : en attente, à l'étape « référent »,
+ * demandés par l'un de ses étudiants — dans l'activité où il en est le référent, puisque la
+ * relation de référent est propre à chaque promotion.
+ *
+ * @param array $activelinks Voir epsynthesis_get_active_links().
+ * @return array{0: string, 1: array}|null [clause, paramètres], ou null si l'utilisateur n'est
+ *                                         référent d'aucun étudiant.
+ */
+function epsynthesis_todo_supplement_sql(array $activelinks) {
+    global $DB;
+
+    $scope = [];
+    $params = [];
+    foreach (array_values($activelinks) as $i => $link) {
+        if (empty($link->rights->referentids)) {
+            continue;
+        }
+        [$insql, $inparams] = $DB->get_in_or_equal($link->rights->referentids, SQL_PARAMS_NAMED, 'tdstu');
+        $scope[] = "(i.epid = :tdsep$i AND i.userid $insql)";
+        $params['tdsep' . $i] = (int) $link->ep->id;
+        $params += $inparams;
+    }
+    if (empty($scope)) {
+        return null;
+    }
+
+    $where = 'i.status = :tdspending AND i.pendingrole = :tdsreferent AND (' . implode(' OR ', $scope) . ')';
+    $params += ['tdspending' => EP_STATUS_PENDING, 'tdsreferent' => EP_ROLE_REFERENT];
+    return [$where, $params];
+}
+
+/**
+ * Nombres de ce qui attend une action de l'utilisateur sur les activités actives, en trois
+ * requêtes de comptage quel que soit le nombre d'activités liées : assez peu coûteux pour figurer
+ * dans la barre de navigation de chaque écran.
+ *
+ * Le total ne compte que ce que l'utilisateur a à faire : les versions de syllabus soumises,
+ * données pour information, attendent la DEVE et n'y entrent pas.
+ *
+ * @param array $activelinks Voir epsynthesis_get_active_links().
+ * @param int $userid
+ * @return stdClass {participants, syllabi (à reprendre), submitted (en attente de la DEVE),
+ *                  supplement, total}
+ */
+function epsynthesis_count_todo(array $activelinks, $userid) {
+    global $DB;
+
+    $counts = (object) ['participants' => 0, 'syllabi' => 0, 'submitted' => 0, 'supplement' => 0, 'total' => 0];
+
+    $built = epsynthesis_todo_participants_sql($activelinks);
+    if ($built !== null) {
+        [$where, $params] = $built;
+        $counts->participants = $DB->count_records_sql(
+            "SELECT COUNT(c.id)
+               FROM {ep_credit} c
+               JOIN {user} u ON u.id = c.userid
+              WHERE $where",
+            $params
+        );
+    }
+
+    $built = epsynthesis_todo_syllabi_sql($activelinks, $userid);
+    if ($built !== null) {
+        [$where, $params] = $built;
+        $rows = $DB->get_records_sql(
+            "SELECT s.status, COUNT(s.id) AS n
+               FROM {ep_syllabus} s
+               JOIN {ep_activity} a ON a.id = s.activityid
+              WHERE $where
+           GROUP BY s.status",
+            $params
+        );
+        foreach ($rows as $row) {
+            if ($row->status === 'submitted') {
+                $counts->submitted += (int) $row->n;
+            } else {
+                $counts->syllabi += (int) $row->n;
+            }
+        }
+    }
+
+    $built = epsynthesis_todo_supplement_sql($activelinks);
+    if ($built !== null) {
+        [$where, $params] = $built;
+        $counts->supplement = $DB->count_records_sql(
+            "SELECT COUNT(i.id)
+               FROM {ep_supplement_item} i
+               JOIN {user} u ON u.id = i.userid
+              WHERE $where",
+            $params
+        );
+    }
+
+    $counts->total = $counts->participants + $counts->syllabi + $counts->supplement;
+    return $counts;
+}
+
+/**
+ * EP du catalogue dont l'utilisateur est responsable et qui ont des inscriptions en attente de sa
+ * décision, avec leur nombre, en une requête groupée sur toutes les activités actives. Triés de
+ * la plus ancienne demande à la plus récente : c'est le retard accumulé qui doit remonter.
+ *
+ * @param array $activelinks Voir epsynthesis_get_active_links().
+ * @return array Liste de {id, epid, name, code, pendingcount, oldest, cmid, coursename, epname}.
+ */
+function epsynthesis_get_todo_participants(array $activelinks) {
+    global $DB;
+
+    $built = epsynthesis_todo_participants_sql($activelinks);
+    if ($built === null) {
+        return [];
+    }
+    [$where, $params] = $built;
+    $rows = $DB->get_records_sql(
+        "SELECT a.id, a.epid, a.name, a.code, COUNT(c.id) AS pendingcount, MIN(c.timecreated) AS oldest
+           FROM {ep_credit} c
+           JOIN {ep_activity} a ON a.id = c.activityid
+           JOIN {user} u ON u.id = c.userid
+          WHERE $where
+       GROUP BY a.id, a.epid, a.name, a.code",
+        $params
+    );
+
+    $byepid = epsynthesis_links_by_epid($activelinks);
+    $result = [];
+    foreach ($rows as $row) {
+        $link = $byepid[(int) $row->epid] ?? null;
+        if (!$link) {
+            continue;
+        }
+        $row->pendingcount = (int) $row->pendingcount;
+        $row->oldest = (int) $row->oldest;
+        $row->cmid = (int) $link->cm->id;
+        $row->coursename = $link->coursename;
+        $row->epname = $link->epname;
+        $result[] = $row;
+    }
+
+    usort($result, function ($a, $b) {
+        return [$a->oldest, $a->id] <=> [$b->oldest, $b->id];
+    });
+    return $result;
+}
+
+/**
+ * Versions de travail de syllabus de l'utilisateur sur toutes les activités actives (voir
+ * epsynthesis_todo_syllabi_sql()), en une requête, enrichies de ce qu'il faut pour les afficher
+ * et les lier : activité d'origine, droit de rédaction, droit de consultation.
+ *
+ * Le droit de rédaction reprend la règle de ep_can_edit_syllabus() à partir de ce que la requête
+ * a déjà lu (responsable ou non, auteur de la proposition, état de l'EP) et des capacités
+ * vérifiées une fois par activité, plutôt que de rejouer ses requêtes ligne à ligne ; la page de
+ * rédaction le revérifie de toute façon à l'ouverture.
+ *
+ * @param array $activelinks Voir epsynthesis_get_active_links().
+ * @param int $userid
+ * @return array Liste de stdClass syllabus {id, activityid, version, status, authorid,
+ *               reviewcomment, timesubmitted, timereviewed, timemodified, epid, activityname,
+ *               activitycode, activitystate, proposedby, isteacher, cmid, coursename, epname,
+ *               canedit, canview}, du plus récemment modifié au plus ancien.
+ */
+function epsynthesis_get_todo_syllabi(array $activelinks, $userid) {
+    global $DB;
+
+    $built = epsynthesis_todo_syllabi_sql($activelinks, $userid);
+    if ($built === null) {
+        return [];
+    }
+    [$where, $params] = $built;
+    $rows = $DB->get_records_sql(
+        "SELECT s.id, s.activityid, s.version, s.status, s.authorid, s.reviewcomment, s.timesubmitted,
+                s.timereviewed, s.timemodified, a.epid, a.name AS activityname, a.code AS activitycode,
+                a.state AS activitystate, a.proposedby,
+                CASE WHEN EXISTS (SELECT 1 FROM {ep_activity_teacher} t2
+                                   WHERE t2.activityid = a.id AND t2.teacherid = :tdteacher2)
+                     THEN 1 ELSE 0 END AS isteacher
+           FROM {ep_syllabus} s
+           JOIN {ep_activity} a ON a.id = s.activityid
+          WHERE $where
+       ORDER BY s.timemodified DESC, s.id DESC",
+        $params + ['tdteacher2' => $userid]
+    );
+
+    $byepid = epsynthesis_links_by_epid($activelinks);
+    $canpropose = [];
+    $result = [];
+    foreach ($rows as $row) {
+        $link = $byepid[(int) $row->epid] ?? null;
+        if (!$link) {
+            continue;
+        }
+        $epid = (int) $row->epid;
+        if (!isset($canpropose[$epid])) {
+            $canpropose[$epid] = has_capability('mod/ep:propose', $link->context, $userid);
+        }
+        $isproposer = !empty($row->proposedby) && (int) $row->proposedby === (int) $userid
+            && in_array($row->activitystate, [EP_ACTIVITY_DRAFT, EP_ACTIVITY_PROPOSED], true);
+        // Règle de ep_can_edit_syllabus().
+        $canedit = $link->rights->manage
+            || ($canpropose[$epid] && (!empty($row->isteacher) || $isproposer));
+
+        $row->isteacher = (int) $row->isteacher;
+        $row->cmid = (int) $link->cm->id;
+        $row->coursename = $link->coursename;
+        $row->epname = $link->epname;
+        $row->canedit = $canedit;
+        // Règle de mod/ep/syllabus.php : un EP hors catalogue n'est lisible que de qui le rédige
+        // ou le publie.
+        $row->canview = $canedit
+            || in_array($row->activitystate, [EP_ACTIVITY_PUBLISHED, EP_ACTIVITY_CLOSED], true);
+        $result[] = $row;
+    }
+    return $result;
+}
+
+/**
+ * Éléments du supplément au diplôme que l'utilisateur peut trancher comme référent (voir
+ * epsynthesis_todo_supplement_sql()), du plus ancien au plus récent, une page à la fois : une
+ * promotion entière peut en avoir déposé en même temps.
+ *
+ * @param array $activelinks Voir epsynthesis_get_active_links().
+ * @param int $limitfrom
+ * @param int $limitnum
+ * @return array id => stdClass élément, enrichi de cmid et coursename.
+ */
+function epsynthesis_get_todo_supplement_items(array $activelinks, $limitfrom = 0, $limitnum = 0) {
+    global $DB;
+
+    $built = epsynthesis_todo_supplement_sql($activelinks);
+    if ($built === null) {
+        return [];
+    }
+    [$where, $params] = $built;
+    $items = $DB->get_records_sql(
+        "SELECT i.*
+           FROM {ep_supplement_item} i
+           JOIN {user} u ON u.id = i.userid
+          WHERE $where
+       ORDER BY i.timecreated ASC, i.id ASC",
+        $params,
+        $limitfrom,
+        $limitnum
+    );
+
+    $byepid = epsynthesis_links_by_epid($activelinks);
+    foreach ($items as $id => $item) {
+        $link = $byepid[(int) $item->epid] ?? null;
+        if (!$link) {
+            unset($items[$id]);
+            continue;
+        }
+        $item->cmid = (int) $link->cm->id;
+        $item->coursename = $link->coursename;
+    }
+    return $items;
+}
+
+/**
+ * Preuves déposées pour une liste d'éléments du supplément, lues en une requête plutôt qu'élément
+ * par élément : seuls les fichiers de la zone des preuves, dans le contexte de l'activité de
+ * chaque élément, sont retenus — comme le fait mod/ep/supplement_file.php, qui en contrôle
+ * l'accès au téléchargement.
+ *
+ * @param array $items Éléments (voir epsynthesis_get_todo_supplement_items()).
+ * @param array $activelinks Voir epsynthesis_get_active_links().
+ * @return array itemid => liste de {filename, pathnamehash}, triés par nom.
+ */
+function epsynthesis_get_supplement_proofs(array $items, array $activelinks) {
+    global $DB;
+
+    if (empty($items)) {
+        return [];
+    }
+    $byepid = epsynthesis_links_by_epid($activelinks);
+    $contextbyitem = [];
+    foreach ($items as $item) {
+        if (isset($byepid[(int) $item->epid])) {
+            $contextbyitem[(int) $item->id] = (int) $byepid[(int) $item->epid]->context->id;
+        }
+    }
+    if (empty($contextbyitem)) {
+        return [];
+    }
+
+    [$itemsql, $params] = $DB->get_in_or_equal(array_keys($contextbyitem), SQL_PARAMS_NAMED, 'pit');
+    [$ctxsql, $ctxparams] = $DB->get_in_or_equal(array_values(array_unique($contextbyitem)), SQL_PARAMS_NAMED, 'pctx');
+    $files = $DB->get_records_sql(
+        "SELECT f.id, f.contextid, f.itemid, f.filename, f.pathnamehash
+           FROM {files} f
+          WHERE f.component = :component AND f.filearea = :filearea AND f.filename <> :dot
+                AND f.itemid $itemsql AND f.contextid $ctxsql
+       ORDER BY f.filename ASC, f.id ASC",
+        $params + $ctxparams + [
+            'component' => 'mod_ep',
+            'filearea' => EP_SUPPLEMENT_EVIDENCE_FILEAREA,
+            'dot' => '.',
+        ]
+    );
+
+    $proofs = [];
+    foreach ($files as $file) {
+        $itemid = (int) $file->itemid;
+        if (($contextbyitem[$itemid] ?? 0) !== (int) $file->contextid) {
+            continue;
+        }
+        $proofs[$itemid][] = (object) ['filename' => $file->filename, 'pathnamehash' => $file->pathnamehash];
+    }
+    return $proofs;
+}
+
+/**
+ * Décision de l'utilisateur, comme enseignant référent, sur un élément du supplément au diplôme,
+ * depuis la synthèse. L'élément est relu, son activité doit faire partie des activités actives
+ * et le droit de statuer est réévalué sur son état courant juste avant l'écriture, elle-même
+ * conditionnée à l'étape « référent » : le formulaire affiché a pu être dépassé par une autre
+ * décision (la DEVE, un autre référent) ou par un retrait de l'étudiant.
+ *
+ * @param array $activelinks Voir epsynthesis_get_active_links().
+ * @param int $itemid
+ * @param int $userid
+ * @param bool $validate True pour valider, false pour refuser.
+ * @param string $comment
+ * @return bool False si l'élément n'existe plus, est hors du périmètre de l'utilisateur ou n'est
+ *              plus en attente de sa décision : rien n'a été écrit.
+ */
+function epsynthesis_decide_supplement_item(array $activelinks, $itemid, $userid, $validate, $comment) {
+    global $DB;
+
+    $item = $DB->get_record('ep_supplement_item', ['id' => $itemid]);
+    if (!$item) {
+        return false;
+    }
+    $link = epsynthesis_links_by_epid($activelinks)[(int) $item->epid] ?? null;
+    if (!$link) {
+        return false;
+    }
+    if (!ep_rights_can_decide_supplement_item(epsynthesis_teacher_rights($link->rights), $item)) {
+        return false;
+    }
+    return ep_decide_supplement_item($link->ep, $item, $userid, (bool) $validate, (string) $comment, EP_ROLE_REFERENT);
+}
+
+/**
+ * Rend, en tête de la page d'atterrissage, le résumé de ce qui attend une action de
+ * l'utilisateur (voir epsynthesis_count_todo()), avec un lien vers chaque section de todo.php.
+ *
+ * @param stdClass $cm Course-module de la synthèse.
+ * @param stdClass $counts Voir epsynthesis_count_todo().
+ * @return string HTML, ou '' s'il n'y a rien à traiter.
+ */
+function epsynthesis_render_todo_summary(stdClass $cm, stdClass $counts) {
+    if ($counts->total <= 0) {
+        return '';
+    }
+    $todourl = new moodle_url('/mod/epsynthesis/todo.php', ['id' => $cm->id]);
+    $lines = [
+        'participants' => $counts->participants,
+        'syllabi' => $counts->syllabi,
+        'supplement' => $counts->supplement,
+    ];
+    $items = [];
+    foreach ($lines as $key => $count) {
+        $text = get_string('todosummary_' . $key, 'mod_epsynthesis', $count);
+        $items[] = $count > 0
+            ? html_writer::link(new moodle_url($todourl, null, 'todo-' . $key), $text)
+            : html_writer::span($text, 'text-muted');
+    }
+    return html_writer::div(
+        html_writer::tag('strong', get_string('todo', 'mod_epsynthesis')) .
+        html_writer::alist($items, ['class' => 'mb-0']),
+        'alert alert-info'
+    );
+}

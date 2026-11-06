@@ -137,9 +137,10 @@ final class supplement_test extends \advanced_testcase {
         $this->assertTrue(ep_update_supplement_item($item));
 
         $sink = $this->redirectMessages();
-        $this->assertTrue(ep_decide_supplement_item($ep, $item, $this->referent->id, true, '', EP_ROLE_REFERENT));
+        $this->assertTrue(ep_decide_supplement_item($ep, $item, $this->referent->id, true, 'Vu en réunion', EP_ROLE_REFERENT));
         $item = $DB->get_record('ep_supplement_item', ['id' => $itemid]);
         $this->assertSame(EP_ROLE_DEVE, $item->pendingrole);
+        $this->assertSame('Vu en réunion', $item->validatorcomment);
         $this->assertFalse(ep_rights_can_decide_supplement_item($referent, $item));
         $this->assertFalse(ep_decide_supplement_item($ep, clone $item, $this->referent->id, true, '', EP_ROLE_REFERENT));
         $this->assertCount(0, $sink->get_messages());

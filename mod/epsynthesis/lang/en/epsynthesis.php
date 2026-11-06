@@ -60,5 +60,26 @@ $string['hiddenactivity'] = 'hidden activity';
 $string['noscope'] = 'You are not the referent teacher of any student and you are not in charge of any unit in '
     . 'the linked activities.';
 
+$string['todo'] = 'To do';
+$string['todowithcount'] = 'To do ({$a})';
+$string['todointro'] = 'What awaits an action from you in the linked activities, as the teacher in charge of a unit '
+    . 'or as referent teacher, apart from credit requests (see Validation). Each line leads to the page of the '
+    . 'source activity where you can act; supplement items can be decided directly here.';
+$string['todoparticipants'] = 'Units you are in charge of: participants awaiting your decision ({$a})';
+$string['todonoparticipants'] = 'No participant is awaiting your decision.';
+$string['todopendingparticipants'] = 'Awaiting your decision';
+$string['todooldest'] = 'Oldest request';
+$string['todosyllabi'] = 'Proposals and syllabus revisions to work on ({$a})';
+$string['todonosyllabi'] = 'No proposal or syllabus revision to work on.';
+$string['todosubmitted'] = 'Awaiting the DEVE ({$a})';
+$string['todosubmitted_help'] = 'For information: these versions have been submitted, the decision now lies with '
+    . 'the DEVE.';
+$string['todolastchange'] = 'Last change';
+$string['todosupplement'] = 'Diploma supplement items to review as referent teacher ({$a})';
+$string['todonosupplement'] = 'No diploma supplement item is awaiting your decision.';
+$string['todosummary_participants'] = '{$a} participant(s) to grade or validate in the units you are in charge of';
+$string['todosummary_syllabi'] = '{$a} proposal(s) or syllabus revision(s) to work on';
+$string['todosummary_supplement'] = '{$a} diploma supplement item(s) to review';
+
 $string['privacy:metadata'] = 'The Personalised learning follow-up plugin stores no personal data: it only '
     . 'displays data already held in the linked "Personalised learning" activities.';
