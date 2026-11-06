@@ -2141,12 +2141,13 @@ function ep_render_paged_table(array $head, array $rows, $pagingbar = '', $class
  * @param int $page Page courante (0-indexée).
  * @param moodle_url $baseurl
  * @param int $perpage
+ * @param string $pagevar Paramètre de page, quand une page porte deux listes.
  * @return string HTML, vide s'il n'y a qu'une page.
  */
-function ep_render_paging_bar($total, $page, moodle_url $baseurl, $perpage = EP_LIST_PERPAGE) {
+function ep_render_paging_bar($total, $page, moodle_url $baseurl, $perpage = EP_LIST_PERPAGE, $pagevar = 'page') {
     global $OUTPUT;
 
-    return $total > $perpage ? $OUTPUT->render(new paging_bar($total, $page, $perpage, $baseurl)) : '';
+    return $total > $perpage ? $OUTPUT->render(new paging_bar($total, $page, $perpage, $baseurl, $pagevar)) : '';
 }
 
 /**
@@ -3591,6 +3592,147 @@ function ep_get_missing_prerequisites(stdClass $ep, stdClass $activity, $userid)
                 'required' => ep_format_ects($activity->minects),
                 'retained' => ep_format_ects($retained),
             ]);
+        }
+    }
+    return $missing;
+}
+
+/**
+ * Prérequis manquants d'un étudiant pour une liste d'EP, en un nombre fixe de requêtes : c'est
+ * la version de ep_get_missing_prerequisites() pour une page qui les affiche tous (le
+ * catalogue), où l'appel EP par EP coûterait plusieurs requêtes par ligne.
+ *
+ * @param stdClass $ep
+ * @param array $activities id => stdClass EP
+ * @param int $userid
+ * @return array activityid => string[] prérequis manquants (les EP sans manque n'y sont pas)
+ */
+function ep_get_missing_prerequisites_bulk(stdClass $ep, array $activities, $userid) {
+    global $DB;
+
+    if (!$activities) {
+        return [];
+    }
+    $required = [];
+    foreach (array_chunk(array_keys($activities), 500) as $chunk) {
+        [$insql, $params] = $DB->get_in_or_equal($chunk);
+        $rs = $DB->get_recordset_select('ep_activity_prereq', "activityid $insql", $params, '', 'id, activityid, requiredid');
+        foreach ($rs as $row) {
+            $required[(int) $row->activityid][] = (int) $row->requiredid;
+        }
+        $rs->close();
+    }
+    $validated = [];
+    if ($required) {
+        $validated = array_flip(array_map('intval', $DB->get_fieldset_select(
+            'ep_credit',
+            'DISTINCT activityid',
+            'epid = :epid AND userid = :userid AND status = :validated AND activityid IS NOT NULL',
+            ['epid' => $ep->id, 'userid' => $userid, 'validated' => EP_STATUS_VALIDATED]
+        )));
+    }
+    $names = [];
+    foreach ($activities as $activity) {
+        $names[(int) $activity->id] = $activity->name;
+    }
+    $unknown = array_diff(array_unique(array_merge([], ...array_values($required))), array_keys($names));
+    if ($unknown) {
+        foreach ($DB->get_records_list('ep_activity', 'id', $unknown, '', 'id, name') as $row) {
+            $names[(int) $row->id] = $row->name;
+        }
+    }
+    $retained = null;
+    $missing = [];
+    foreach ($activities as $activity) {
+        $list = [];
+        foreach ($required[(int) $activity->id] ?? [] as $requiredid) {
+            if (!isset($validated[$requiredid])) {
+                $requiredname = format_string($names[$requiredid] ?? '');
+                $list[$requiredname] = get_string('prereqmissingactivity', 'mod_ep', $requiredname);
+            }
+        }
+        ksort($list);
+        $list = array_values($list);
+        if ($activity->minects > 0) {
+            $retained = $retained ?? ep_get_student_progress($ep, $userid)->totalretained;
+            if ($retained < (float) $activity->minects) {
+                $list[] = get_string('prereqmissingects', 'mod_ep', (object) [
+                    'required' => ep_format_ects($activity->minects),
+                    'retained' => ep_format_ects($retained),
+                ]);
+            }
+        }
+        if ($list) {
+            $missing[(int) $activity->id] = $list;
+        }
+    }
+    return $missing;
+}
+
+/**
+ * Prérequis manquants de plusieurs étudiants pour un même EP, en un nombre fixe de requêtes :
+ * c'est la version de ep_get_missing_prerequisites() pour la liste des participants.
+ *
+ * @param stdClass $ep
+ * @param stdClass $activity
+ * @param int[] $userids
+ * @return array userid => string[] prérequis manquants (les étudiants sans manque n'y sont pas)
+ */
+function ep_get_missing_prerequisites_for_users(stdClass $ep, stdClass $activity, array $userids) {
+    global $DB;
+
+    $userids = array_values(array_unique(array_map('intval', $userids)));
+    $requiredids = ep_get_activity_prerequisites($activity->id);
+    if (!$userids || (!$requiredids && $activity->minects <= 0)) {
+        return [];
+    }
+    $validated = [];
+    $names = [];
+    if ($requiredids) {
+        $names = $DB->get_records_list('ep_activity', 'id', $requiredids, 'name', 'id, name');
+        [$reqsql, $reqparams] = $DB->get_in_or_equal($requiredids, SQL_PARAMS_NAMED, 'r');
+        foreach (array_chunk($userids, 500) as $chunk) {
+            [$usersql, $userparams] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'u');
+            $rs = $DB->get_recordset_select(
+                'ep_credit',
+                "userid $usersql AND status = :validated AND activityid $reqsql",
+                $reqparams + $userparams + ['validated' => EP_STATUS_VALIDATED],
+                '',
+                'id, userid, activityid'
+            );
+            foreach ($rs as $row) {
+                $validated[(int) $row->userid][(int) $row->activityid] = true;
+            }
+            $rs->close();
+        }
+    }
+    $progress = [];
+    if ($activity->minects > 0) {
+        \mod_ep\local\progress_cache::prime((int) $ep->id, $userids);
+        try {
+            foreach ($userids as $userid) {
+                $progress[$userid] = ep_get_student_progress($ep, $userid)->totalretained;
+            }
+        } finally {
+            \mod_ep\local\progress_cache::clear();
+        }
+    }
+    $missing = [];
+    foreach ($userids as $userid) {
+        $list = [];
+        foreach ($names as $required) {
+            if (empty($validated[$userid][(int) $required->id])) {
+                $list[] = get_string('prereqmissingactivity', 'mod_ep', format_string($required->name));
+            }
+        }
+        if ($activity->minects > 0 && $progress[$userid] < (float) $activity->minects) {
+            $list[] = get_string('prereqmissingects', 'mod_ep', (object) [
+                'required' => ep_format_ects($activity->minects),
+                'retained' => ep_format_ects($progress[$userid]),
+            ]);
+        }
+        if ($list) {
+            $missing[$userid] = $list;
         }
     }
     return $missing;
@@ -5059,13 +5201,13 @@ function ep_cancel_supplement_item(stdClass $item, $byuserid, $role) {
 }
 
 /**
- * Éléments du supplément d'une instance, filtrés.
+ * Clause de sélection des éléments du supplément d'une instance, filtrés.
  *
  * @param int $epid
  * @param array $filters userid, status, pendingrole, userids (périmètre d'un référent).
- * @return array id => stdClass
+ * @return array|null [where, params], ou null si le filtre ne peut rien retenir.
  */
-function ep_get_supplement_items($epid, array $filters = []) {
+function ep_supplement_items_where($epid, array $filters) {
     global $DB;
 
     $where = ['i.epid = :epid'];
@@ -5084,19 +5226,59 @@ function ep_get_supplement_items($epid, array $filters = []) {
     }
     if (isset($filters['userids'])) {
         if (empty($filters['userids'])) {
-            return [];
+            return null;
         }
         [$insql, $inparams] = $DB->get_in_or_equal($filters['userids'], SQL_PARAMS_NAMED, 'u');
         $where[] = "i.userid $insql";
         $params += $inparams;
     }
+    return [implode(' AND ', $where), $params];
+}
+
+/**
+ * Nombre d'éléments du supplément d'une instance, avec les filtres de ep_get_supplement_items().
+ *
+ * @param int $epid
+ * @param array $filters
+ * @return int
+ */
+function ep_count_supplement_items($epid, array $filters = []) {
+    global $DB;
+
+    $clause = ep_supplement_items_where($epid, $filters);
+    if ($clause === null) {
+        return 0;
+    }
+    [$where, $params] = $clause;
+    return (int) $DB->count_records_sql("SELECT COUNT(1) FROM {ep_supplement_item} i WHERE $where", $params);
+}
+
+/**
+ * Éléments du supplément d'une instance, filtrés, triés par étudiant puis par période.
+ *
+ * @param int $epid
+ * @param array $filters userid, status, pendingrole, userids (périmètre d'un référent).
+ * @param int $limitfrom
+ * @param int $limitnum 0 pour tous.
+ * @return array id => stdClass
+ */
+function ep_get_supplement_items($epid, array $filters = [], $limitfrom = 0, $limitnum = 0) {
+    global $DB;
+
+    $clause = ep_supplement_items_where($epid, $filters);
+    if ($clause === null) {
+        return [];
+    }
+    [$where, $params] = $clause;
     return $DB->get_records_sql(
         "SELECT i.*
            FROM {ep_supplement_item} i
            JOIN {user} u ON u.id = i.userid
-          WHERE " . implode(' AND ', $where) . "
+          WHERE $where
        ORDER BY u.lastname, u.firstname, i.periodstart, i.id",
-        $params
+        $params,
+        $limitfrom,
+        $limitnum
     );
 }
 

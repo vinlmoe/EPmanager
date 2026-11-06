@@ -36,6 +36,7 @@ $filteryear = optional_param('studyyear', '', PARAM_RAW);
 $tsort = optional_param('tsort', 'timecreated', PARAM_ALPHA);
 $tdir = optional_param('tdir', 'DESC', PARAM_ALPHA);
 $page = optional_param('page', 0, PARAM_INT);
+$apage = optional_param('apage', 0, PARAM_INT);
 
 $cm = get_coursemodule_from_id('ep', $id, 0, false, MUST_EXIST);
 $course = get_course($cm->course);
@@ -97,8 +98,13 @@ if ($responsible) {
 }
 
 // 1. Ce qui attend une décision de l'utilisateur : c'est pour cela qu'il ouvre cette page.
-$awaiting = ep_get_credits_awaiting($ep, $rights, 'timecreated', 'ASC');
-echo $OUTPUT->heading(get_string('awaitingmydecision', 'mod_ep'), 4);
+// File paginée en base (paramètre « apage », la liste complète plus bas ayant « page ») : la
+// DEVE d'une grande promotion peut avoir des milliers de demandes en attente.
+$awaitingtotal = ep_count_credits_awaiting($ep, $rights);
+$awaiting = $awaitingtotal
+    ? ep_get_credits_awaiting($ep, $rights, 'timecreated', 'ASC', $apage * EP_LIST_PERPAGE, EP_LIST_PERPAGE)
+    : [];
+echo $OUTPUT->heading(get_string('awaitingmydecision', 'mod_ep') . ($awaitingtotal ? " ($awaitingtotal)" : ''), 4);
 if (empty($awaiting)) {
     echo $OUTPUT->notification(get_string('nopendingcredits', 'mod_ep'), 'info');
 } else {
@@ -133,6 +139,7 @@ if (empty($awaiting)) {
         ];
     }
     echo html_writer::table($awaitingtable);
+    echo ep_render_paging_bar($awaitingtotal, $apage, $baseurl, EP_LIST_PERPAGE, 'apage');
 }
 
 // 2. Tout le périmètre de l'utilisateur, filtrable : pour retrouver une demande déjà traitée,

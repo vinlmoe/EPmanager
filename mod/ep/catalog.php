@@ -163,6 +163,9 @@ $table->head = [
     get_string('actions', 'mod_ep'),
 ];
 
+// Prérequis manquants de l'étudiant pour les EP où il n'est pas inscrit, calculés une fois.
+$missingall = $cansubmit ? ep_get_missing_prerequisites_bulk($ep, array_diff_key($activities, $myregistrations), $USER->id) : [];
+
 foreach ($activities as $activity) {
     $type = $types[$activity->typeid] ?? null;
 
@@ -188,7 +191,7 @@ foreach ($activities as $activity) {
     }
     // Prérequis : rappelés à l'étudiant (ce qui lui manque) et à ceux qui gèrent le catalogue.
     if ($cansubmit && empty($myregistrations[$activity->id])) {
-        $missing = ep_get_missing_prerequisites($ep, $activity, $USER->id);
+        $missing = $missingall[$activity->id] ?? [];
         if ($missing) {
             $name .= html_writer::div(
                 get_string('prereqmissing', 'mod_ep', implode(' ; ', $missing)),
@@ -220,7 +223,7 @@ foreach ($activities as $activity) {
             $actioncell = html_writer::span(get_string('nofreeplace', 'mod_ep'), 'text-muted');
         } else if (!ep_activity_open_to_year($activity, (int) $ep->currentstudyyear)) {
             $actioncell = html_writer::span(get_string('notopentoyear', 'mod_ep'), 'text-muted');
-        } else if ($activity->prereqblocking && ep_get_missing_prerequisites($ep, $activity, $USER->id)) {
+        } else if ($activity->prereqblocking && !empty($missingall[$activity->id])) {
             $actioncell = html_writer::span(get_string('errorprerequisites', 'mod_ep'), 'text-muted');
         } else {
             $actioncell = ep_render_actions([

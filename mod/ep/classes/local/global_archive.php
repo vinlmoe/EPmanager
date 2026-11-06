@@ -44,6 +44,12 @@ class global_archive {
     /**
      * Construit l'archive d'une activité.
      *
+     * L'export d'une grande promotion compte des dizaines de milliers de crédits : il est écrit en
+     * un seul passage sur les crédits, lus par paquets, chaque ligne allant aussitôt dans
+     * donnees.json et dans la feuille des crédits du classeur. Seuls les comptes cités, les
+     * éléments du supplément, les décisions d'année et les suppléments émis, bien moins nombreux,
+     * sont tenus en mémoire.
+     *
      * @param \stdClass $ep
      * @param \context_module $context
      * @return string Chemin de l'archive, dans un dossier temporaire de la requête.
@@ -53,11 +59,22 @@ class global_archive {
         require_once($CFG->dirroot . '/mod/ep/locallib.php');
 
         $dir = make_request_directory();
-        $files = [];
         $fs = get_file_storage();
-        $addfiles = function ($area, $itemid) use ($fs, $context, &$files) {
+        $types = ep_get_types($ep->id);
+        $activities = ep_get_activities($ep->id);
+        $categories = ep_get_supplement_categories($ep->id);
+
+        // Fichiers lus par zone en une requête chacune, puis rangés par élément.
+        $areafiles = [];
+        foreach ([EP_EVIDENCE_FILEAREA, EP_SUPPLEMENT_EVIDENCE_FILEAREA, EP_SUPPLEMENT_ISSUED_FILEAREA] as $area) {
+            foreach ($fs->get_area_files($context->id, 'mod_ep', $area, false, 'itemid, filename', false) as $file) {
+                $areafiles[$area][(int) $file->get_itemid()][] = $file;
+            }
+        }
+        $files = [];
+        $addfiles = function ($area, $itemid) use ($areafiles, &$files) {
             $paths = [];
-            foreach ($fs->get_area_files($context->id, 'mod_ep', $area, $itemid, 'filename', false) as $file) {
+            foreach ($areafiles[$area][(int) $itemid] ?? [] as $file) {
                 $path = 'fichiers/' . $area . '/' . $itemid . '/' . clean_filename($file->get_filename());
                 $files[$path] = $file;
                 $paths[] = $path;
@@ -65,85 +82,186 @@ class global_archive {
             return $paths;
         };
 
+        // Comptes cités, lus d'avance en une requête par table : les noms servent au classeur,
+        // l'adresse et le numéro à retrouver les personnes à la restauration.
+        $sources = [
+            'ep_credit' => ['userid', 'validatedby', 'addedby'],
+            'ep_supplement_item' => ['userid', 'validatedby'],
+            'ep_year_validation' => ['userid', 'decidedby'],
+            'ep_supplement_issue' => ['userid', 'issuedby'],
+        ];
         $userids = [];
-        $data = ['format' => self::FORMAT, 'exported' => time(), 'credits' => [], 'items' => [], 'years' => [], 'issues' => []];
-        $types = ep_get_types($ep->id);
-        $activities = ep_get_activities($ep->id);
-        $credits = $DB->get_records('ep_credit', ['epid' => $ep->id], 'userid, id');
-        $decisions = [];
-        foreach (array_chunk(array_keys($credits), 500) as $chunk) {
-            [$insql, $params] = $DB->get_in_or_equal($chunk);
-            foreach ($DB->get_records_select('ep_credit_decision', "creditid $insql", $params, 'timecreated, id') as $decision) {
-                $decisions[$decision->creditid][] = $decision;
+        foreach ($sources as $table => $fields) {
+            foreach ($fields as $field) {
+                $sql = "SELECT DISTINCT $field FROM {{$table}} WHERE epid = :epid AND $field IS NOT NULL";
+                foreach ($DB->get_fieldset_sql($sql, ['epid' => $ep->id]) as $id) {
+                    $userids[(int) $id] = true;
+                }
             }
         }
-        foreach ($credits as $credit) {
-            $userids[$credit->userid] = true;
-            foreach (array_filter([$credit->validatedby, $credit->addedby]) as $id) {
-                $userids[$id] = true;
-            }
-            $row = (array) $credit;
-            unset($row['id'], $row['epid'], $row['typeid'], $row['activityid']);
-            $row['typecode'] = $types[$credit->typeid]->code ?? '';
-            $row['activitycode'] = $credit->activityid ? ($activities[$credit->activityid]->code ?? '') : '';
-            $row['activityname'] = $credit->activityid ? ($activities[$credit->activityid]->name ?? '') : '';
-            $row['decisions'] = [];
-            foreach ($decisions[$credit->id] ?? [] as $decision) {
-                $userids[$decision->userid] = true;
-                $entry = (array) $decision;
-                unset($entry['id'], $entry['creditid']);
-                $row['decisions'][] = $entry;
-            }
-            $row['files'] = $addfiles(EP_EVIDENCE_FILEAREA, $credit->id);
-            $data['credits'][] = $row;
+        $sql = 'SELECT DISTINCT d.userid FROM {ep_credit_decision} d JOIN {ep_credit} c ON c.id = d.creditid
+                 WHERE c.epid = :epid AND d.userid IS NOT NULL';
+        foreach ($DB->get_fieldset_sql($sql, ['epid' => $ep->id]) as $id) {
+            $userids[(int) $id] = true;
         }
-        $categories = ep_get_supplement_categories($ep->id);
+        $users = [];
+        foreach (array_chunk(array_keys($userids), 500) as $chunk) {
+            $users += $DB->get_records_list('user', 'id', $chunk, '', 'id, email, idnumber, firstname, lastname');
+        }
+        $userdata = [];
+        foreach ($users as $user) {
+            $userdata[(int) $user->id] = ['email' => $user->email, 'idnumber' => (string) $user->idnumber,
+                'firstname' => $user->firstname, 'lastname' => $user->lastname];
+        }
+
+        $items = [];
         foreach ($DB->get_records('ep_supplement_item', ['epid' => $ep->id], 'userid, id') as $item) {
-            $userids[$item->userid] = true;
-            $userids[$item->validatedby] = true;
             $row = (array) $item;
             unset($row['id'], $row['epid'], $row['categoryid']);
             $row['category'] = $categories[$item->categoryid]->name ?? '';
             $row['files'] = $addfiles(EP_SUPPLEMENT_EVIDENCE_FILEAREA, $item->id);
-            $data['items'][] = $row;
+            $items[] = $row;
         }
+        $years = [];
         foreach ($DB->get_records('ep_year_validation', ['epid' => $ep->id], 'userid, studyyear') as $year) {
-            $userids[$year->userid] = true;
-            $userids[$year->decidedby] = true;
             $row = (array) $year;
             unset($row['id'], $row['epid']);
-            $data['years'][] = $row;
+            $years[] = $row;
         }
-        $issues = $DB->get_records('ep_supplement_issue', ['epid' => $ep->id], 'id');
-        foreach ($issues as $issue) {
-            $userids[$issue->userid] = true;
-            $userids[$issue->issuedby] = true;
+        $issues = [];
+        $issuerecords = $DB->get_records('ep_supplement_issue', ['epid' => $ep->id], 'id');
+        foreach ($issuerecords as $issue) {
             $row = (array) $issue;
             unset($row['id'], $row['epid'], $row['replacedby']);
-            $row['replacedbynumber'] = $issue->replacedby ? ($issues[$issue->replacedby]->number ?? '') : '';
+            $row['replacedbynumber'] = $issue->replacedby ? ($issuerecords[$issue->replacedby]->number ?? '') : '';
             $row['files'] = $addfiles(EP_SUPPLEMENT_ISSUED_FILEAREA, $issue->id);
-            $data['issues'][] = $row;
-        }
-
-        // Comptes cités, désignés par adresse et numéro : les identifiants internes n'ont pas de
-        // sens sur un autre site.
-        $userids = array_values(array_filter(array_map('intval', array_keys($userids))));
-        $users = [];
-        foreach (array_chunk($userids, 500) as $chunk) {
-            $users += $DB->get_records_list('user', 'id', $chunk, '', 'id, email, idnumber, firstname, lastname');
-        }
-        $data['users'] = [];
-        foreach ($users as $user) {
-            $data['users'][(int) $user->id] = ['email' => $user->email, 'idnumber' => (string) $user->idnumber,
-                'firstname' => $user->firstname, 'lastname' => $user->lastname];
+            $issues[] = $row;
         }
 
         file_put_contents($dir . '/parametrage.json', json_encode(
             ep_export_settings($ep, true),
             JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE
         ));
-        file_put_contents($dir . '/donnees.json', json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-        self::write_workbook($ep, $context, $data, $users, $dir . '/classeur.xlsx');
+
+        // Classeur et données : feuilles d'en-tête, puis les crédits en un passage.
+        $workbook = new workbook_writer($dir . '/classeur.xlsx');
+        $name = fn($userid) => isset($users[$userid]) ? $users[$userid]->lastname . ' ' . $users[$userid]->firstname : '';
+        $email = fn($userid) => $users[$userid]->email ?? '';
+        $date = fn($time) => $time ? userdate($time, '%d/%m/%Y') : '';
+
+        $rows = [[get_string('lastname'), get_string('firstname'), get_string('email'), get_string('idnumber'),
+            get_string('totalretainedshort', 'mod_ep'), get_string('pendingects', 'mod_ep'), get_string('status', 'mod_ep')]];
+        $workbook->sheet(get_string('pilotage', 'mod_ep'), $rows);
+        // Bilans par paquets de 500 étudiants : le calcul charge tous les crédits des étudiants
+        // demandés, ce qu'une promotion entière rendrait coûteux en mémoire.
+        foreach (array_chunk(ep_get_enrolled_students($context), 500, true) as $students) {
+            foreach (ep_build_pilotage_rows($ep, $students) as $row) {
+                $workbook->row([$row->user->lastname, $row->user->firstname, $row->user->email, (string) $row->user->idnumber,
+                    $row->progress->totalretained, $row->progress->totalpending,
+                    get_string($row->progress->complete ? 'objectivedone' : 'objectivetodo', 'mod_ep')]);
+            }
+        }
+        $rows = null;
+
+        $workbook->sheet(get_string('exportcredits', 'mod_ep'), [[get_string('student', 'mod_ep'), get_string('email'),
+            get_string('type', 'mod_ep'), get_string('activitycode', 'mod_ep'), get_string('creditname', 'mod_ep'),
+            get_string('studyyear', 'mod_ep'), get_string('claimedects', 'mod_ep'), get_string('retainedects', 'mod_ep'),
+            get_string('grade', 'mod_ep'), get_string('status', 'mod_ep'), get_string('decidedby', 'mod_ep'),
+            get_string('decidedon', 'mod_ep'), get_string('validatorcomment', 'mod_ep')]]);
+
+        $json = fopen($dir . '/donnees.json', 'w');
+        fwrite($json, '{"format":' . self::FORMAT . ',"exported":' . time() . ',"credits":[');
+        $firstcredit = true;
+        $flush = function (array $credits) use (
+            $DB,
+            $types,
+            $activities,
+            $addfiles,
+            $json,
+            &$firstcredit,
+            $workbook,
+            $name,
+            $email,
+            $date
+) {
+            $decisions = [];
+            [$insql, $params] = $DB->get_in_or_equal(array_keys($credits));
+            foreach ($DB->get_records_select('ep_credit_decision', "creditid $insql", $params, 'timecreated, id') as $decision) {
+                $entry = (array) $decision;
+                unset($entry['id'], $entry['creditid']);
+                $decisions[$decision->creditid][] = $entry;
+            }
+            foreach ($credits as $credit) {
+                $row = (array) $credit;
+                unset($row['id'], $row['epid'], $row['typeid'], $row['activityid']);
+                $row['typecode'] = $types[$credit->typeid]->code ?? '';
+                $row['activitycode'] = $credit->activityid ? ($activities[$credit->activityid]->code ?? '') : '';
+                $row['activityname'] = $credit->activityid ? ($activities[$credit->activityid]->name ?? '') : '';
+                $row['decisions'] = $decisions[$credit->id] ?? [];
+                $row['files'] = $addfiles(EP_EVIDENCE_FILEAREA, $credit->id);
+                fwrite($json, ($firstcredit ? '' : ',') . json_encode($row, JSON_UNESCAPED_UNICODE));
+                $firstcredit = false;
+                $workbook->row([$name($credit->userid), $email($credit->userid), $row['typecode'], $row['activitycode'],
+                    $credit->name, (int) $credit->studyyear, (float) $credit->claimedects, (float) $credit->retainedects,
+                    $credit->grade === null ? '' : (float) $credit->grade, ep_status_label($credit->status),
+                    $name($credit->validatedby), $date($credit->validatetime), (string) $credit->validatorcomment]);
+            }
+        };
+        $buffer = [];
+        $rs = $DB->get_recordset('ep_credit', ['epid' => $ep->id], 'userid, id');
+        foreach ($rs as $credit) {
+            $buffer[$credit->id] = $credit;
+            if (count($buffer) >= 500) {
+                $flush($buffer);
+                $buffer = [];
+            }
+        }
+        $rs->close();
+        if ($buffer) {
+            $flush($buffer);
+        }
+        fwrite($json, '],"items":' . json_encode($items, JSON_UNESCAPED_UNICODE)
+            . ',"years":' . json_encode($years, JSON_UNESCAPED_UNICODE)
+            . ',"issues":' . json_encode($issues, JSON_UNESCAPED_UNICODE)
+            . ',"users":' . json_encode((object) $userdata, JSON_UNESCAPED_UNICODE) . '}');
+        fclose($json);
+
+        $rows = [[get_string('activitycode', 'mod_ep'), get_string('catalogactivity', 'mod_ep'), get_string('type', 'mod_ep'),
+            'ECTS', get_string('activitystate', 'mod_ep'), get_string('places', 'mod_ep'),
+            get_string('activityteachers', 'mod_ep')]];
+        $teachers = ep_get_activities_teachers($ep->id);
+        foreach ($activities as $activity) {
+            $rows[] = [$activity->code, $activity->name, $types[$activity->typeid]->name ?? '', (float) $activity->ects,
+                ep_activity_state_options()[$activity->state] ?? $activity->state, (int) $activity->capacity,
+                implode(', ', array_map('fullname', $teachers[$activity->id] ?? []))];
+        }
+        $workbook->sheet(get_string('catalog', 'mod_ep'), $rows);
+
+        $rows = [[get_string('student', 'mod_ep'), get_string('supplementcategory', 'mod_ep'),
+            get_string('supplementitemtitle', 'mod_ep'), get_string('status', 'mod_ep'), get_string('decidedon', 'mod_ep')]];
+        foreach ($items as $item) {
+            $rows[] = [$name($item['userid']), $item['category'], $item['title'], ep_status_label($item['status']),
+                $date($item['validatetime'])];
+        }
+        $workbook->sheet(get_string('supplementitems', 'mod_ep'), $rows);
+
+        $rows = [[get_string('student', 'mod_ep'), get_string('studyyear', 'mod_ep'), get_string('decision', 'mod_ep'),
+            get_string('retainedects', 'mod_ep'), get_string('decidedon', 'mod_ep'), get_string('validatorcomment', 'mod_ep')]];
+        foreach ($years as $year) {
+            $rows[] = [$name($year['userid']), (int) $year['studyyear'],
+                get_string($year['decision'] ? 'yearvalidated' : 'yearnotvalidated', 'mod_ep'), (float) $year['retainedects'],
+                $date($year['timedecided']), (string) $year['comment']];
+        }
+        $workbook->sheet(get_string('yearvalidation', 'mod_ep'), $rows);
+
+        $rows = [[get_string('student', 'mod_ep'), get_string('supplementnumberheader', 'mod_ep'),
+            get_string('supplementlanguage', 'mod_ep'), get_string('decidedon', 'mod_ep'), get_string('status', 'mod_ep')]];
+        foreach ($issues as $issue) {
+            $rows[] = [$name($issue['userid']), $issue['number'], $issue['lang'], $date($issue['timeissued']),
+                get_string($issue['replacedbynumber'] !== '' ? 'supplementreplaced' : 'supplementcurrent', 'mod_ep')];
+        }
+        $workbook->sheet(get_string('supplementissues', 'mod_ep'), $rows);
+        $workbook->close();
 
         $entries = [
             'parametrage.json' => $dir . '/parametrage.json',
@@ -156,110 +274,6 @@ class global_archive {
         $zippath = $dir . '/export.zip';
         get_file_packer('application/zip')->archive_to_pathname($entries, $zippath);
         return $zippath;
-    }
-
-    /**
-     * Écrit le classeur lisible de l'export.
-     *
-     * @param \stdClass $ep
-     * @param \context_module $context
-     * @param array $data
-     * @param array $users
-     * @param string $path
-     * @return void
-     */
-    protected static function write_workbook(\stdClass $ep, \context_module $context, array $data, array $users, string $path) {
-        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
-        $sheets = [];
-        $name = fn($userid) => isset($users[$userid]) ? $users[$userid]->lastname . ' ' . $users[$userid]->firstname : '';
-        $email = fn($userid) => $users[$userid]->email ?? '';
-        $date = fn($time) => $time ? userdate($time, '%d/%m/%Y') : '';
-
-        // Bilan par étudiant inscrit.
-        $rows = [[get_string('lastname'), get_string('firstname'), get_string('email'), get_string('idnumber'),
-            get_string('totalretainedshort', 'mod_ep'), get_string('pendingects', 'mod_ep'), get_string('status', 'mod_ep')]];
-        foreach (ep_get_pilotage_overview($ep, $context) as $row) {
-            $rows[] = [$row->user->lastname, $row->user->firstname, $row->user->email, (string) $row->user->idnumber,
-                $row->progress->totalretained, $row->progress->totalpending,
-                get_string($row->progress->complete ? 'objectivedone' : 'objectivetodo', 'mod_ep')];
-        }
-        $sheets[get_string('pilotage', 'mod_ep')] = $rows;
-
-        $rows = [[get_string('student', 'mod_ep'), get_string('email'), get_string('type', 'mod_ep'),
-            get_string('activitycode', 'mod_ep'), get_string('creditname', 'mod_ep'), get_string('studyyear', 'mod_ep'),
-            get_string('claimedects', 'mod_ep'), get_string('retainedects', 'mod_ep'), get_string('grade', 'mod_ep'),
-            get_string('status', 'mod_ep'), get_string('decidedby', 'mod_ep'), get_string('decidedon', 'mod_ep'),
-            get_string('validatorcomment', 'mod_ep')]];
-        foreach ($data['credits'] as $credit) {
-            $rows[] = [$name($credit['userid']), $email($credit['userid']), $credit['typecode'], $credit['activitycode'],
-                $credit['name'], $credit['studyyear'], (float) $credit['claimedects'], (float) $credit['retainedects'],
-                $credit['grade'] === null ? '' : (float) $credit['grade'], ep_status_label($credit['status']),
-                $name($credit['validatedby']), $date($credit['validatetime']), (string) $credit['validatorcomment']];
-        }
-        $sheets[get_string('exportcredits', 'mod_ep')] = $rows;
-
-        $rows = [[get_string('activitycode', 'mod_ep'), get_string('catalogactivity', 'mod_ep'), get_string('type', 'mod_ep'),
-            'ECTS', get_string('activitystate', 'mod_ep'), get_string('places', 'mod_ep'),
-            get_string('activityteachers', 'mod_ep')]];
-        $types = ep_get_types($ep->id);
-        $teachers = ep_get_activities_teachers($ep->id);
-        foreach (ep_get_activities($ep->id) as $activity) {
-            $rows[] = [$activity->code, $activity->name, $types[$activity->typeid]->name ?? '', (float) $activity->ects,
-                ep_activity_state_options()[$activity->state] ?? $activity->state, (int) $activity->capacity,
-                implode(', ', array_map('fullname', $teachers[$activity->id] ?? []))];
-        }
-        $sheets[get_string('catalog', 'mod_ep')] = $rows;
-
-        $rows = [[get_string('student', 'mod_ep'), get_string('supplementcategory', 'mod_ep'),
-            get_string('supplementitemtitle', 'mod_ep'), get_string('status', 'mod_ep'), get_string('decidedon', 'mod_ep')]];
-        foreach ($data['items'] as $item) {
-            $rows[] = [$name($item['userid']), $item['category'], $item['title'], ep_status_label($item['status']),
-                $date($item['validatetime'])];
-        }
-        $sheets[get_string('supplementitems', 'mod_ep')] = $rows;
-
-        $rows = [[get_string('student', 'mod_ep'), get_string('studyyear', 'mod_ep'), get_string('decision', 'mod_ep'),
-            get_string('retainedects', 'mod_ep'), get_string('decidedon', 'mod_ep'), get_string('validatorcomment', 'mod_ep')]];
-        foreach ($data['years'] as $year) {
-            $rows[] = [$name($year['userid']), $year['studyyear'],
-                get_string($year['decision'] ? 'yearvalidated' : 'yearnotvalidated', 'mod_ep'), (float) $year['retainedects'],
-                $date($year['timedecided']), (string) $year['comment']];
-        }
-        $sheets[get_string('yearvalidation', 'mod_ep')] = $rows;
-
-        $rows = [[get_string('student', 'mod_ep'), get_string('supplementnumberheader', 'mod_ep'),
-            get_string('supplementlanguage', 'mod_ep'), get_string('decidedon', 'mod_ep'), get_string('status', 'mod_ep')]];
-        foreach ($data['issues'] as $issue) {
-            $rows[] = [$name($issue['userid']), $issue['number'], $issue['lang'], $date($issue['timeissued']),
-                get_string($issue['replacedbynumber'] !== '' ? 'supplementreplaced' : 'supplementcurrent', 'mod_ep')];
-        }
-        $sheets[get_string('supplementissues', 'mod_ep')] = $rows;
-
-        $first = true;
-        foreach ($sheets as $title => $rows) {
-            $sheet = $first ? $spreadsheet->getActiveSheet() : $spreadsheet->createSheet();
-            $first = false;
-            // Titre de feuille : 31 caractères au plus, sans les caractères interdits par Excel.
-            $sheet->setTitle(\core_text::substr(str_replace(['/', '\\', '?', '*', '[', ']', ':'], ' ', $title), 0, 31));
-            foreach ($rows as $r => $cells) {
-                foreach (array_values($cells) as $c => $cell) {
-                    $coordinate = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c + 1) . ($r + 1);
-                    if (is_int($cell) || is_float($cell)) {
-                        $sheet->setCellValueExplicit($coordinate, $cell, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC);
-                    } else {
-                        // Texte toujours écrit comme tel : un « =… » saisi ne devient pas une formule.
-                        $sheet->setCellValueExplicit(
-                            $coordinate,
-                            (string) $cell,
-                            \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
-                        );
-                    }
-                }
-            }
-            $sheet->getStyle('A1:' . \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($rows[0])) . '1')
-                ->getFont()->setBold(true);
-        }
-        (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet))->save($path);
     }
 
     /**
@@ -390,6 +404,23 @@ class global_archive {
             }
             $missingusers = [];
 
+            // Crédits déjà présents, lus une fois : un contrôle par ligne dans la table qui grossit
+            // à chaque insertion ralentirait la restauration d'une grande archive à mesure.
+            $creditkey = fn($userid, $typeid, $year, $created, $name) => $userid . '|' . $typeid . '|' . (int) $year
+                . '|' . (int) $created . '|' . \core_text::strtolower(trim((string) $name));
+            $existing = [];
+            $rs = $DB->get_recordset('ep_credit', ['epid' => $ep->id], '', 'id, userid, typeid, studyyear, timecreated, name');
+            foreach ($rs as $credit) {
+                $existing[$creditkey(
+                    $credit->userid,
+                    $credit->typeid,
+                    $credit->studyyear,
+                    $credit->timecreated,
+                    $credit->name
+                )] = true;
+            }
+            $rs->close();
+            $pendingdecisions = [];
             foreach ($data['credits'] ?? [] as $row) {
                 $studentid = $mapstudent($row['userid']);
                 $typeid = $types[$row['typecode']] ?? 0;
@@ -400,18 +431,12 @@ class global_archive {
                     }
                     continue;
                 }
-                $exists = $DB->record_exists_select(
-                    'ep_credit',
-                    'epid = :epid AND userid = :userid AND typeid = :typeid AND studyyear = :year AND timecreated = :created AND '
-                    . $DB->sql_equal('name', ':name', false),
-                    ['epid' => $ep->id, 'userid' => $studentid, 'typeid' => $typeid, 'year' => $row['studyyear'],
-                    'created' => $row['timecreated'],
-                    'name' => $row['name']]
-                );
-                if ($exists) {
+                $key = $creditkey($studentid, $typeid, $row['studyyear'], $row['timecreated'], $row['name']);
+                if (isset($existing[$key])) {
                     $report->skipped++;
                     continue;
                 }
+                $existing[$key] = true;
                 $credit = (object) array_diff_key($row, array_flip(['typecode', 'activitycode', 'activityname', 'decisions',
                     'files']));
                 $credit->epid = $ep->id;
@@ -432,15 +457,27 @@ class global_archive {
                     $decision = (object) $decision;
                     $decision->creditid = $credit->id;
                     $decision->userid = $decision->userid ? $mapstaff($decision->userid) : null;
-                    $DB->insert_record('ep_credit_decision', $decision);
+                    $pendingdecisions[] = $decision;
+                }
+                // Décisions insérées par lots.
+                if (count($pendingdecisions) >= 1000) {
+                    $DB->insert_records('ep_credit_decision', $pendingdecisions);
+                    $pendingdecisions = [];
                 }
                 $copyfiles($row['files'], EP_EVIDENCE_FILEAREA, $credit->id);
                 $report->credits++;
+            }
+            if ($pendingdecisions) {
+                $DB->insert_records('ep_credit_decision', $pendingdecisions);
             }
 
             $categories = [];
             foreach (ep_get_supplement_categories($ep->id) as $category) {
                 $categories[\core_text::strtolower($category->name)] = (int) $category->id;
+            }
+            $existingitems = [];
+            foreach ($DB->get_records('ep_supplement_item', ['epid' => $ep->id], '', 'id, userid, timecreated, title') as $item) {
+                $existingitems[$item->userid . '|' . $item->timecreated . '|' . $item->title] = true;
             }
             foreach ($data['items'] ?? [] as $row) {
                 $studentid = $mapstudent($row['userid']);
@@ -452,13 +489,12 @@ class global_archive {
                 if (!isset($categories[$key])) {
                     $categories[$key] = ep_save_supplement_category($ep->id, (object) ['name' => $row['category'], 'enabled' => 1]);
                 }
-                if (
-                    $DB->record_exists('ep_supplement_item', ['epid' => $ep->id, 'userid' => $studentid,
-                        'timecreated' => $row['timecreated'], 'title' => $row['title']])
-                ) {
+                $itemkey = $studentid . '|' . $row['timecreated'] . '|' . $row['title'];
+                if (isset($existingitems[$itemkey])) {
                     $report->skipped++;
                     continue;
                 }
+                $existingitems[$itemkey] = true;
                 $item = (object) array_diff_key($row, array_flip(['category', 'files']));
                 $item->epid = $ep->id;
                 $item->userid = $studentid;
@@ -469,19 +505,21 @@ class global_archive {
                 $report->items++;
             }
 
+            $existingyears = [];
+            foreach ($DB->get_records('ep_year_validation', ['epid' => $ep->id], '', 'id, userid, studyyear') as $year) {
+                $existingyears[$year->userid . '|' . $year->studyyear] = true;
+            }
             foreach ($data['years'] ?? [] as $row) {
                 $studentid = $mapstudent($row['userid']);
                 if (!$studentid) {
                     $report->skipped++;
                     continue;
                 }
-                if (
-                    $DB->record_exists('ep_year_validation', ['epid' => $ep->id, 'userid' => $studentid,
-                        'studyyear' => $row['studyyear']])
-                ) {
+                if (isset($existingyears[$studentid . '|' . $row['studyyear']])) {
                     $report->skipped++;
                     continue;
                 }
+                $existingyears[$studentid . '|' . $row['studyyear']] = true;
                 $year = (object) $row;
                 $year->epid = $ep->id;
                 $year->userid = $studentid;

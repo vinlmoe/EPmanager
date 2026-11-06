@@ -420,6 +420,12 @@ if (empty($participants)) {
     echo html_writer::tag('p', get_string('participantscount', 'mod_ep', 0));
 } else {
     $students = ep_get_credit_users($participants);
+    // Prérequis manquants des inscrits en attente, calculés en une fois pour toute la liste.
+    $pendingusers = array_map(
+        fn($credit) => (int) $credit->userid,
+        array_filter($participants, fn($credit) => (int) $credit->status === EP_STATUS_PENDING)
+    );
+    $missingbyuser = ep_get_missing_prerequisites_for_users($ep, $activity, $pendingusers);
     // Auteurs des ajouts, lus en une requête.
     $adderids = array_unique(array_filter(array_map(fn($credit) => (int) $credit->addedby, $participants)));
     $adders = $adderids ? $DB->get_records_list('user', 'id', $adderids) : [];
@@ -477,7 +483,7 @@ if (empty($participants)) {
         // Les prérequis ne comptent que pour une inscription encore à trancher.
         $prereqcell = '';
         if ($pending) {
-            $missing = ep_get_missing_prerequisites($ep, $activity, $credit->userid);
+            $missing = $missingbyuser[(int) $credit->userid] ?? [];
             if ($missing) {
                 $prereqcell = html_writer::span(get_string('prereqmissing', 'mod_ep', implode(', ', $missing)), 'text-muted');
             }

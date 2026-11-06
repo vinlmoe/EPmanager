@@ -313,7 +313,9 @@ function epsynthesis_decorate_credit(stdClass $credit, stdClass $link, array $st
 function epsynthesis_get_credits_awaiting(array $activelinks) {
     $rows = [];
     foreach ($activelinks as $link) {
-        $credits = ep_get_credits_awaiting($link->ep, $link->rights, 'timecreated', 'ASC');
+        // Périmètre d'enseignant seulement : un enseignant éditeur qui aurait aussi les droits de
+        // la DEVE ne doit pas voir remonter ici toute la file de chaque promotion.
+        $credits = ep_get_credits_awaiting($link->ep, epsynthesis_teacher_rights($link->rights), 'timecreated', 'ASC');
         if (empty($credits)) {
             continue;
         }

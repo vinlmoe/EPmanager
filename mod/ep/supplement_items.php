@@ -34,6 +34,7 @@ $id = required_param('id', PARAM_INT);
 // Statut du filtre de la liste complète : chaîne vide pour « tous », sinon l'un des statuts.
 $status = optional_param('status', '', PARAM_ALPHANUMEXT);
 $page = optional_param('page', 0, PARAM_INT);
+$qpage = optional_param('qpage', 0, PARAM_INT);
 
 $cm = get_coursemodule_from_id('ep', $id, 0, false, MUST_EXIST);
 $course = get_course($cm->course);
@@ -92,12 +93,15 @@ $categories = ep_get_supplement_categories($ep->id);
 
 // Demandes qui attendent la décision de l'utilisateur. Pour un référent, le périmètre (ses
 // étudiants) est posé dans la requête, l'étape attendue est vérifiée ligne à ligne.
+// La file est paginée en SQL : pour un référent, l'étape attendue fait partie du filtre.
 $filters = ['status' => EP_STATUS_PENDING];
 if (!$rights->validatedeve) {
     $filters['userids'] = $rights->referentids;
+    $filters['pendingrole'] = EP_ROLE_REFERENT;
 }
+$pendingtotal = ep_count_supplement_items($ep->id, $filters);
 $pending = array_filter(
-    ep_get_supplement_items($ep->id, $filters),
+    ep_get_supplement_items($ep->id, $filters, $qpage * EP_LIST_PERPAGE, EP_LIST_PERPAGE),
     function ($item) use ($rights) {
         return ep_rights_can_decide_supplement_item($rights, $item);
     }
@@ -111,6 +115,7 @@ if (empty($pending)) {
     echo $OUTPUT->notification(get_string('nopendingsupplementitems', 'mod_ep'), 'info');
 } else {
     $students = ep_get_credit_users($pending);
+    supplement_view::preload_proofs($context, array_keys($pending));
     $rows = [];
     foreach ($pending as $item) {
         $student = $students[$item->userid] ?? null;
@@ -152,7 +157,7 @@ if (empty($pending)) {
         get_string('supplementproofs', 'mod_ep'),
         get_string('submittedon', 'mod_ep'),
         get_string('decision', 'mod_ep'),
-    ], $rows);
+    ], $rows, ep_render_paging_bar($pendingtotal, $qpage, $pageurl, EP_LIST_PERPAGE, 'qpage'));
 }
 
 // Pour la DEVE seulement : l'ensemble des éléments de l'instance, quel que soit leur statut, pour
@@ -168,13 +173,14 @@ if ($rights->validatedeve) {
         'ep-supplement-status'
     );
 
-    $all = ep_get_supplement_items($ep->id, $status === '' ? [] : ['status' => (int) $status]);
-    $total = count($all);
-    $all = array_slice($all, $page * EP_LIST_PERPAGE, EP_LIST_PERPAGE, true);
+    $allfilters = $status === '' ? [] : ['status' => (int) $status];
+    $total = ep_count_supplement_items($ep->id, $allfilters);
+    $all = ep_get_supplement_items($ep->id, $allfilters, $page * EP_LIST_PERPAGE, EP_LIST_PERPAGE);
     if (empty($all)) {
         echo $OUTPUT->notification(get_string('supplementnoitems', 'mod_ep'), 'info');
     } else {
         $students = ep_get_credit_users($all);
+        supplement_view::preload_proofs($context, array_keys($all));
         $rows = [];
         foreach ($all as $item) {
             $student = $students[$item->userid] ?? null;

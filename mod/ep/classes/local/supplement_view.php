@@ -100,6 +100,44 @@ class supplement_view {
         return $html;
     }
 
+    /** @var int|null Contexte des preuves préchargées. */
+    private static $proofcontext = null;
+
+    /** @var array itemid => stored_file[] préchargés par preload_proofs(). */
+    private static $proofs = [];
+
+    /**
+     * Charge en une requête les preuves des éléments d'une page, que proofs() lira ensuite au
+     * lieu d'interroger le stockage élément par élément.
+     *
+     * @param context $context
+     * @param int[] $itemids
+     * @return void
+     */
+    public static function preload_proofs(context $context, array $itemids): void {
+        global $DB;
+
+        self::$proofcontext = (int) $context->id;
+        self::$proofs = array_fill_keys(array_map('intval', $itemids), []);
+        if (!$itemids) {
+            return;
+        }
+        $fs = get_file_storage();
+        foreach (array_chunk(array_keys(self::$proofs), 500) as $chunk) {
+            [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'i');
+            $records = $DB->get_records_select(
+                'files',
+                "contextid = :contextid AND component = 'mod_ep' AND filearea = :filearea AND itemid $insql
+                    AND filename <> '.'",
+                $params + ['contextid' => $context->id, 'filearea' => EP_SUPPLEMENT_EVIDENCE_FILEAREA],
+                'filename ASC, id ASC'
+            );
+            foreach ($records as $record) {
+                self::$proofs[(int) $record->itemid][] = $fs->get_file_instance($record);
+            }
+        }
+    }
+
     /**
      * Preuves d'un élément, en liens vers supplement_file.php qui en contrôle l'accès.
      *
@@ -109,14 +147,18 @@ class supplement_view {
      * @return string HTML, « - » sans preuve.
      */
     public static function proofs(stdClass $cm, context $context, stdClass $item): string {
-        $files = get_file_storage()->get_area_files(
-            $context->id,
-            'mod_ep',
-            EP_SUPPLEMENT_EVIDENCE_FILEAREA,
-            $item->id,
-            'filename',
-            false
-        );
+        if (self::$proofcontext === (int) $context->id && array_key_exists((int) $item->id, self::$proofs)) {
+            $files = self::$proofs[(int) $item->id];
+        } else {
+            $files = get_file_storage()->get_area_files(
+                $context->id,
+                'mod_ep',
+                EP_SUPPLEMENT_EVIDENCE_FILEAREA,
+                $item->id,
+                'filename',
+                false
+            );
+        }
         if (empty($files)) {
             return '-';
         }
