@@ -24,7 +24,7 @@ const plan = [
   ['etu-tableau-de-bord', etu, `/mod/ep/view.php?id=${CM}`],
   ['etu-catalogue', etu, `/mod/ep/catalog.php?id=${CM}`],
   ['etu-syllabus', etu, `/mod/ep/syllabus.php?id=${CM}&activityid=${site.activities[29]}`],
-  ['etu-inscription', etu, `/mod/ep/catalog.php?id=${CM}&action=register&activityid=${site.activities[2]}`],
+  
   ['etu-declarer', etu, `/mod/ep/declare.php?id=${CM}`],
   ['etu-supplement', etu, `/mod/ep/supplement.php?id=${CM}`],
   ['etu-supplement-element', etu, `/mod/ep/supplement_item.php?id=${CM}`],
@@ -68,6 +68,8 @@ const plan = [
         locale: 'fr-FR' });
       const page = await context.newPage();
       await page.goto(`${BASE}/login/index.php`);
+      // Les requêtes de fond de la page de connexion doivent être finies avant l'envoi.
+      await page.waitForLoadState('networkidle');
       await page.fill('#username', user);
       await page.fill('#password', site.password);
       await page.click('#loginbtn');

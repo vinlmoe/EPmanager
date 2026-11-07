@@ -3,6 +3,28 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## 1.0.2 — mod_ep 2026111600, mod_epsynthesis 2026111600 (16 novembre 2026)
+
+Optimisations supplémentaires, mesurées sur le banc du test de stress.
+
+### Module
+- **Synthèse enseignant, liste « Validation »** : une seule requête couvrant toutes les promotions
+  (droits propres à chacune), triée et paginée par la base ; seules les lignes affichées sont
+  mises en forme (101 → 87 ms pour six promotions, 143 ms avant la 1.0.1).
+- **Synthèse** : activités liées lues en une requête, module de cours et contexte tirés des
+  informations de cours déjà en cache (calcul des promotions actives 7,6 → 3 ms).
+- **Pages secondaires** : la description de l'activité n'est plus mise en forme pour être
+  aussitôt masquée (4 à 6 ms par page).
+- **Inscription directe depuis le catalogue** : année d'étude choisie sur la ligne de l'EP, sans
+  page de confirmation ; retour à la même page de la liste. Ruée de 300 inscriptions simultanées :
+  15,3 → 11,6 s (médiane par étudiant 13,0 → 9,2 s).
+
+### Déploiement (documenté dans `mod/ep/INSTALL.md`)
+- APCu comme cache applicatif : +11 à +18 % ; JIT de PHP : +5 à +8 % ; OPcache sans vérification
+  des fichiers : ≈ +2 %.
+- Débit d'un serveur de 4 cœurs : 59 à 61 pages par seconde de 25 à 400 utilisateurs simultanés,
+  contre 37 à 44 avant le test de stress (+40 à +60 %), toujours sans erreur.
+
 ## 1.0.1 — mod_ep 2026111500, mod_epsynthesis 2026111400 (15 novembre 2026)
 
 Test de stress et optimisations.

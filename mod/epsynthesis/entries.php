@@ -131,20 +131,21 @@ echo epsynthesis_render_list_filters($listurl, $typeoptions, [
     'search' => $search, 'typekey' => $typekey, 'status' => $filterstatus, 'studyyear' => $filteryear,
 ]);
 
-$allcredits = epsynthesis_get_filtered_credits($activelinks, [
+// Une seule requête sur toutes les promotions, triée et paginée par la base.
+[$credits, $total] = epsynthesis_get_filtered_credits($activelinks, [
     'search' => $search,
     'typefilter' => $typefilter,
     'status' => $filterstatus,
     'studyyear' => $filteryear,
-], $tsort, $tdir);
+], $tsort, $tdir, $page * EP_LIST_PERPAGE, EP_LIST_PERPAGE);
 
-if (empty($allcredits)) {
+if ($total === 0) {
     echo $OUTPUT->notification(get_string('nocredits', 'mod_ep'), 'info');
     echo $OUTPUT->footer();
     exit;
 }
 
-[$credits, $pagingbarhtml] = ep_paginate($allcredits, $page, $listurl);
+$pagingbarhtml = ep_render_paging_bar($total, $page, $listurl);
 
 $table = new html_table();
 $table->head = [

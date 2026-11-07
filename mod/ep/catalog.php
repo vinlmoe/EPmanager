@@ -78,11 +78,19 @@ if ($action === 'register' && $activityid) {
             $studyyear = (int) $ep->currentstudyyear;
         }
         $result = ep_register_to_activity($ep, $activity, $USER->id, $studyyear);
+        // Inscription faite depuis la liste : retour à la même page de la liste, pour enchaîner.
+        $fromlist = optional_param('fromlist', 0, PARAM_BOOL);
+        $listreturn = new moodle_url($baseurl, ['page' => $page, 'search' => $search]);
         if ($result->problem !== null) {
-            redirect($baseurl, get_string($result->problem, 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+            redirect(
+                $fromlist ? $listreturn : $baseurl,
+                get_string($result->problem, 'mod_ep'),
+                null,
+                \core\output\notification::NOTIFY_ERROR
+            );
         }
         redirect(
-            new moodle_url('/mod/ep/view.php', ['id' => $cm->id]),
+            $fromlist ? $listreturn : new moodle_url('/mod/ep/view.php', ['id' => $cm->id]),
             get_string('registered', 'mod_ep'),
             null,
             \core\output\notification::NOTIFY_SUCCESS
@@ -182,6 +190,8 @@ $table->head = [
     get_string('actions', 'mod_ep'),
 ];
 
+$yearoptions = $cansubmit ? ep_studyyear_selectable_options($ep) : [];
+
 // Prérequis manquants de l'étudiant pour les EP où il n'est pas inscrit, calculés une fois.
 $missingall = $cansubmit ? ep_get_missing_prerequisites_bulk($ep, array_diff_key($activities, $myregistrations), $USER->id) : [];
 
@@ -245,10 +255,17 @@ foreach ($activities as $activity) {
         } else if ($activity->prereqblocking && !empty($missingall[$activity->id])) {
             $actioncell = html_writer::span(get_string('errorprerequisites', 'mod_ep'), 'text-muted');
         } else {
-            $actioncell = ep_render_actions([
-                get_string('register', 'mod_ep') =>
-                    new moodle_url($baseurl, ['action' => 'register', 'activityid' => $activity->id]),
-            ], 'btn btn-sm btn-primary mr-1 mb-1');
+            // Inscription directe depuis la liste (année d'étude choisie sur la ligne) : une page
+            // de moins par inscription, ce qui compte quand toute une promotion s'inscrit à
+            // l'ouverture des inscriptions.
+            $actioncell = ep_render_register_form(
+                $baseurl,
+                $activity,
+                $yearoptions,
+                (int) $ep->currentstudyyear,
+                $page,
+                $search
+            );
         }
     } else {
         // Ceux qui gèrent le catalogue ou les participants de cet EP y accèdent d'ici.

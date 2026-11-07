@@ -126,16 +126,26 @@ et donner à la DEVE le rôle « gestionnaire ».
 ## Dimensionnement et réglages du serveur
 
 Mesures du test de stress (`docs/audit/test-de-stress.pdf`), sur un serveur de 4 cœurs avec six
-promotions (10 000 étudiants, 540 000 crédits) :
+promotions (10 000 étudiants, 540 000 crédits) : une page du module coûte de 40 à 75 ms de
+processeur, à peine plus qu'une page ordinaire de Moodle ; réglé comme ci-dessous, un serveur de
+4 cœurs en sert environ 60 par seconde, sans erreur jusqu'à 400 utilisateurs simultanés sans
+temps de réflexion, et en continu. Réglages, du plus au moins rentable :
 
-- une page du module coûte de 50 à 75 ms de processeur, à peine plus qu'une page ordinaire de
-  Moodle ; un serveur de 4 cœurs en sert environ 50 par seconde, sans erreur jusqu'à 400
-  utilisateurs simultanés sans temps de réflexion, et en continu pendant une demi-heure ;
-- activer les **connexions persistantes** à la base (`$CFG->dboptions['dbpersist'] = 1;` dans
-  `config.php`, ou un pool de connexions comme pgbouncer) : +23 % de débit ;
-- dimensionner PHP-FPM à environ 4 processus par cœur (`pm = static`) et prévoir 512 Mo de mémoire
-  par processus pour les exports complets et les livrets PDF ;
+| Réglage | Où | Gain mesuré |
+| --- | --- | --- |
+| Connexions persistantes à la base : `$CFG->dboptions['dbpersist'] = 1;` (ou un pool comme pgbouncer) | `config.php` | +23 % |
+| APCu comme magasin du cache applicatif (extension `apcu`, `apc.shm_size = 256M`, magasin « APCu » associé au mode application dans *Administration du site > Plugins > Caches*) | PHP, Moodle | +11 à +18 % |
+| JIT de PHP : `opcache.jit = tracing`, `opcache.jit_buffer_size = 128M` | `php.ini` de PHP-FPM | +5 à +8 % |
+| OPcache sans vérification des fichiers : `opcache.validate_timestamps = 0` | `php.ini` de PHP-FPM | ≈ +2 % |
+
+- Avec APCu ou `validate_timestamps = 0`, **redémarrer PHP-FPM après chaque mise à jour** du code
+  ou mise à niveau faite en ligne de commande : le cache en mémoire et le code compilé ne sont
+  pas partagés avec les scripts en ligne de commande.
+- Dimensionner PHP-FPM à environ 4 processus par cœur (`pm = static`) et prévoir 512 Mo de mémoire
+  par processus pour les exports complets et les livrets PDF.
 - Redis pour les sessions et le cache applicatif n'est utile qu'avec plusieurs serveurs web.
+- À l'ouverture des inscriptions, une promotion entière qui s'inscrit à la même minute est servie
+  sans erreur ni surréservation ; 300 inscriptions simultanées demandent 12 s sur 4 cœurs.
 
 ## Tests
 

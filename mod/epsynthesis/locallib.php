@@ -59,12 +59,12 @@ function epsynthesis_render_managelinks_notice(stdClass $epsynthesis, stdClass $
  * instance de synthèse.
  *
  * @param int $synthesisid
- * @return array cmid => stdClass{linkid, epcmid, courseid, coursename, epname, visible, coursevisible}
+ * @return array cmid => stdClass{linkid, epcmid, epid, courseid, coursename, epname, visible, coursevisible}
  */
 function epsynthesis_get_links($synthesisid) {
     global $DB;
 
-    $sql = "SELECT l.id AS linkid, l.epcmid, cm.visible, e.name AS epname, c.id AS courseid,
+    $sql = "SELECT l.id AS linkid, l.epcmid, cm.visible, cm.instance AS epid, e.name AS epname, c.id AS courseid,
                    c.fullname AS coursename, c.visible AS coursevisible
               FROM {epsynthesis_link} l
               JOIN {course_modules} cm ON cm.id = l.epcmid
@@ -155,20 +155,21 @@ function epsynthesis_set_links($synthesisid, array $epcmids) {
 function epsynthesis_get_active_links($synthesisid, $userid) {
     global $DB;
 
-    $active = [];
-    foreach (epsynthesis_get_links($synthesisid) as $epcmid => $link) {
-        if (!$link->visible || !$link->coursevisible) {
-            continue;
-        }
+    $links = array_filter(epsynthesis_get_links($synthesisid), fn($link) => $link->visible && $link->coursevisible);
+    if (!$links) {
+        return [];
+    }
+    // Les activités EP liées sont lues en une requête ; module de cours et contexte viennent des
+    // informations de cours de Moodle (déjà en cache), et non d'une lecture par activité.
+    $eps = $DB->get_records_list('ep', 'id', array_unique(array_map(fn($link) => (int) $link->epid, $links)));
 
+    $active = [];
+    foreach ($links as $epcmid => $link) {
         try {
-            $cm = get_coursemodule_from_id('ep', $epcmid, 0, false, IGNORE_MISSING);
-            if (!$cm) {
-                continue;
-            }
-            $context = context_module::instance($cm->id);
+            $cminfo = get_fast_modinfo($link->courseid, $userid)->get_cm($epcmid);
+            $context = $cminfo->context;
         } catch (Exception $e) {
-            // Lien orphelin (contexte manquant/corrompu...) : ignoré plutôt que de faire échouer
+            // Lien orphelin (module ou contexte manquant) : ignoré plutôt que de faire échouer
             // toute la synthèse pour les autres activités liées, saines.
             continue;
         }
@@ -176,22 +177,21 @@ function epsynthesis_get_active_links($synthesisid, $userid) {
         // Inscription active au cours d'origine et accès à l'activité, pas seulement la capacité :
         // une inscription suspendue ou expirée garde l'attribution de rôle, mais celui qui l'a
         // perdue ne doit plus rien voir ni décider de cette promotion, ici pas plus que là-bas.
-        if (!is_enrolled($context, $userid, 'mod/ep:evaluateteacher', true)) {
-            continue;
-        }
-        $cminfo = get_fast_modinfo($cm->course, $userid)->get_cm($cm->id);
-        if (!$cminfo->uservisible) {
+        if (!$cminfo->uservisible || !is_enrolled($context, $userid, 'mod/ep:evaluateteacher', true)) {
             continue;
         }
 
-        $ep = $DB->get_record('ep', ['id' => $cm->instance], '*', MUST_EXIST);
+        $ep = $eps[$link->epid] ?? null;
+        if (!$ep) {
+            continue;
+        }
         $rights = ep_get_user_rights($ep, $context, $userid);
         if (empty($rights->referentids) && empty($rights->responsibleids)) {
             continue;
         }
 
         $active[$epcmid] = (object) [
-            'cm' => $cm,
+            'cm' => $cminfo->get_course_module_record(),
             'context' => $context,
             'ep' => $ep,
             'rights' => $rights,
@@ -398,27 +398,25 @@ function epsynthesis_get_credits_awaiting(array $activelinks) {
 }
 
 /**
- * Construit la liste combinée des crédits du périmètre de l'utilisateur, toutes activités actives
- * confondues, avec les mêmes filtres que credits.php et triée globalement selon la même clé/sens.
+ * Clause de sélection des crédits du périmètre de l'utilisateur sur toutes les activités actives :
+ * la réunion des clauses de chaque activité (ep_filtered_credits_sql(), avec ses propres droits),
+ * dont les paramètres sont renommés pour ne pas se confondre d'une activité à l'autre.
  *
  * @param array $activelinks Voir epsynthesis_get_active_links().
- * @param array $filters ['search' => string, 'typefilter' => [epcmid, typeid]|null,
- *                        'status' => string, 'studyyear' => string]
- * @param string $sort
- * @param string $dir
- * @return array Crédits enrichis, triés.
+ * @param array $filters Voir epsynthesis_get_filtered_credits().
+ * @return array|null [where, params], ou null si aucune activité n'a rien à proposer.
  */
-function epsynthesis_get_filtered_credits(array $activelinks, array $filters, $sort, $dir) {
+function epsynthesis_filtered_credits_sql(array $activelinks, array $filters): ?array {
     $typefilter = $filters['typefilter'] ?? null;
-
-    $rows = [];
+    $clauses = [];
+    $params = [];
+    $k = 0;
     foreach ($activelinks as $epcmid => $link) {
         // Un type donné n'existe que dans son instance d'origine : si le filtre en cible un dans
         // une autre activité, celle-ci ne peut rien avoir à proposer.
         if ($typefilter !== null && $typefilter[0] !== $epcmid) {
             continue;
         }
-
         $creditfilters = [
             'search' => $filters['search'] ?? '',
             'status' => $filters['status'] ?? '',
@@ -427,44 +425,91 @@ function epsynthesis_get_filtered_credits(array $activelinks, array $filters, $s
         if ($typefilter !== null) {
             $creditfilters['typeid'] = $typefilter[1];
         }
-
-        $credits = ep_get_filtered_credits(
+        $built = ep_filtered_credits_sql(
             $link->ep->id,
             $creditfilters,
-            $sort,
-            $dir,
             $link->rights->referentids,
             $link->rights->responsibleids
         );
-        if (empty($credits)) {
+        if ($built === null) {
             continue;
         }
-
-        $students = ep_get_credit_users($credits);
-        [$typenames, $names] = epsynthesis_decoration_maps($link, $students, $sort === 'student');
-        foreach ($credits as $credit) {
-            $rows[] = epsynthesis_decorate_credit($credit, $link, $students, $typenames, $names);
+        [$where, $linkparams] = $built;
+        $k++;
+        $where = preg_replace_callback('/:([a-z][a-z0-9_]*)/i', function ($m) use ($linkparams, $k) {
+            return array_key_exists($m[1], $linkparams) ? ':' . $m[1] . '_l' . $k : $m[0];
+        }, $where);
+        foreach ($linkparams as $name => $value) {
+            $params[$name . '_l' . $k] = $value;
         }
+        $clauses[] = "($where)";
     }
+    return $clauses ? ['(' . implode(' OR ', $clauses) . ')', $params] : null;
+}
 
+/**
+ * Une page de la liste combinée des crédits du périmètre de l'utilisateur, toutes activités
+ * actives confondues, avec les mêmes filtres que credits.php : une seule requête, triée et
+ * paginée par la base, puis seules les lignes de la page sont enrichies (cours, type, étudiant).
+ *
+ * @param array $activelinks Voir epsynthesis_get_active_links().
+ * @param array $filters ['search' => string, 'typefilter' => [epcmid, typeid]|null,
+ *                        'status' => string, 'studyyear' => string]
+ * @param string $sort student, type, name, ects, status, course ou timecreated.
+ * @param string $dir
+ * @param int $limitfrom
+ * @param int $limitnum
+ * @return array [crédits enrichis de la page, nombre total]
+ */
+function epsynthesis_get_filtered_credits(
+    array $activelinks,
+    array $filters,
+    $sort,
+    $dir,
+    $limitfrom = 0,
+    $limitnum = 0
+): array {
+    global $DB;
+
+    $built = epsynthesis_filtered_credits_sql($activelinks, $filters);
+    if ($built === null) {
+        return [[], 0];
+    }
+    [$where, $params] = $built;
+    $dir = strtoupper($dir) === 'ASC' ? 'ASC' : 'DESC';
     $sortmap = [
-        'student' => 'studentfullname',
-        'type' => 'typename',
-        'name' => 'name',
-        'ects' => 'claimedects',
-        'status' => 'status',
-        'course' => 'coursename',
-        'timecreated' => 'timecreated',
+        'student' => "u.lastname $dir, u.firstname $dir",
+        'type' => "t.sortorder $dir, t.name $dir",
+        'name' => "c.name $dir",
+        'ects' => "c.claimedects $dir",
+        'status' => "c.status $dir",
+        'course' => "co.fullname $dir",
+        'timecreated' => "c.timecreated $dir",
     ];
-    $sortfield = $sortmap[$sort] ?? $sortmap['timecreated'];
-    $reverse = strtoupper($dir) !== 'ASC';
+    $order = ($sortmap[$sort] ?? $sortmap['timecreated']) . ", c.id $dir";
+    $from = "FROM {ep_credit} c
+             JOIN {user} u ON u.id = c.userid
+        LEFT JOIN {ep_type} t ON t.id = c.typeid
+             JOIN {ep} e ON e.id = c.epid
+             JOIN {course} co ON co.id = e.course
+            WHERE $where";
+    $total = (int) $DB->count_records_sql("SELECT COUNT(1) $from", $params);
+    $credits = $total ? $DB->get_records_sql("SELECT c.* $from ORDER BY $order", $params, $limitfrom, $limitnum) : [];
 
-    usort($rows, function ($a, $b) use ($sortfield, $reverse) {
-        $result = $a->$sortfield <=> $b->$sortfield;
-        return $reverse ? -$result : $result;
-    });
-
-    return $rows;
+    $byepid = [];
+    foreach ($activelinks as $link) {
+        $byepid[(int) $link->ep->id] = $link;
+    }
+    $students = ep_get_credit_users($credits);
+    $rows = [];
+    $maps = [];
+    foreach ($credits as $credit) {
+        $link = $byepid[(int) $credit->epid];
+        $maps[$link->cm->id] = $maps[$link->cm->id] ?? epsynthesis_decoration_maps($link, $students);
+        [$typenames, $names] = $maps[$link->cm->id];
+        $rows[] = epsynthesis_decorate_credit($credit, $link, $students, $typenames, $names);
+    }
+    return [$rows, $total];
 }
 
 /**
