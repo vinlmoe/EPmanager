@@ -571,7 +571,6 @@ $string['sessionkind_other'] = 'Autre';
 $string['sessionduration'] = 'Durée (h)';
 $string['sessionteacher'] = 'Intervenant';
 $string['sessionteachername'] = 'Intervenant extérieur';
-$string['sessiondate'] = 'Date';
 $string['addsessions'] = 'Ajouter des séances';
 $string['hourstotal'] = 'Volume horaire';
 $string['hourssessions'] = 'Séances : {$a} h';

@@ -373,14 +373,12 @@ class syllabus_pdf extends \pdf {
             $users = $DB->get_records_list('user', 'id', $teacherids, '', $fields);
         }
         $kinds = ep_session_kind_options();
-        $dateformat = get_string('strftimedate', 'langconfig');
 
         $head = '<tr style="background-color:' . self::LABEL_BACKGROUND . ';font-weight:bold;">'
-            . '<th width="38%">' . s(get_string('sessiontitle', 'mod_ep')) . '</th>'
-            . '<th width="17%">' . s(get_string('sessionkind', 'mod_ep')) . '</th>'
+            . '<th width="45%">' . s(get_string('sessiontitle', 'mod_ep')) . '</th>'
+            . '<th width="18%">' . s(get_string('sessionkind', 'mod_ep')) . '</th>'
             . '<th width="10%" align="right">' . s(get_string('sessionduration', 'mod_ep')) . '</th>'
-            . '<th width="20%">' . s(get_string('sessionteacher', 'mod_ep')) . '</th>'
-            . '<th width="15%">' . s(get_string('sessiondate', 'mod_ep')) . '</th></tr>';
+            . '<th width="27%">' . s(get_string('sessionteacher', 'mod_ep')) . '</th></tr>';
         // Le thead est répété par TCPDF en haut de chaque page quand le programme déborde.
         $html = '<table border="1" cellpadding="3" cellspacing="0"><thead>' . $head . '</thead>';
         foreach ($sessions as $session) {
@@ -391,12 +389,10 @@ class syllabus_pdf extends \pdf {
                 $teacher = (string) $session->teachername;
             }
             $html .= '<tr nobr="true">'
-                . '<td width="38%">' . s($session->title) . '</td>'
-                . '<td width="17%">' . s($kinds[$session->kind] ?? $session->kind) . '</td>'
+                . '<td width="45%">' . s($session->title) . '</td>'
+                . '<td width="18%">' . s($kinds[$session->kind] ?? $session->kind) . '</td>'
                 . '<td width="10%" align="right">' . s(format_float((float) $session->duration, 2, true, true)) . '</td>'
-                . '<td width="20%">' . s($teacher) . '</td>'
-                . '<td width="15%">' . (empty($session->sessiondate) ? '' : s(userdate($session->sessiondate, $dateformat)))
-                . '</td></tr>';
+                . '<td width="27%">' . s($teacher) . '</td></tr>';
         }
         return $html . '</table>';
     }

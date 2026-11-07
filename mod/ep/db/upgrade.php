@@ -398,5 +398,16 @@ function xmldb_ep_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026111500, 'ep');
     }
 
+    if ($oldversion < 2026111800) {
+        // Les séances du programme d'un syllabus ne sont plus datées : le syllabus décrit l'EP, pas
+        // le calendrier d'une session.
+        $table = new xmldb_table('ep_session');
+        $field = new xmldb_field('sessiondate');
+        if ($dbman->field_exists($table, $field)) {
+            $dbman->drop_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026111800, 'ep');
+    }
+
     return true;
 }

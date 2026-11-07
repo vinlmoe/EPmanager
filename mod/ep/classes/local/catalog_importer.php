@@ -83,7 +83,6 @@ class catalog_importer {
             'kind' => [['Nature', 'Kind'], false],
             'duration' => [['Durée', 'Duration', 'Heures'], false],
             'teacher' => [['Intervenant', 'Lecturer', 'Teacher'], false],
-            'date' => [['Date'], false],
         ];
     }
 
@@ -459,6 +458,11 @@ class catalog_importer {
         if ($result->errors) {
             return $result;
         }
+        // Une colonne non reconnue (la « Date » des fichiers d'avant la 1.0.4, par exemple) est
+        // signalée et ignorée.
+        foreach ($read->unknown as $header) {
+            $result->warnings[] = get_string('importcolumnignored', 'mod_ep', s($header));
+        }
         $bycode = [];
         foreach (ep_get_activities($ep->id) as $activity) {
             if ($activity->code !== '') {
@@ -499,11 +503,10 @@ class catalog_importer {
                 continue;
             }
             $duration = $value('duration') === '' ? 0.0 : csv_reader::number($value('duration'));
-            $date = csv_reader::date($value('date'));
-            if ($duration === null || $duration < 0 || $date === null) {
+            if ($duration === null || $duration < 0) {
                 $result->errors[] = get_string('importline', 'mod_ep', (object) ['line' => $lineno,
-                    'error' => get_string('importbadvalue', 'mod_ep', (object) ['column' => $columns['duration'][0][0] . ' / '
-                        . $columns['date'][0][0], 'value' => s($value('duration') . ' ' . $value('date'))])]);
+                    'error' => get_string('importbadvalue', 'mod_ep', (object) ['column' => $columns['duration'][0][0],
+                        'value' => s($value('duration'))])]);
                 continue;
             }
             $teacher = $value('teacher');
@@ -514,7 +517,6 @@ class catalog_importer {
                 'duration' => $duration,
                 'teacherid' => $teacherid ?: 0,
                 'teachername' => $teacherid ? '' : $teacher,
-                'sessiondate' => $date,
             ];
         }
         return $result;

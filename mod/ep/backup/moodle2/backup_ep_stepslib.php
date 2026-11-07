@@ -84,7 +84,7 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         ]);
         $sessions = new backup_nested_element('sessions');
         $session = new backup_nested_element('session', ['id'], [
-            'sortorder', 'title', 'kind', 'duration', 'teacherid', 'teachername', 'sessiondate', 'timecreated',
+            'sortorder', 'title', 'kind', 'duration', 'teacherid', 'teachername', 'timecreated',
         ]);
 
         $suppcategories = new backup_nested_element('suppcategories');

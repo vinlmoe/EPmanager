@@ -173,7 +173,6 @@ class syllabus_view {
                 get_string('sessionkind', 'mod_ep'),
                 get_string('sessionduration', 'mod_ep'),
                 get_string('sessionteacher', 'mod_ep'),
-                get_string('sessiondate', 'mod_ep'),
             ];
             foreach ($sessions as $session) {
                 if (!empty($session->teacherid) && isset($teachers[$session->teacherid])) {
@@ -186,7 +185,6 @@ class syllabus_view {
                     $kinds[$session->kind] ?? s($session->kind),
                     ep_format_ects($session->duration),
                     $teacher !== '' ? s($teacher) : '-',
-                    !empty($session->sessiondate) ? userdate($session->sessiondate, get_string('strftimedate')) : '-',
                 ];
             }
             $html .= html_writer::tag('h4', get_string('sessions', 'mod_ep')) . html_writer::table($table);

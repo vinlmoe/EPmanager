@@ -340,7 +340,7 @@ class provider implements
                 'timereviewed' => $date($syllabus->timereviewed),
             ];
         }
-        $sql = "SELECT se.id, a.name, s.version, se.title, se.duration, se.sessiondate
+        $sql = "SELECT se.id, a.name, s.version, se.title, se.duration
                   FROM {ep_session} se
                   JOIN {ep_syllabus} s ON s.id = se.syllabusid
                   JOIN {ep_activity} a ON a.id = s.activityid
@@ -352,7 +352,6 @@ class provider implements
                 'version' => $session->version,
                 'title' => $session->title,
                 'duration' => $session->duration,
-                'date' => $date($session->sessiondate),
             ];
         }
 

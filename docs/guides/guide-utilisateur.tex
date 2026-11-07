@@ -5,9 +5,9 @@
 
 % Version du guide : à mettre à jour à chaque modification, avec une ligne dans l'historique.
 \newcommand{\titreguide}{Guide utilisateur}
-\newcommand{\versionguide}{1.0}
+\newcommand{\versionguide}{1.1}
 \newcommand{\dateguide}{novembre 2026}
-\newcommand{\versionep}{1.0.3}
+\newcommand{\versionep}{1.0.4}
 \newcommand{\versionsynthese}{1.0.2}
 
 \usepackage{guide-commun}
@@ -34,6 +34,8 @@ pas}{gu-etu-tableau-de-bord}
 \midrule
 1.0 & novembre 2026 & Première version, pour EP Manager 1.0.3 : tous les rôles en un seul
 document, captures prises sur une promotion de 1\,000 étudiants. \\
+1.1 & novembre 2026 & Séances du programme sans date (EP Manager 1.0.4) ; qui valide les
+syllabus. \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -275,6 +277,8 @@ prérequis, contenu, méthodes, conditions d'examen et de seconde session, bibli
 programme des séances avec leurs intervenants, volume horaire. Elle se télécharge en PDF.
 
 \capture{gu-etu-syllabus}{Fiche (syllabus) d'un EP du catalogue.}
+
+\capture[0.85\linewidth]{gu-etu-seances}{Programme des séances, tel qu'il figure sur la fiche.}
 
 \subsection{S'inscrire}
 
@@ -564,20 +568,23 @@ plus d'une semaine.
     d'apprentissage, prérequis, contenu, méthodes, conditions d'examen et de seconde session,
     bibliographie, langue, travail personnel.
   \item Décrivez son \textbf{programme} : les séances, avec leur nature (cours, TD, TP,
-    clinique\dots), leur durée, leur date et leur intervenant (un enseignant du site, ou un
-    intervenant extérieur par son nom). Le volume horaire est calculé.
+    clinique\dots), leur durée et leur intervenant (un enseignant du site, ou un intervenant
+    extérieur par son nom). Les séances ne sont pas datées : le syllabus décrit l'EP, pas le
+    calendrier d'une session. Le volume horaire est calculé.
   \item \bouton{Enregistrer le brouillon} autant de fois que nécessaire, puis
     \bouton{Soumettre à la DEVE}.
 \end{etapes}
 
-\capture{01-enseignant-proposer-ep-formulaire}{Proposition d'un nouvel EP : caractéristiques
-et syllabus.}
+\capture{gu-ens-proposer}{Proposition d'un nouvel EP : caractéristiques et syllabus.}
+
+\capture{gu-ens-seances}{Programme des séances : intitulé, nature, durée, intervenant (compte du
+site ou nom d'un intervenant extérieur).}
 
 La DEVE publie la proposition (l'EP entre au catalogue), vous la renvoie avec un commentaire
 (corrigez, puis soumettez de nouveau) ou la refuse. Vous êtes prévenu de sa décision, et la
 proposition renvoyée apparaît dans l'onglet \og À traiter\fg{} du suivi.
 
-\capture{01-enseignant-propositions}{Propositions et syllabus : l'état de chaque version.}
+\capture{gu-ens-propositions}{Propositions et syllabus : l'état de chaque version.}
 
 \subsection{Mettre à jour un EP publié}
 
@@ -586,7 +593,28 @@ la version en vigueur reste au catalogue tant que la nouvelle n'est pas publiée
 choix de la DEVE, la mise à jour est publiée aussitôt ou passe par sa revue. Les versions
 précédentes restent consultables.
 
-\capture{03-enseignant-proposer-mise-a-jour}{Mise à jour du syllabus d'un EP publié.}
+\capture{gu-ens-syllabus-edit}{Mise à jour du syllabus d'un EP publié : rubriques, puis
+programme des séances.}
+
+\subsection{Qui valide un syllabus}\label{sec:qui-valide-syllabus}
+
+C'est la \textbf{DEVE} (capacité \texttt{mod/ep:manage}) qui valide les syllabus, depuis
+\chemin{Propositions et syllabus} : elle publie la version soumise, la renvoie à son auteur avec
+un commentaire, ou la refuse (section~\ref{sec:propositions}). Ni le référent ni un autre
+enseignant n'interviennent.
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}X l@{}}
+\toprule
+\textbf{Cas} & \textbf{Qui valide} \\
+\midrule
+Proposition d'un nouvel EP & Toujours la DEVE \\
+Mise à jour du syllabus d'un EP publié, par son responsable & La DEVE ; ou personne, publiée
+aussitôt, si la DEVE a coché la \og publication directe des mises à jour\fg{} \\
+Syllabus ou séances importés par la DEVE (CSV, paramétrage JSON) & Publiés directement \\
+\bottomrule
+\end{tabularx}
+\end{center}
+Même publiée directement, une mise à jour reste dans l'historique des versions de l'EP.
 
 \newpage
 % ===========================================================================
@@ -714,16 +742,16 @@ décrites dans le document \emph{Formats des imports et des exports}.
 
 \capture{gu-deve-import-catalogue}{Import du catalogue depuis un fichier CSV.}
 
-\subsection{Examiner les propositions des enseignants}
+\subsection{Examiner les propositions des enseignants}\label{sec:propositions}
 
 \chemin{Propositions et syllabus} liste les versions soumises par les enseignants. Pour
 chacune, après lecture de la fiche (et, pour une mise à jour, la comparaison avec la version
 en vigueur) : \bouton{Publier}, \bouton{Renvoyer à l'auteur} avec un commentaire, ou
 \bouton{Refuser}. L'auteur est prévenu.
 
-\capture{02-deve-propositions-a-examiner}{Propositions à examiner.}
+\capture{gu-deve-propositions}{Propositions et mises à jour à examiner.}
 
-\capture{03-deve-comparer-versions}{Comparaison d'une mise à jour avec la version publiée.}
+\capture{gu-deve-comparer}{Mise à jour soumise : version en vigueur, version proposée et décision.}
 
 \section{Éditions PDF et courriels}\label{sec:courriels}
 

@@ -3,6 +3,21 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## 1.0.4 — mod_ep 2026111800, mod_epsynthesis 2026111600 (18 novembre 2026)
+
+### Module
+- **Programme des séances d'un syllabus sans date** : le syllabus décrit l'EP, pas le calendrier
+  d'une session. La date disparaît du formulaire, de la fiche, du PDF et du livret, de l'import
+  CSV des séances (une colonne « Date » d'un ancien fichier est signalée et ignorée), de la
+  sauvegarde et de l'export RGPD ; la mise à niveau supprime la colonne `sessiondate` de
+  `ep_session`.
+
+### Documentation
+- Guide utilisateur 1.1 : qui valide un syllabus (la DEVE ; publication directe des mises à jour
+  si elle l'a choisie ; imports publiés directement) ; captures du programme des séances et des
+  propositions refaites. Guide enseignant 1.1. Formats des imports et exemple `seances.csv` sans
+  colonne « Date ».
+
 ## 1.0.3 — mod_ep 2026111700, mod_epsynthesis 2026111600 (17 novembre 2026)
 
 Test des interactions de bout en bout d'une promotion de 1 000 étudiants

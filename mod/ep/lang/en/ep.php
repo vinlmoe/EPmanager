@@ -571,7 +571,6 @@ $string['sessionkind_other'] = 'Other';
 $string['sessionduration'] = 'Duration (h)';
 $string['sessionteacher'] = 'Lecturer';
 $string['sessionteachername'] = 'External lecturer';
-$string['sessiondate'] = 'Date';
 $string['addsessions'] = 'Add sessions';
 $string['hourstotal'] = 'Teaching hours';
 $string['hourssessions'] = 'Sessions: {$a} h';

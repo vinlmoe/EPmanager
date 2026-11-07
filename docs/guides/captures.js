@@ -22,7 +22,8 @@ const ens = `ens${ST}_1`;
 const auteur = `ens${ST}_5`;
 const deve = `deve${ST}_1`;
 // Guide utilisateur : responsable d'un EP qui a des inscrits en attente (RESP=compte:activityid),
-// supplément émis à vérifier (VERIF=numéro:code), synthèse (SYNTHESE=cmid).
+// supplément émis à vérifier (VERIF=numéro:code), synthèse (SYNTHESE=cmid), EP publié de l'auteur
+// à mettre à jour (AUTEUR_EP=activityid), EP dont une mise à jour attend la DEVE (REVUE_EP).
 const [resp, respact] = (process.env.RESP || `${ens}:${site.activities[0]}`).split(':');
 const [verifnumber, verifcode] = (process.env.VERIF || ':').split(':');
 const SYN = process.env.SYNTHESE;
@@ -90,6 +91,14 @@ const plan = [
   ['gu-ens-validation', ens, `/mod/ep/credits.php?id=${CM}`],
   ['gu-ens-demande', ens, (page) => follow(page, `/mod/ep/credits.php?id=${CM}`, 'validate.php', 'Valider')],
   ['gu-ens-supplement-items', ens, `/mod/ep/supplement_items.php?id=${CM}`],
+  ['gu-ens-propositions', auteur, `/mod/ep/proposals.php?id=${CM}`],
+  ['gu-ens-proposer', auteur, `/mod/ep/syllabus_edit.php?id=${CM}`],
+  ['gu-ens-syllabus-edit', auteur, `/mod/ep/syllabus_edit.php?id=${CM}&activityid=${process.env.AUTEUR_EP || 0}`],
+  ['gu-ens-seances', auteur, `/mod/ep/syllabus_edit.php?id=${CM}&activityid=${process.env.AUTEUR_EP || 0}`,
+    '#id_sessionshdr'],
+  ['gu-etu-seances', etu, `/mod/ep/syllabus.php?id=${CM}&activityid=${site.activities[4]}`, 'table.ep-syllabus-sessions'],
+  ['gu-deve-propositions', deve, `/mod/ep/proposals.php?id=${CM}`],
+  ['gu-deve-comparer', deve, `/mod/ep/syllabus.php?id=${CM}&activityid=${process.env.REVUE_EP || 0}`],
   ['gu-ens-participants', resp, `/mod/ep/participants.php?id=${CM}&activityid=${respact}`],
   ['gu-ens-import-notes', resp, `/mod/ep/grades_import.php?id=${CM}&activityid=${respact}`],
   ['gu-deve-administration', deve, `/mod/ep/administration.php?id=${CM}`],
@@ -139,7 +148,7 @@ const plan = [
     }
     return contexts[user];
   };
-  for (const [name, user, target] of plan) {
+  for (const [name, user, target, selector] of plan) {
     if (only.length && !only.includes(name)) {
       continue;
     }
@@ -158,12 +167,20 @@ const plan = [
       // l'index recouvrirait la gauche du contenu.
       await page.addStyleTag({ content: '.drawer, .drawer-toggles { display: none !important; }'
         + ' #page.drawers { margin-left: 0 !important; margin-right: 0 !important; }'
-        + ' #page.drawers .main-inner { max-width: 100% !important; }' });
+        + ' #page.drawers .main-inner { max-width: 100% !important; }'
+        // Barre de navigation non fixe : elle recouvrirait la capture d'un élément de la page.
+        + ' .navbar.fixed-top { position: absolute !important; }' });
       // Haut de la page, sur 1 500 pixels au plus : ce que l'utilisateur voit en arrivant, avec la
       // barre de navigation ; les longues listes sont coupées plutôt que réduites à l'illisible.
-      const height = await page.evaluate(() => document.documentElement.scrollHeight);
       const file = path.join(OUT, `${name}.png`);
-      await page.screenshot({ path: file, fullPage: true, clip: { x: 0, y: 0, width: 1280, height: Math.min(height, 1500) } });
+      if (selector) {
+        // Un seul élément de la page, quelle que soit sa place : un programme de séances, par
+        // exemple, qui tombe sous les 1 500 premiers pixels.
+        await page.locator(selector).first().screenshot({ path: file });
+      } else {
+        const height = await page.evaluate(() => document.documentElement.scrollHeight);
+        await page.screenshot({ path: file, fullPage: true, clip: { x: 0, y: 0, width: 1280, height: Math.min(height, 1500) } });
+      }
       console.log(`${name} : ${page.url()}`);
     } catch (e) {
       console.log(`${name} : ÉCHEC ${e.message.split('\n')[0]}`);

@@ -37,7 +37,8 @@ use mod_ep\output\syllabus_view;
  *  - sessioncount (int) : nombre de lignes de séances à afficher.
  *
  * Les séances reviennent dans sessionrow[n] (sessiontitle, sessionkind, sessionduration,
- * sessionteacher, sessionteachername) et sessiondate[n].
+ * sessionteacher, sessionteachername). Les séances ne sont pas datées : le syllabus décrit l'EP,
+ * pas le calendrier d'une session.
  *
  * @package   mod_ep
  * @copyright 2026 Sébastien Lefebvre
@@ -117,9 +118,7 @@ class syllabus_form extends \moodleform {
         $teacheroptions = [0 => '—'] + ($this->_customdata['teachers'] ?? []);
         // Les champs d'une ligne sont groupés sous sessionrow[n][...] : un groupe qui préfixe ses
         // éléments est numéroté par repeat_elements() d'après sa ligne, alors qu'un groupe sans
-        // préfixe l'est d'après son rang parmi tous les éléments répétés. La date reste hors du
-        // groupe : un date_selector est lui-même un groupe, et QuickForm ne relit pas les valeurs
-        // d'un groupe imbriqué dans un autre.
+        // préfixe l'est d'après son rang parmi tous les éléments répétés.
         $row = [
             $mform->createElement('text', 'sessiontitle', get_string('sessiontitle', 'mod_ep'), ['size' => '30']),
             $mform->createElement('select', 'sessionkind', get_string('sessionkind', 'mod_ep'), ep_session_kind_options()),
@@ -129,7 +128,6 @@ class syllabus_form extends \moodleform {
         ];
         $elements = [
             $mform->createElement('group', 'sessionrow', get_string('sessiontitle', 'mod_ep') . ' {no}', $row, ' ', true),
-            $mform->createElement('date_selector', 'sessiondate', get_string('sessiondate', 'mod_ep'), ['optional' => true]),
         ];
         // Pas de valeur par défaut pour les champs du groupe : enregistrée sous son nom à plat
         // (sessionrow[n][champ]), elle l'emporterait sur les valeurs passées par set_data(). Une

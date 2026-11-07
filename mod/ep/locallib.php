@@ -4272,7 +4272,7 @@ function ep_can_edit_syllabus(stdClass $activity, context $context, $userid = nu
  * compte l'emporte sur un nom libre.
  *
  * @param int $syllabusid
- * @param array $sessions Liste de tableaux {title, kind, duration, teacherid, teachername, sessiondate}.
+ * @param array $sessions Liste de tableaux {title, kind, duration, teacherid, teachername}.
  * @return int Nombre de séances enregistrées.
  */
 function ep_set_syllabus_sessions($syllabusid, array $sessions) {
@@ -4297,7 +4297,6 @@ function ep_set_syllabus_sessions($syllabusid, array $sessions) {
             'duration' => max(0, round((float) ($session['duration'] ?? 0), 2)),
             'teacherid' => $teacherid,
             'teachername' => $teacherid ? '' : core_text::substr(trim((string) ($session['teachername'] ?? '')), 0, 255),
-            'sessiondate' => (int) ($session['sessiondate'] ?? 0),
             'timecreated' => time(),
         ]);
     }

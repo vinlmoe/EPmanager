@@ -169,7 +169,8 @@ final class import_test extends \advanced_testcase {
 
     /**
      * Séances : programme remplacé dans une nouvelle version publiée, textes repris ; intervenant
-     * du site rapproché par son adresse, intervenant extérieur gardé par son nom.
+     * du site rapproché par son adresse, intervenant extérieur gardé par son nom ; colonne « Date »
+     * d'un ancien fichier signalée et ignorée (les séances ne sont plus datées).
      */
     public function test_sessions_import(): void {
         $activity = $this->gen->create_activity($this->ep, ['code' => 'PHY1', 'name' => 'Physiologie']);
@@ -183,6 +184,7 @@ final class import_test extends \advanced_testcase {
             . "INCONNU;Rien;;1;;\n";
         $read = catalog_importer::read_sessions($this->ep, $csv);
         $this->assertCount(1, $read->errors);
+        $this->assertSame([get_string('importcolumnignored', 'mod_ep', 'Date')], $read->warnings);
         $this->assertSame(1, catalog_importer::apply_sessions($this->ep, $read->byactivity, get_admin()->id));
 
         $syllabus = ep_get_syllabus($activity->id);
@@ -191,7 +193,7 @@ final class import_test extends \advanced_testcase {
         $this->assertCount(2, $sessions);
         $this->assertSame('lecture', $sessions[0]->kind);
         $this->assertEquals($this->teacher->id, $sessions[0]->teacherid);
-        $this->assertSame(make_timestamp(2026, 9, 2), (int) $sessions[0]->sessiondate);
+        $this->assertFalse(property_exists($sessions[0], 'sessiondate'));
         $this->assertNull($sessions[1]->teacherid);
         $this->assertSame('Dr Dupont', $sessions[1]->teachername);
         $this->assertEquals(3.5, $sessions[1]->duration);

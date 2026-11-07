@@ -157,7 +157,6 @@ foreach ($sessions as $index => $session) {
         'sessionteacher' => (int) $session->teacherid,
         'sessionteachername' => $session->teachername,
     ];
-    $formdata['sessiondate'][$index] = (int) $session->sessiondate;
 }
 $mform->set_data($formdata);
 
@@ -174,7 +173,6 @@ if ($mform->is_cancelled()) {
             'duration' => (float) ($row['sessionduration'] ?? 0),
             'teacherid' => (int) ($row['sessionteacher'] ?? 0),
             'teachername' => $row['sessionteachername'] ?? '',
-            'sessiondate' => (int) ($data->sessiondate[$index] ?? 0),
         ];
     }
     $textdata = (object) [
