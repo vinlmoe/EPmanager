@@ -8,7 +8,9 @@
 // du site (EP proposé en attente, synthèse) sont cherchés dans les pages.
 const { chromium } = require('playwright');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const site = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const only = process.argv.slice(3);
@@ -38,7 +40,10 @@ const follow = async (page, url, motif, texte) => {
   await page.goto(await link.first().getAttribute('href'));
 };
 
-// [nom, compte, url (ou fonction async(page) qui navigue), sélecteur à photographier (facultatif)]
+// [nom, compte, url (ou fonction async(page) qui navigue), sélecteur à photographier (facultatif)].
+// Pour un document PDF produit par une page : [nom, compte, url du PDF, { pdf: [pages] }] ; le PDF est
+// téléchargé dans la session du compte et les pages demandées sont rendues côte à côte, sur fond
+// gris, comme des feuilles (pdftoppm et montage d'ImageMagick).
 const plan = [
   ['etu-tableau-de-bord', etu, `/mod/ep/view.php?id=${CM}`],
   ['etu-catalogue', etu, `/mod/ep/catalog.php?id=${CM}`],
@@ -98,6 +103,13 @@ const plan = [
   ['gu-ens-seances', auteur, `/mod/ep/syllabus_edit.php?id=${CM}&activityid=${process.env.AUTEUR_EP || 0}`,
     '#id_sessionshdr'],
   ['gu-etu-seances', etu, `/mod/ep/syllabus.php?id=${CM}&activityid=${site.activities[4]}`, 'table.ep-syllabus-sessions'],
+  // Documents PDF.
+  ['gu-pdf-syllabus', etu, `/mod/ep/syllabus_pdf.php?id=${CM}&activityid=${site.activities[4]}`, { pdf: [1, 2] }],
+  ['gu-pdf-livret', deve, `/mod/ep/booklet.php?id=${CM}`, { pdf: [1, 2, 4] }],
+  ['gu-pdf-supplement', etu, `/mod/ep/supplement.php?id=${CM}&action=preview&lang=fr`, { pdf: [1, 2] }],
+  // Feuille d'émargement d'un EP qui a des inscrits (EMARGEMENT=activityid).
+  ['gu-pdf-emargement', deve, `/mod/ep/participants.php?id=${CM}&activityid=${process.env.EMARGEMENT || respact}&action=sheet`,
+    { pdf: [1] }],
   ['gu-deve-propositions', deve, `/mod/ep/proposals.php?id=${CM}`],
   ['gu-deve-comparer', deve, `/mod/ep/syllabus.php?id=${CM}&activityid=${process.env.REVUE_EP || 0}`],
   ['gu-ens-participants', resp, `/mod/ep/participants.php?id=${CM}&activityid=${respact}`],
@@ -153,6 +165,9 @@ if (process.env.SYLLABUS) {
     ['sy-deve-cours-sans-module', deve,
       `/mod/syllabusstaff/courselink.php?id=${sy.staffcmid}&courseid=${sy.nomodulecourse}&frameworkid=${ref}`],
     ['sy-deve-livret', deve, `/mod/syllabusstaff/booklet.php?id=${sy.staffcmid}&selection=y2`],
+    ['sy-pdf-fiche', sett, `/mod/syllabus/pdf.php?id=${m1.cmid}`, { pdf: [1, 2] }],
+    ['sy-pdf-livret', deve, `/mod/syllabusstaff/booklet.php?id=${sy.staffcmid}&selection=all&download=1`,
+      { pdf: [1, 3, 4] }],
     ['sy-ens-progression', m1.leaders[0],
       `/mod/syllabusstaff/progression.php?id=${sy.staffcmid}&compid=${process.env.SYCOMP || 0}`],
     ['sy-ens-resultats', m1.leaders[0], `/mod/syllabus/results.php?id=${m1.cmid}`],
@@ -191,6 +206,29 @@ if (process.env.SYLLABUS) {
     }
     const page = await login(user);
     try {
+      if (selector && selector.pdf) {
+        // Document PDF : téléchargé avec la session du compte, pages rendues en images.
+        const response = await page.request.get(BASE + target);
+        const type = response.headers()['content-type'] || '';
+        if (!type.includes('pdf')) {
+          throw new Error(`pas un PDF (${type})`);
+        }
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-'));
+        const pdf = path.join(dir, 'doc.pdf');
+        fs.writeFileSync(pdf, await response.body());
+        // Pages demandées qui existent : une fiche courte peut tenir sur une page.
+        const count = Number(/Pages:\s+(\d+)/.exec(execFileSync('pdfinfo', [pdf]).toString())[1]);
+        const images = selector.pdf.filter((n) => n <= count).map((n) => {
+          const out = path.join(dir, `p${n}`);
+          execFileSync('pdftoppm', ['-f', String(n), '-l', String(n), '-r', '90', '-png', '-singlefile', pdf, out]);
+          return `${out}.png`;
+        });
+        execFileSync('montage', [...images, '-background', '#d9d9d9', '-bordercolor', '#9a9a9a', '-border', '1',
+          '-geometry', '+18+18', '-tile', `${images.length}x1`, path.join(OUT, `${name}.png`)]);
+        fs.rmSync(dir, { recursive: true, force: true });
+        console.log(`${name} : ${BASE + target} (PDF, pages ${selector.pdf.join(', ')})`);
+        continue;
+      }
       if (typeof target === 'function') {
         await target(page);
       } else {
