@@ -1,0 +1,230 @@
+<?php
+// This file is part of Moodle - http://moodle.org/
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * English strings for mod_syllabus.
+ *
+ * @package   mod_syllabus
+ * @copyright 2026 Sébastien Lefebvre
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+defined('MOODLE_INTERNAL') || die();
+
+$string['actionsnone'] = '-';
+$string['addquestion'] = 'Add a question';
+$string['addsessions'] = 'Add sessions';
+$string['anonymitynotice'] = 'Your answers are anonymous: neither your teachers nor the academic office can know what you answered. Only the fact that you answered is recorded, so that you answer only once.';
+$string['answer'] = 'Answer';
+$string['answers'] = 'Answers';
+$string['answersn'] = '{$a} answer(s) to this question';
+$string['belowthreshold'] = 'Results are only shown from {$a} responses, to protect students\' anonymity.';
+$string['characteristics'] = 'Module characteristics';
+$string['code'] = 'Code';
+$string['commonquestions_help'] = 'Questions set by the academic office for all modules or for modules of this type. They will be frozen when the evaluation opens, together with yours.';
+$string['continueediting'] = 'Continue editing';
+$string['decide_publish'] = 'Publish';
+$string['decide_reject'] = 'Reject';
+$string['decide_return'] = 'Return to the module leaders';
+$string['decision_publish'] = 'published';
+$string['decision_reject'] = 'rejected';
+$string['decision_return'] = 'returned for corrections';
+$string['distribution'] = 'Distribution';
+$string['downloadcsv'] = 'Download the results (CSV)';
+$string['downloadpdf'] = 'Syllabus as PDF';
+$string['ects'] = 'Credits (ECTS)';
+$string['editnotice_publish'] = 'Once saved, the syllabus is published straight away: students will see it.';
+$string['editnotice_review'] = 'Your syllabus will be reviewed by the academic office before it is published. Until then, students see the previous version.';
+$string['editquestion'] = 'Edit the question';
+$string['editsyllabus'] = 'Write the syllabus';
+$string['errorbusy'] = 'Someone else is modifying this module: please try again in a moment.';
+$string['errorchoices'] = 'Give at least two choices, one per line.';
+$string['errorcloseafteropen'] = 'The closing date must be after the opening date.';
+$string['errorcommentrequired'] = 'A comment is required to return or reject a syllabus.';
+$string['errorfrozen'] = 'The evaluation is open: its questions can no longer be changed.';
+$string['errorname'] = 'The name is required.';
+$string['errornegative'] = 'The value cannot be negative.';
+$string['errornotdraft'] = 'This version is awaiting the academic office: it can no longer be changed.';
+$string['erroropenrequired'] = 'Please also give the opening date.';
+$string['errorquestiontext'] = 'The question text is required.';
+$string['errortype'] = 'Choose the module type.';
+$string['errorvalue'] = 'Invalid answer.';
+$string['evalclose'] = 'Evaluation closes';
+$string['evalclosed'] = 'The evaluation of this module is closed.';
+$string['evalclosed_student'] = 'The evaluation of this module is closed ({$a}).';
+$string['evaldone'] = 'You have already evaluated this module.';
+$string['evaldone_student'] = 'You have evaluated this module. Thank you!';
+$string['evalerrors'] = 'Some answers are missing or invalid.';
+$string['evalinvite'] = 'The evaluation of this module is open ({$a}). Your opinion helps the teachers improve the module.';
+$string['evalnone'] = 'This module has no evaluation.';
+$string['evalnone_student'] = 'This module has no evaluation.';
+$string['evalnotallowed'] = 'You are not asked to evaluate this module.';
+$string['evalnotallowed_student'] = 'You are not asked to evaluate this module.';
+$string['evalnowindow'] = 'No evaluation planned';
+$string['evalopen'] = 'Evaluation opens';
+$string['evalopen_help'] = 'From this date, the students of the course can evaluate the module, once each, anonymously. They are notified by a message. When the evaluation opens, the questions (the academic office\'s and yours) are frozen.';
+$string['evalquestions'] = 'Evaluation questions';
+$string['evalstate_closed'] = 'Closed';
+$string['evalstate_none'] = 'Not planned';
+$string['evalstate_open'] = 'Open';
+$string['evalstate_upcoming'] = 'Upcoming';
+$string['evalthanks'] = 'Thank you: your evaluation has been recorded.';
+$string['evaluatemodule'] = 'Evaluate this module';
+$string['evaluation'] = 'Module evaluation';
+$string['evaluation_help'] = 'Students evaluate the module during the window below. They first answer the academic office\'s questions (common to all modules or to this module type), then yours.';
+$string['evaluationsettings'] = 'Window and questions';
+$string['evalupcoming'] = 'The evaluation of this module is not open yet.';
+$string['evalupcoming_student'] = 'You will be able to evaluate this module: {$a}.';
+$string['evalwindow'] = 'from {$a->open} to {$a->close}';
+$string['evalwindowheading'] = 'Evaluation window';
+$string['eventevaluationsubmitted'] = 'Module evaluated';
+$string['fiche'] = 'Module syllabus';
+$string['fichepublished'] = 'Syllabus published.';
+$string['fichesaved'] = 'Draft saved.';
+$string['fichestate'] = 'Syllabus writing';
+$string['fichesubmitted'] = 'Syllabus sent to the academic office.';
+$string['field_assessment'] = 'Assessment methods';
+$string['field_bibliography'] = 'Bibliography and resources';
+$string['field_content'] = 'Content';
+$string['field_methods'] = 'Teaching methods';
+$string['field_objectives'] = 'Objectives';
+$string['field_outcomes'] = 'Intended learning outcomes';
+$string['field_outcomes_help'] = 'What the student will be able to do at the end of the module, phrased with action verbs (identify, perform, interpret...).';
+$string['field_prerequisitestext'] = 'Prerequisites';
+$string['field_resit'] = 'Resit';
+$string['frozennotice'] = 'The evaluation is open: its questions are frozen.';
+$string['hoursn'] = '{$a} h';
+$string['hoursperects'] = '{$a} h per ECTS';
+$string['hourspersonal'] = 'Personal work: {$a} h';
+$string['hourssessions'] = 'Sessions: {$a} h';
+$string['hourstotal'] = 'Workload';
+$string['hoursworkload'] = 'Total workload: {$a} h';
+$string['language'] = 'Language of instruction';
+$string['mean'] = 'Mean';
+$string['meanis'] = 'Mean: {$a} / 5';
+$string['messageprovider:evaluationopen'] = 'A module evaluation opens';
+$string['messageprovider:syllabusreviewed'] = 'Academic office decision on a module syllabus';
+$string['messageprovider:syllabussubmitted'] = 'Module syllabus to review';
+$string['module'] = 'Module';
+$string['modulename'] = 'Module syllabus';
+$string['modulename_field'] = 'Module name';
+$string['modulename_help'] = 'The module syllabus (ECTS model: objectives, learning outcomes, content, methods, assessment, sessions, workload), written by its leaders and, if the academic office requires it, reviewed by it; and the evaluation of the module by students, from a given date, on the academic office\'s questions and the teachers\' own.';
+$string['modulenameplural'] = 'Module syllabi';
+$string['moduletype'] = 'Module type';
+$string['moduletype_help'] = 'Types defined by the academic office. The academic office can set evaluation questions for a module type.';
+$string['msgopen_body'] = 'The evaluation of the module "{$a->module}" is open until {$a->close}. Your answers are anonymous: {$a->url}';
+$string['msgopen_subject'] = 'Evaluate the module "{$a->module}"';
+$string['msgreviewed_body'] = 'The syllabus of the module "{$a->module}" has been {$a->decision}. {$a->comment} {$a->url}';
+$string['msgreviewed_subject'] = 'Syllabus of "{$a->module}": {$a->decision}';
+$string['msgsubmitted_body'] = 'The syllabus of the module "{$a->module}" is awaiting your review: {$a->url}';
+$string['msgsubmitted_subject'] = 'Syllabus to review: "{$a->module}"';
+$string['noclose'] = 'no end date';
+$string['nofiche'] = 'The syllabus of this module has not been published yet.';
+$string['noinstances'] = 'No syllabus in this course.';
+$string['nopublished'] = 'No published version: students do not see a syllabus yet.';
+$string['noquestions'] = 'No questions.';
+$string['noteachers'] = 'Nobody enrolled in the course can be a module leader (capability mod/syllabus:edit).';
+$string['notype'] = 'No type';
+$string['origin_common'] = 'Academic office';
+$string['origin_teacher'] = 'Teacher';
+$string['origin_type'] = 'Academic office (type)';
+$string['part_common'] = 'Academic office questions';
+$string['part_teacher'] = 'Teacher questions';
+$string['pdfversion'] = 'Version {$a->version} of {$a->date}';
+$string['personalhours'] = 'Personal work (hours)';
+$string['pluginadministration'] = 'Syllabus administration';
+$string['pluginname'] = 'Module syllabus';
+$string['proposeupdate'] = 'Update the syllabus';
+$string['publishedversion'] = 'Published version: {$a->version}, of {$a->date}.';
+$string['question'] = 'Question';
+$string['questionenabled'] = 'Active';
+$string['questionkind'] = 'Answer format';
+$string['questionkind_choice'] = 'Choice from a list';
+$string['questionkind_help'] = 'Scale from 1 (strongly disagree) to 5 (strongly agree), yes or no, a choice from a list, or a free answer.';
+$string['questionkind_scale'] = 'Scale from 1 to 5';
+$string['questionkind_text'] = 'Free answer';
+$string['questionkind_yesno'] = 'Yes / no';
+$string['questionoptions'] = 'Choices (one per line)';
+$string['questionrequired'] = 'Answer required';
+$string['questionsaved'] = 'Question saved.';
+$string['questionscope'] = 'Asked in';
+$string['questiontext'] = 'Question';
+$string['resetresponses'] = 'Delete the answers to module evaluations';
+$string['responsesrate'] = '{$a->responses} response(s) out of {$a->eligible} student(s).';
+$string['results'] = 'Evaluation results';
+$string['resultsafterclose'] = 'The evaluation results will be visible once it closes.';
+$string['reviewchanged'] = 'Someone else has already dealt with this version.';
+$string['reviewcomment'] = 'Comment to the module leaders';
+$string['reviewcommentis'] = 'Academic office comment: {$a}';
+$string['reviewdone_publish'] = 'Syllabus published.';
+$string['reviewdone_reject'] = 'Syllabus rejected.';
+$string['reviewdone_return'] = 'Syllabus returned to the module leaders.';
+$string['reviewheading'] = 'Review by the academic office';
+$string['savedraft'] = 'Save draft';
+$string['savepublish'] = 'Save and publish';
+$string['savequestion'] = 'Save the question';
+$string['savesubmit'] = 'Save and submit to the academic office';
+$string['savewindow'] = 'Save the window';
+$string['scale_1'] = '1 - Strongly disagree';
+$string['scale_2'] = '2 - Disagree';
+$string['scale_3'] = '3 - Neither agree nor disagree';
+$string['scale_4'] = '4 - Agree';
+$string['scale_5'] = '5 - Strongly agree';
+$string['scope_common'] = 'All modules';
+$string['scope_type'] = 'Modules of a type';
+$string['scope_typeof'] = '"{$a}" modules';
+$string['semester'] = 'Period';
+$string['semester_help'] = 'Semester or teaching period, in plain words (for example "S5" or "Autumn").';
+$string['sessionduration'] = 'Duration (h)';
+$string['sessionkind'] = 'Kind';
+$string['sessionkind_clinical'] = 'Clinical';
+$string['sessionkind_fieldwork'] = 'Fieldwork';
+$string['sessionkind_lecture'] = 'Lecture';
+$string['sessionkind_other'] = 'Other';
+$string['sessionkind_practical'] = 'Practical';
+$string['sessionkind_project'] = 'Project';
+$string['sessionkind_tutorial'] = 'Tutorial';
+$string['sessions'] = 'Sessions';
+$string['sessions_help'] = 'One line per session: title, kind, duration in hours and lecturer (a teacher of the course, or the name of an external lecturer). Lines without a title are ignored.';
+$string['sessionteacher'] = 'Lecturer';
+$string['sessionteachername'] = 'or external lecturer';
+$string['sessiontitle'] = 'Session';
+$string['showpublished'] = 'Show the published version';
+$string['showworking'] = 'Show the version in progress';
+$string['status_draft'] = 'Draft';
+$string['status_published'] = 'Published';
+$string['status_rejected'] = 'Rejected';
+$string['status_returned'] = 'Returned by the academic office';
+$string['status_submitted'] = 'Submitted to the academic office';
+$string['status_superseded'] = 'Superseded';
+$string['studyyear'] = 'Year of study';
+$string['studyyear_n'] = 'Y{$a}';
+$string['studyyear_none'] = 'Not specified';
+$string['submitevaluation'] = 'Send my evaluation';
+$string['syllabus:addinstance'] = 'Add a module syllabus';
+$string['syllabus:edit'] = 'Be a module leader (write its syllabus, set evaluation questions)';
+$string['syllabus:evaluate'] = 'Evaluate a module';
+$string['syllabus:manage'] = 'Manage modules (academic office): leaders, review, evaluation, results';
+$string['syllabus:view'] = 'Read a module syllabus';
+$string['taskopenevaluations'] = 'Opening of module evaluations';
+$string['teachers'] = 'Module leaders';
+$string['teachers_help'] = 'Module leaders write the module syllabus, set their evaluation questions and see the results. They are chosen among the teachers of the course.';
+$string['teacherselect'] = 'Leader';
+$string['teacherssaved'] = '{$a} module leader(s) saved.';
+$string['windowsaved'] = 'Evaluation window saved.';
+$string['workingnotice'] = 'Version in progress ({$a}): students do not see it yet.';
+$string['workingversion'] = 'Version in progress: {$a->version} ({$a->status}).';
+$string['writefiche'] = 'Write the syllabus';
