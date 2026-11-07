@@ -98,7 +98,7 @@ if (empty($awaiting)) {
     foreach ($awaiting as $credit) {
         $awaitingtable->data[] = [
             format_string($credit->coursename),
-            $credit->studentfullname,
+            epsynthesis_credit_student_name($credit),
             $credit->typename,
             format_string($credit->name),
             ep_studyyear_label($credit->studyyear),
@@ -167,7 +167,7 @@ foreach ($credits as $credit) {
 
     $table->data[] = [
         format_string($credit->coursename),
-        $credit->studentfullname,
+        epsynthesis_credit_student_name($credit),
         $credit->typename,
         format_string($credit->name),
         ep_studyyear_label($credit->studyyear),

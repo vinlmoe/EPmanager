@@ -44,8 +44,14 @@ $step('cours et activités');
 
 $roles = $DB->get_records_menu('role', null, '', 'shortname, id');
 $users = ['students' => [], 'teachers' => [], 'deve' => []];
-$make = function ($kind, $i, $role) use ($gen, $course, $tag, $password, $roles, &$users) {
-    $user = $gen->create_user([
+// Enseignants et DEVE partagés : avec la variable PERSONNEL=<tag>, ceux d'une promotion déjà
+// générée sont inscrits dans ce cours au lieu d'en créer de nouveaux, comme dans une école où les
+// mêmes enseignants suivent toutes les promotions.
+$staff = getenv('PERSONNEL') ?: '';
+$make = function ($kind, $i, $role) use ($gen, $course, $tag, $password, $roles, &$users, $staff, $DB) {
+    $existing = $staff !== '' && $kind !== 'etu'
+        ? $DB->get_record('user', ['username' => "{$kind}{$staff}_{$i}"]) : false;
+    $user = $existing ?: $gen->create_user([
         'username' => "{$kind}{$tag}_{$i}",
         'password' => $password,
         'email' => "{$kind}{$tag}_{$i}@example.com",

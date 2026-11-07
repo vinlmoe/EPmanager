@@ -35,6 +35,16 @@ require_once($CFG->dirroot . '/mod/ep/lib.php');
  * @return string
  */
 function ep_status_label($status) {
+    return ep_request_memo('statuslabel' . (int) $status, fn() => ep_status_label_compute($status));
+}
+
+/**
+ * Libellé d'un état, sans mise en mémoire (voir ep_status_label()).
+ *
+ * @param int $status
+ * @return string
+ */
+function ep_status_label_compute($status) {
     switch ((int) $status) {
         case EP_STATUS_CANCELLED:
             return get_string('status_cancelled', 'mod_ep');
@@ -125,11 +135,35 @@ function ep_format_ects_unit($ects) {
  * @return array int => libellé
  */
 function ep_studyyear_options() {
-    $options = [0 => get_string('studyyear_unspecified', 'mod_ep')];
-    for ($year = 1; $year <= 6; $year++) {
-        $options[$year] = get_string('studyyear_n', 'mod_ep', $year);
+    // Appelée pour chaque ligne des listes (via ep_studyyear_label()) : calculée une fois par
+    // requête et par langue.
+    return ep_request_memo('studyyears', function () {
+        $options = [0 => get_string('studyyear_unspecified', 'mod_ep')];
+        for ($year = 1; $year <= 6; $year++) {
+            $options[$year] = get_string('studyyear_n', 'mod_ep', $year);
+        }
+        return $options;
+    });
+}
+
+/**
+ * Valeur calculée une fois par requête et par langue : libellés et fragments HTML répétés sur
+ * chaque ligne des listes. Cache de requête plutôt que variable statique : il est vidé entre deux
+ * tests unitaires.
+ *
+ * @param string $key
+ * @param callable $compute
+ * @return mixed
+ */
+function ep_request_memo(string $key, callable $compute) {
+    $cache = cache::make_from_params(cache_store::MODE_REQUEST, 'mod_ep', 'memo');
+    $key = $key . '_' . current_language();
+    $value = $cache->get($key);
+    if ($value === false) {
+        $value = $compute();
+        $cache->set($key, $value);
     }
-    return $options;
+    return $value;
 }
 
 /**
@@ -274,7 +308,7 @@ function ep_get_activities_taken_places($epid) {
     global $DB;
 
     [$insql, $inparams] = $DB->get_in_or_equal([EP_STATUS_PENDING, EP_STATUS_VALIDATED], SQL_PARAMS_NAMED, 'st');
-    $sql = "SELECT c.activityid, COUNT(c.id) AS taken
+    $sql = "SELECT c.activityid, COUNT(1) AS taken
               FROM {ep_credit} c
              WHERE c.epid = :epid AND c.activityid IS NOT NULL AND c.status $insql
           GROUP BY c.activityid";
@@ -294,7 +328,7 @@ function ep_get_activities_taken_places($epid) {
 function ep_get_activities_status_counts($epid) {
     global $DB;
 
-    $sql = "SELECT " . $DB->sql_concat('c.activityid', "'-'", 'c.status') . " AS k, c.activityid, c.status, COUNT(c.id) AS n
+    $sql = "SELECT " . $DB->sql_concat('c.activityid', "'-'", 'c.status') . " AS k, c.activityid, c.status, COUNT(1) AS n
               FROM {ep_credit} c
              WHERE c.epid = :epid AND c.activityid IS NOT NULL
           GROUP BY c.activityid, c.status";
@@ -2124,12 +2158,14 @@ function ep_render_actions(array $links, $class = 'btn btn-sm btn-secondary mr-1
  * @return string HTML
  */
 function ep_render_credit_status($status) {
-    global $OUTPUT;
-
-    return $OUTPUT->render_from_template('mod_ep/credit_status', [
-        'label' => ep_status_label($status),
-        'class' => ep_status_badgeclass($status),
-    ]);
+    // Même fragment pour toutes les lignes d'un même état : rendu une fois par requête.
+    return ep_request_memo('creditstatus' . (int) $status, function () use ($status) {
+        global $OUTPUT;
+        return $OUTPUT->render_from_template('mod_ep/credit_status', [
+            'label' => ep_status_label($status),
+            'class' => ep_status_badgeclass($status),
+        ]);
+    });
 }
 
 /**
@@ -3070,10 +3106,13 @@ function ep_count_filtered_credits(
         return 0;
     }
     [$where, $params] = $built;
+    // La jointure aux comptes ne sert qu'à la recherche sur le nom : sans elle, le total se lit
+    // sur l'index (promotion, état) seul.
+    $join = preg_match('/\bu\./', $where) ? 'JOIN {user} u ON u.id = c.userid' : '';
     return $DB->count_records_sql(
-        "SELECT COUNT(c.id)
+        "SELECT COUNT(1)
            FROM {ep_credit} c
-           JOIN {user} u ON u.id = c.userid
+           $join
           WHERE $where",
         $params
     );

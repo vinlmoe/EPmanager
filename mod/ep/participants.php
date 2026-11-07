@@ -300,10 +300,12 @@ foreach ($participants as $credit) {
         $registered[(int) $credit->userid] = true;
     }
 }
-$candidates = array_diff_key(ep_get_enrolled_students($context), $registered);
+// Les étudiants à ajouter ne sont lus qu'à la demande et par recherche (voir plus bas) : charger
+// toute la promotion à chaque affichage coûtait plus que le reste de la page.
 
 if ($action === 'add' && data_submitted() && confirm_sesskey()) {
     $requested = array_unique(array_filter(optional_param_array('userids', [], PARAM_INT)));
+    $candidates = $requested ? array_diff_key(ep_get_enrolled_students($context, '', $requested), $registered) : [];
     $userids = array_values(array_intersect($requested, array_keys($candidates)));
     $force = optional_param('force', 0, PARAM_BOOL) && $rights->validatedeve;
     if (empty($userids)) {
@@ -575,13 +577,15 @@ if (empty($participants)) {
 
 // 4. Ajout d'étudiants, y compris après la période d'inscription.
 echo $OUTPUT->heading(get_string('addparticipants', 'mod_ep'), 4);
-if (empty($candidates)) {
+$addsearch = trim(optional_param('addsearch', '', PARAM_TEXT));
+// Au plus 200 étudiants proposés : on en lit autant, plus les déjà inscrits qui seront écartés.
+$pool = array_diff_key(ep_get_enrolled_students($context, $addsearch, null, 0, 201 + count($registered)), $registered);
+if (empty($pool) && $addsearch === '') {
     echo $OUTPUT->notification(get_string('nostudentstoadd', 'mod_ep'), 'info');
 } else {
     echo html_writer::div(get_string('addparticipants_help', 'mod_ep'), 'text-muted mb-2');
     // Dans une grande promotion, la liste est d'abord filtrée par une recherche (nom, numéro) :
     // une liste de deux mille noms ne se parcourt pas.
-    $addsearch = trim(optional_param('addsearch', '', PARAM_TEXT));
     echo html_writer::start_tag('form', ['method' => 'get', 'action' => $baseurl->out_omit_querystring(),
         'class' => 'form-inline mb-2']);
     foreach ($baseurl->params() as $name => $value) {
@@ -592,14 +596,8 @@ if (empty($candidates)) {
         'id' => 'addparticipants_search', 'class' => 'form-control mr-2', 'placeholder' => get_string('searchstudent', 'mod_ep')]);
     echo html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('search'), 'class' => 'btn btn-secondary']);
     echo html_writer::end_tag('form');
-    $shown = $candidates;
-    if ($addsearch !== '') {
-        $needle = core_text::strtolower($addsearch);
-        $shown = array_filter($candidates, fn($c) => core_text::strpos(core_text::strtolower(fullname($c) . ' '
-            . $c->idnumber . ' ' . $c->email), $needle) !== false);
-    }
-    $truncated = count($shown) > 200;
-    $shown = array_slice($shown, 0, 200, true);
+    $truncated = count($pool) > 200;
+    $shown = array_slice($pool, 0, 200, true);
     if ($truncated) {
         echo html_writer::div(get_string('addparticipantsrefine', 'mod_ep'), 'text-muted small mb-2');
     }

@@ -297,17 +297,74 @@ function epsynthesis_render_list_filters(moodle_url $baseurl, array $typeoptions
  * @param stdClass $credit
  * @param stdClass $link Une entrée de epsynthesis_get_active_links().
  * @param array $students Voir ep_get_credit_users().
+ * @param array|null $typenames Libellés précalculés (voir epsynthesis_decoration_maps()).
+ * @param array|null $names Noms précalculés (voir epsynthesis_decoration_maps()).
  * @return stdClass Le crédit, enrichi.
  */
-function epsynthesis_decorate_credit(stdClass $credit, stdClass $link, array $students) {
+function epsynthesis_decorate_credit(
+    stdClass $credit,
+    stdClass $link,
+    array $students,
+    ?array $typenames = null,
+    ?array $names = null
+) {
     $credit->cmid = $link->cm->id;
     $credit->coursename = $link->coursename;
-    $credit->typename = isset($link->types[$credit->typeid])
-        ? format_string($link->types[$credit->typeid]->name) : '-';
-    $student = $students[$credit->userid] ?? null;
-    $credit->studentfullname = $student ? fullname($student) : '-';
+    if ($typenames !== null) {
+        $credit->typename = $typenames[$credit->typeid] ?? '-';
+    } else {
+        $credit->typename = isset($link->types[$credit->typeid]) ? format_string($link->types[$credit->typeid]->name) : '-';
+    }
+    if ($names !== null) {
+        $credit->studentfullname = $names[$credit->userid] ?? '-';
+    } else if ($typenames !== null) {
+        // Noms calculés plus tard, pour les seules lignes affichées (voir
+        // epsynthesis_credit_student_name()).
+        $credit->studentuser = $students[$credit->userid] ?? null;
+    } else {
+        $student = $students[$credit->userid] ?? null;
+        $credit->studentfullname = $student ? fullname($student) : '-';
+    }
 
     return $credit;
+}
+
+/**
+ * Libellés de type et noms d'étudiants d'une activité liée, mis en forme une fois chacun : une
+ * liste de milliers de crédits n'en compte que quelques-uns, et format_string() passe par les
+ * filtres de texte.
+ *
+ * @param stdClass $link Voir epsynthesis_get_active_links().
+ * @param array $students userid => stdClass user
+ * @return array [typeid => libellé, userid => nom complet]
+ */
+function epsynthesis_decoration_maps(stdClass $link, array $students, bool $withnames = true): array {
+    $typenames = [];
+    foreach ($link->types as $typeid => $type) {
+        $typenames[$typeid] = format_string($type->name);
+    }
+    $names = null;
+    if ($withnames) {
+        $names = [];
+        foreach ($students as $userid => $student) {
+            $names[$userid] = fullname($student);
+        }
+    }
+    return [$typenames, $names];
+}
+
+/**
+ * Nom complet de l'étudiant d'un crédit de la liste combinée : déjà calculé pour un tri par
+ * étudiant, sinon calculé ici, pour les seules lignes affichées.
+ *
+ * @param stdClass $credit Crédit enrichi par epsynthesis_decorate_credit().
+ * @return string
+ */
+function epsynthesis_credit_student_name(stdClass $credit): string {
+    if (isset($credit->studentfullname)) {
+        return $credit->studentfullname;
+    }
+    return !empty($credit->studentuser) ? fullname($credit->studentuser) : '-';
 }
 
 /**
@@ -327,8 +384,9 @@ function epsynthesis_get_credits_awaiting(array $activelinks) {
             continue;
         }
         $students = ep_get_credit_users($credits);
+        [$typenames, $names] = epsynthesis_decoration_maps($link, $students);
         foreach ($credits as $credit) {
-            $rows[] = epsynthesis_decorate_credit($credit, $link, $students);
+            $rows[] = epsynthesis_decorate_credit($credit, $link, $students, $typenames, $names);
         }
     }
 
@@ -383,8 +441,9 @@ function epsynthesis_get_filtered_credits(array $activelinks, array $filters, $s
         }
 
         $students = ep_get_credit_users($credits);
+        [$typenames, $names] = epsynthesis_decoration_maps($link, $students, $sort === 'student');
         foreach ($credits as $credit) {
-            $rows[] = epsynthesis_decorate_credit($credit, $link, $students);
+            $rows[] = epsynthesis_decorate_credit($credit, $link, $students, $typenames, $names);
         }
     }
 

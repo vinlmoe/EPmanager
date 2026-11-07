@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/ep/db" VERSION="20261113" COMMENT="XMLDB file for module mod_ep"
+<XMLDB PATH="mod/ep/db" VERSION="20261115" COMMENT="XMLDB file for module mod_ep"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
@@ -230,6 +230,8 @@
         <INDEX NAME="status" UNIQUE="false" FIELDS="status"/>
         <INDEX NAME="epid-source-sourceref" UNIQUE="false" FIELDS="epid, source, sourceref"/>
         <INDEX NAME="epid-status" UNIQUE="false" FIELDS="epid, status"/>
+        <INDEX NAME="epid-activityid-status" UNIQUE="false" FIELDS="epid, activityid, status" COMMENT="Places prises et états par EP du catalogue, lus sur l'index seul"/>
+        <INDEX NAME="epid-status-timecreated" UNIQUE="false" FIELDS="epid, status, timecreated" COMMENT="Files d'attente paginées par date sans tri de toute la file"/>
         <INDEX NAME="activityid-status" UNIQUE="false" FIELDS="activityid, status"/>
         <INDEX NAME="userid" UNIQUE="false" FIELDS="userid"/>
         <INDEX NAME="epid-pendingrole" UNIQUE="false" FIELDS="epid, pendingrole"/>

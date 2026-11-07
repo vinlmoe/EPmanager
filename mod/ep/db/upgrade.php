@@ -382,5 +382,21 @@ function xmldb_ep_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026111300, 'ep');
     }
 
+    if ($oldversion < 2026111500) {
+        // Index du test de stress : places prises et états par EP lus sur l'index seul, files
+        // d'attente paginées par date sans trier toute la file.
+        $table = new xmldb_table('ep_credit');
+        $indexes = [
+            new xmldb_index('epid-activityid-status', XMLDB_INDEX_NOTUNIQUE, ['epid', 'activityid', 'status']),
+            new xmldb_index('epid-status-timecreated', XMLDB_INDEX_NOTUNIQUE, ['epid', 'status', 'timecreated']),
+        ];
+        foreach ($indexes as $index) {
+            if (!$dbman->index_exists($table, $index)) {
+                $dbman->add_index($table, $index);
+            }
+        }
+        upgrade_mod_savepoint(true, 2026111500, 'ep');
+    }
+
     return true;
 }
