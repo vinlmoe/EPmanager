@@ -3,6 +3,23 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## Modules syllabus 1.2.0 — mod_syllabus, mod_syllabusstaff 2026112200 (22 novembre 2026)
+
+Référentiels de compétences tenus dans le suivi des modules, sans l'administration du site.
+
+- **mod_syllabus** : référentiels propres (tables `syllabus_framework`, `syllabus_comp` en arbre,
+  `syllabus_complink` avec le niveau) à la place des compétences de Moodle ; liaison par les
+  responsables du module ou la DEVE, sans droit de Moodle ; liens d'un cours supprimé effacés ;
+  sauvegarde et restauration des niveaux (compétence retrouvée par les codes du référentiel et de
+  la compétence). Mise à jour depuis la 1.1.0 : référentiels utilisés et liens recopiés, table
+  `syllabus_competency` supprimée.
+- **mod_syllabusstaff** : page « Référentiels de compétences » pour la DEVE (référentiels, arbre
+  des compétences avec ajout, modification, déplacement et suppression, import CSV en deux passes,
+  réimport pour mise à jour) ; liaison des cours sans module ; matrice étendue à ces cours
+  (« * »).
+- Libellés « Monter », « Descendre », « Renommer » traduits dans le module.
+- Tests unitaires des compétences réécrits (5) ; scénario de bout en bout étendu (32/32).
+
 ## Modules syllabus 1.1.0 — mod_syllabus, mod_syllabusstaff 2026112100 (21 novembre 2026)
 
 Référentiel de compétences.

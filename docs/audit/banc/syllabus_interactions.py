@@ -9,8 +9,9 @@ Usage : python3 syllabus_interactions.py site-x.json syllabus.json > syllabus-re
    chaque module dans ses réglages.
 2. Responsables (12 modules en parallèle) : fiche rédigée et soumise, deux questions posées.
 3. DEVE : relecture, onze fiches publiées, une renvoyée ; le responsable la corrige, elle est
-   publiée. Chaque responsable lie son module à des compétences du référentiel, avec un niveau ;
-   la DEVE consulte la matrice compétences × cours et l'exporte.
+   publiée. La DEVE crée le référentiel de compétences dans le suivi des modules (import CSV) ;
+   chaque responsable lie son module à des compétences, avec un niveau ; la DEVE lie un cours
+   sans module, consulte la matrice compétences × cours et l'exporte.
 4. DEVE : même fenêtre d'évaluation pour les 12 modules, en lot ; tâche d'ouverture (questions
    figées, étudiants prévenus).
 5. 200 étudiants (40 en parallèle) : « Mes modules », puis évaluation de chaque module (neuf sur
@@ -272,9 +273,37 @@ deve.post(f'/mod/syllabus/view.php?id={returned["cmid"]}&show=working', {'sesske
           'reviewcomment': ''})
 expect('fiches_publiees', sql(f"select count(*) from mdl_syllabus_version where syllabusid in ({idlist}) "
                               "and status='published'") == '12')
-# 3 bis. Compétences : chaque responsable lie son module à 3 à 6 compétences du référentiel, avec
-# un niveau, par la page « Compétences » du module.
-FRAMEWORK, LEAVES = SETUP['frameworkid'], SETUP['competencies']
+# 3 bis. Compétences. La DEVE crée le référentiel dans le suivi des modules et en importe les
+# compétences (CSV : 5 domaines de 4 compétences), puis en ajoute une à la main ; chaque
+# responsable lie son module à 3 à 6 compétences, avec un niveau ; la DEVE lie un cours sans
+# module ; matrice et export.
+fw = f'/mod/syllabusstaff/frameworks.php?id={STAFF}'
+f = form_with(deve.get(fw).text, 'idnumber')
+deve.submit(f, {'name': 'Compétences du vétérinaire', 'idnumber': 'REFVET', 'description': 'Référentiel de l\'école.',
+                'submitbutton': 'Enregistrer'}, drop=('cancel',))
+FRAMEWORK = int(sql("select id from mdl_syllabus_framework where idnumber='REFVET'") or 0)
+domains = ['Démarche clinique', 'Santé publique vétérinaire', 'Thérapeutique', 'Communication', 'Professionnalisme']
+lines = ['Code;Code parent;Intitulé;Description']
+for d, name in enumerate(domains, 1):
+    lines += [f'D{d}.{c};D{d};{name} : compétence {c};' for c in range(1, 5)] + [f'D{d};;{name};Domaine {d}']
+page = deve.get(f'{fw}&frameworkid={FRAMEWORK}').text
+f = next(x for x in forms(page) if any(n == 'csvfile' for n, _ in x['fields']))
+draft = dict(f['fields'])['csvfile']
+ctx = re.search(r'"contextid":(\d+)', page).group(1)
+deve.s.post(BASE + '/repository/repository_ajax.php?action=upload', data={'sesskey': deve.sesskey, 'repo_id': 5,
+            'itemid': draft, 'ctx_id': ctx, 'savepath': '/', 'title': 'referentiel.csv', 'env': 'filepicker'},
+            files={'repo_upload_file': ('referentiel.csv', '\n'.join(lines).encode('utf-8'), 'text/csv')}, timeout=60)
+deve.last = BASE + f'{fw}&frameworkid={FRAMEWORK}'
+r = deve.submit(f, {'submitbutton': 'Importer'})
+page = deve.get(f'{fw}&frameworkid={FRAMEWORK}').text
+f = next(x for x in forms(page) if any(n == 'compid' for n, _ in x['fields']))
+d5 = sql(f"select id from mdl_syllabus_comp where frameworkid={FRAMEWORK} and idnumber='D5'")
+deve.submit(f, {'parentid': d5, 'idnumber': 'D5.5', 'name': 'Professionnalisme : compétence 5',
+                'submitbutton': 'Enregistrer'}, drop=('cancel',))
+expect('referentiel_de_competences_cree', sql(f"select count(*) from mdl_syllabus_comp where frameworkid={FRAMEWORK}") == '26'
+       and sql(f"select count(*) from mdl_syllabus_comp where frameworkid={FRAMEWORK} and parentid > 0") == '21')
+LEAVES = [int(x) for x in sql(f"select id from mdl_syllabus_comp where frameworkid={FRAMEWORK} and parentid > 0 "
+                              "order by idnumber").splitlines()]
 expected_links = {}
 
 
@@ -296,21 +325,28 @@ def leader_links(k_module):
 
 
 phase('3 bis. responsables : compétences des modules', leader_links, list(enumerate(MODULES)))
-links = sql(f"select count(*) from mdl_competency_modulecomp mc join mdl_course_modules cm on cm.id = mc.cmid "
-            f"where cm.instance in ({idlist}) and cm.module = (select id from mdl_modules where name='syllabus')")
+links = sql(f"select count(*) from mdl_syllabus_complink where syllabusid in ({idlist})")
 expect('competences_liees_aux_modules', int(links) == sum(len(v) for v in expected_links.values()), links)
-levels_ok = all(sql(f"select string_agg(competencyid || ':' || level, ',' order by competencyid) from mdl_syllabus_competency "
+levels_ok = all(sql(f"select string_agg(compid || ':' || level, ',' order by compid) from mdl_syllabus_complink "
                     f"where syllabusid={sid}") == ','.join(f'{c}:{l}' for c, l in sorted(v.items()))
                 for sid, v in expected_links.items())
 expect('niveaux_enregistres', levels_ok)
+url = f'/mod/syllabusstaff/courselink.php?id={STAFF}&courseid={SETUP["nomodulecourse"]}&frameworkid={FRAMEWORK}'
+page = deve.get(url).text
+deve.post(url, [('sesskey', deve.sesskey), ('save', 1)] + [(f'levels[{c}]', 3 if c == LEAVES[-1] else 0)
+                                                          for c in map(int, re.findall(r'name="levels\[(\d+)\]"', page))])
+expect('cours_sans_module_lie', sql(f"select count(*) from mdl_syllabus_complink where courseid={SETUP['nomodulecourse']} "
+                                    "and syllabusid = 0") == '1')
 r = deve.get(f'/mod/syllabusstaff/competencies.php?id={STAFF}&frameworkid={FRAMEWORK}')
-cells = len(re.findall(r'<td class="cell[^"]*"[^>]*>(I|A|M|•)</td>', r.text))
+cells = len(re.findall(r'<td class="cell[^"]*"[^>]*>[IAM]\*?</td>', r.text))
 expect('matrice_des_competences', cells == int(links) + 1, f'{cells} cellules')
 expect('competence_non_couverte_signalee', 'table-warning' in r.text)
 csv = deve.get(f'/mod/syllabusstaff/competencies.php?id={STAFF}&frameworkid={FRAMEWORK}&download=csv')
-expect('export_csv_des_competences', csv.text.count('\n') >= 26, f'{csv.text.count(chr(10))} lignes')
+expect('export_csv_des_competences', csv.text.count('\n') >= 27, f'{csv.text.count(chr(10))} lignes')
 fiche = Web(SETUP['students'][0]).get(f'/mod/syllabus/view.php?id={MODULES[0]["cmid"]}')
 expect('competences_sur_la_fiche', 'Compétences visées' in fiche.text)
+teacher_matrix = Web(MODULES[0]['leaders'][0]).get(f'/mod/syllabusstaff/competencies.php?id={STAFF}&frameworkid={FRAMEWORK}')
+expect('matrice_ouverte_aux_enseignants', 'syllabusstaff-matrix' in teacher_matrix.text)
 
 # 4. Fenêtre en lot, tâche d'ouverture.
 now = int(time.time())
@@ -322,8 +358,8 @@ out = subprocess.run(['sudo', '-u', 'www-data', 'php', 'admin/cli/scheduled_task
                       '--execute=\\mod_syllabus\\task\\open_evaluations'], cwd=MOODLE, capture_output=True, text=True).stdout
 report['tache_ouverture_s'] = round(time.time() - t, 1)
 expect('questions_figees', sql(f"select count(*) from mdl_syllabus where id in ({idlist}) and evalfrozen = 1") == '12')
-sent = int(sql("select count(*) from mdl_notifications where component='mod_syllabus' and eventtype='evaluationopen'"))
-expect('etudiants_prevenus', sent >= 2400, f'{sent} messages')
+sent = int(sql(f"select count(*) from mdl_notifications where component='mod_syllabus' and eventtype='evaluationopen' and timecreated >= {now - 5}"))
+expect('etudiants_prevenus', sent == 2400, f'{sent} messages')
 
 # 5. Étudiants.
 counts = {'answered': 0, 'skipped': 0, 'listed': 0}

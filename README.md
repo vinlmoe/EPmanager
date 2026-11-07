@@ -19,8 +19,8 @@ Le dépôt porte aussi trois modules pour les **modules d'enseignement** du curs
 
 | Module | Pour qui | Rôle | Documentation |
 | --- | --- | --- | --- |
-| [`mod/syllabus`](mod/syllabus) | Responsables, DEVE et étudiants, dans le cours de chaque module | Fiche du module au modèle ECTS (versions, relecture par la DEVE, PDF) ; compétences visées (référentiel de compétences de Moodle, avec un niveau) ; évaluation du module par les étudiants à partir d'une date, sur les questions de la DEVE et de l'enseignant, anonyme | [`mod/syllabus/INSTALL.md`](mod/syllabus/INSTALL.md) |
-| [`mod/syllabusstaff`](mod/syllabusstaff) | Enseignants et DEVE, dans un cours d'équipe | Modules dont l'enseignant est responsable ; matrice compétences × cours ; pour la DEVE, tous les modules, relectures, fenêtres d'évaluation en lot, résultats comparés, référentiel commun (types, questions communes) | idem |
+| [`mod/syllabus`](mod/syllabus) | Responsables, DEVE et étudiants, dans le cours de chaque module | Fiche du module au modèle ECTS (versions, relecture par la DEVE, PDF) ; compétences visées (référentiel tenu par la DEVE dans le suivi des modules, avec un niveau) ; évaluation du module par les étudiants à partir d'une date, sur les questions de la DEVE et de l'enseignant, anonyme | [`mod/syllabus/INSTALL.md`](mod/syllabus/INSTALL.md) |
+| [`mod/syllabusstaff`](mod/syllabusstaff) | Enseignants et DEVE, dans un cours d'équipe | Modules dont l'enseignant est responsable ; matrice compétences × cours ; pour la DEVE, tous les modules, relectures, fenêtres d'évaluation en lot, résultats comparés, référentiel commun (types, questions communes), référentiels de compétences (arbre, import CSV) et cours sans module | idem |
 | [`mod/syllabusstudent`](mod/syllabusstudent) | Étudiants, dans le cours de la promotion | Modules des cours où l'étudiant est inscrit, fiches, évaluations à faire | idem |
 
 ## Ce que le système gère

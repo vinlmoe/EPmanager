@@ -64,7 +64,7 @@ function syllabusstaff_navlinks($cm, string $current, bool $canmanageall): strin
     $pages = ['view' => 'mymodules', 'competencies' => 'competencymatrix'];
     if ($canmanageall) {
         $pages += ['all' => 'allmodules', 'review' => 'toreview', 'results' => 'resultsoverview',
-            'referential' => 'referential'];
+            'referential' => 'referential', 'frameworks' => 'competencyframeworks'];
     }
     $html = '';
     foreach ($pages as $page => $label) {
@@ -232,4 +232,37 @@ function syllabusstaff_parse_datetime(string $value): int {
         return 0;
     }
     return make_timestamp((int) $m[1], (int) $m[2], (int) $m[3], (int) $m[4], (int) $m[5]);
+}
+
+/**
+ * Cours du périmètre de l'activité (catégorie et sous-catégories, ou tout le site), hors page
+ * d'accueil.
+ *
+ * @param stdClass $instance
+ * @return array id => stdClass {id, shortname, fullname, category}
+ */
+function syllabusstaff_scope_courses(stdClass $instance): array {
+    global $DB;
+    $params = ['site' => SITEID];
+    $where = 'c.id <> :site';
+    if ($instance->categoryid && ($category = core_course_category::get($instance->categoryid, IGNORE_MISSING, true))) {
+        $where .= ' AND (cat.id = :catid OR ' . $DB->sql_like('cat.path', ':catpath') . ')';
+        $params += ['catid' => $category->id, 'catpath' => $category->path . '/%'];
+    }
+    return $DB->get_records_sql("SELECT c.id, c.shortname, c.fullname, c.category
+                                   FROM {course} c
+                                   JOIN {course_categories} cat ON cat.id = c.category
+                                  WHERE $where
+                               ORDER BY c.fullname", $params);
+}
+
+/**
+ * Le cours est-il dans le périmètre de l'activité ?
+ *
+ * @param stdClass $instance
+ * @param stdClass $course
+ * @return bool
+ */
+function syllabusstaff_course_in_scope(stdClass $instance, stdClass $course): bool {
+    return isset(syllabusstaff_scope_courses($instance)[(int) $course->id]);
 }

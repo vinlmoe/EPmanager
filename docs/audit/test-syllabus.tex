@@ -10,7 +10,7 @@
 \newcommand{\code}[1]{\texttt{\detokenize{#1}}}
 \title{Test des modules syllabus et de leur évaluation}
 \author{Sébastien Lefebvre}
-\date{Novembre 2026 -- version 1.1.0 des modules}
+\date{Novembre 2026 -- version 1.2.0 des modules}
 
 \begin{document}
 \maketitle
@@ -27,9 +27,9 @@ habituel (4 c\oe urs, nginx, PHP-FPM~8.3, PostgreSQL~16, Moodle~4.5). Chaque pag
 \paragraph{Données} (\code{syllabus_setup.php}) : une catégorie de 12 cours de module, chacun
 avec son activité « Syllabus du module » et deux responsables (24 enseignants) ; 200 étudiants
 inscrits aux 12 cours ; la DEVE gestionnaire de chaque cours ; un cours d'équipe avec le suivi
-des modules ; « Mes modules » dans le cours de la promotion ; un référentiel de compétences de
-Moodle (5 domaines de 4 compétences), dont une compétence liée à un cours sans passer par son
-module.
+des modules ; « Mes modules » dans le cours de la promotion ; un cours « Stage clinique » sans
+module. Aucun référentiel de compétences n'est préparé : la DEVE le crée par les pages du suivi
+des modules, sans l'administration du site.
 
 \section{Scénario et contrôles}
 
@@ -42,14 +42,19 @@ DEVE : référentiel (relecture obligatoire, seuil de 5 réponses, 2 types, 4 qu
 communes dont une pour le type « Clinique »), type de chaque module dans ses réglages & conforme \\
 12 responsables en parallèle : fiche rédigée (rubriques, 3 séances) et soumise, 2 questions & 2,5 s \\
 Fiches à relire listées ; 11 publiées, 1 renvoyée puis corrigée et publiée & conforme \\
-12 responsables : module lié à 3 à 6 compétences avec un niveau, par la page « Compétences »
-(liens de Moodle au cours et à l'activité) & 1,2 s \\
-Liens et niveaux en base, matrice compétences $\times$ cours (une case par lien, plus le lien
-au cours seul), compétence non couverte signalée, export CSV, compétences sur la fiche & conforme \\
+DEVE, page « Référentiels de compétences » du suivi : référentiel créé, CSV de 25 lignes
+importé (domaines placés après leurs compétences), une compétence ajoutée à la main & 26
+compétences, 21 rattachées \\
+12 responsables : module lié à 3 à 6 compétences avec un niveau, par la page « Compétences » du
+module & 53 liens, 1,1 s \\
+Niveaux en base ; DEVE : « Stage clinique » (sans module) lié depuis la matrice & conforme \\
+Matrice compétences $\times$ cours (une case par lien, cours sans module compris), compétence
+non couverte signalée, export CSV, compétences sur la fiche, matrice ouverte aux enseignants &
+54 cases \\
 Fenêtre d'évaluation des 12 modules fixée en lot & conforme \\
-Tâche d'ouverture : questions figées, étudiants prévenus & 2\,400 messages, 20 s \\
+Tâche d'ouverture : questions figées, étudiants prévenus & 2\,400 messages, 26 s \\
 200 étudiants (40 en parallèle) : « Mes modules » (12 modules chacun), puis 9 évaluations sur 10
-& 2\,172 réponses en 99 s \\
+& 2\,172 réponses en 111 s \\
 Seconde réponse d'un étudiant & refusée \\
 Une réponse anonyme par participation, réponses obligatoires toutes présentes & 2\,172 / 2\,172 \\
 Table des réponses : ni étudiant ni heure (\code{id}, \code{syllabusid}, \code{daysubmitted}) &
@@ -65,13 +70,18 @@ Anomalies dans les pages & 0 \\
 \end{tabularx}
 \end{center}
 
-Résultat : \textbf{29 contrôles sur 29}. S'y ajoutent 27 tests unitaires (droits, circuit de
+Résultat : \textbf{32 contrôles sur 32}. S'y ajoutent 27 tests unitaires (droits, circuit de
 relecture, figeage des questions, anonymat, seuil, visibilité des résultats, tâche,
-réinitialisation, sauvegarde et restauration, RGPD, synthèses, compétences : arbre, liaison et
-retrait, droit de Moodle, matrice, restauration des niveaux) et le test de conformité RGPD
-de Moodle, réussi pour les trois modules.
+réinitialisation, sauvegarde et restauration, RGPD, synthèses, compétences : import CSV en
+arbre, contrôle des parents, déplacement, liaison et retrait, suppression refusée d'une
+compétence visée, matrice, restauration des niveaux) et le test de conformité RGPD de Moodle,
+réussi pour les trois modules.
 
-\section{Défaut trouvé et corrigé}
+La mise à jour depuis la version 1.1.0, qui s'appuyait sur les compétences de Moodle, a été
+jouée sur le banc : 53 liens recopiés avec leurs niveaux, référentiel de 25 compétences recopié,
+ancienne table supprimée.
+
+\section{Défauts trouvés et corrigés}
 
 Les captures du guide ont montré le formulaire d'évaluation avec une réponse \textbf{déjà
 cochée} : le premier choix d'une question à choix (et « Non » pour une question oui/non). Le
@@ -85,7 +95,13 @@ pour oui/non, 0 à 2 pour un choix parmi trois).
 
 Le scénario a aussi révélé une erreur dans le banc lui-même : les scripts appelaient un
 programme de tâche inexistant au lieu de \code{admin/cli/scheduled_task.php}. Corrigé ; le scénario de liaison avec « Gestion des
-stages », qui en dépendait pour sa tâche de nuit, a été rejoué (14/14).
+stages », qui en dépendait pour sa tâche de nuit, a été rejoué (14/14). Le compte des
+messages d'ouverture cumulait par ailleurs les passages successifs ; il se limite désormais au
+passage en cours.
+
+Les captures de la version 1.2.0 ont montré les libellés « Move up », « Move down » et
+« Rename » en anglais : ces chaînes de Moodle ne sont pas traduites par le paquet de langue
+installé. Le module porte désormais les siennes (« Monter », « Descendre », « Renommer »).
 
 \section{Limite connue}
 

@@ -141,7 +141,8 @@ foreach (syllabus_get_types() as $type) {
         . $hidden('sesskey', sesskey()) . $hidden('action', 'savetype') . $hidden('typeid', $type->id)
         . html_writer::empty_tag('input', ['type' => 'text', 'name' => 'typename', 'value' => $type->name,
             'class' => 'form-control mr-2', 'aria-label' => get_string('name')])
-        . html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('rename'), 'class' => 'btn btn-secondary'])
+        . html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('rename', 'syllabusstaff'),
+            'class' => 'btn btn-secondary'])
         . html_writer::end_tag('form');
     $delete = html_writer::link(new moodle_url($baseurl, ['action' => 'deletetype', 'typeid' => $type->id,
         'sesskey' => sesskey()]), get_string('delete'), ['class' => 'text-danger']);
@@ -164,7 +165,7 @@ $actions = function ($question, $index, $count) use ($baseurl) {
     )];
     foreach (['up' => 'moveup', 'down' => 'movedown'] as $move => $label) {
         $links[] = html_writer::link(new moodle_url($baseurl, ['action' => $move, 'questionid' => $question->id,
-            'sesskey' => sesskey()]), get_string($label));
+            'sesskey' => sesskey()]), get_string($label, 'syllabusstaff'));
     }
     $links[] = html_writer::link(new moodle_url($baseurl, ['action' => 'delete', 'questionid' => $question->id,
         'sesskey' => sesskey()]), get_string('delete'), ['class' => 'text-danger']);

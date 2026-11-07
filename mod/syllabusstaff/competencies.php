@@ -16,7 +16,7 @@
 
 /**
  * Matrice d'un référentiel de compétences : quels cours du périmètre visent quelles compétences,
- * et à quel niveau (lien au module avec son niveau, ou lien au cours seulement) ; couverture du
+ * et à quel niveau (par leur module, ou directement pour un cours sans module) ; couverture du
  * référentiel ; export CSV.
  *
  * @package   mod_syllabusstaff
@@ -40,14 +40,15 @@ require_login($cm->course, true, $cm);
     ['frameworkid' => $frameworkid, 'studyyear' => $studyyear]
 );
 
-$frameworks = syllabus_competencies_enabled() ? syllabus_get_frameworks() : [];
-if (!$frameworkid && $frameworks) {
-    $frameworkid = (int) array_key_first($frameworks);
+$frameworks = syllabus_get_frameworks();
+if (!isset($frameworks[$frameworkid])) {
+    $frameworkid = $frameworks ? (int) array_key_first($frameworks) : 0;
 }
 
-// Colonnes : les cours du périmètre qui ont un module, et ceux qui ont des compétences du
-// référentiel liées au cours sans avoir de module.
+// Colonnes : les cours du périmètre qui ont un module, et ceux qui visent des compétences sans en
+// avoir (liés par la DEVE).
 $columns = [];
+$withoutmodule = [];
 if ($frameworkid) {
     [$modules] = syllabus_list_instances(['categoryid' => $instance->categoryid]);
     foreach ($modules as $module) {
@@ -56,58 +57,43 @@ if ($frameworkid) {
                 ? $module->code : $module->courseshortname, 'name' => $module->coursename, 'cmid' => (int) $module->cmid];
         }
     }
-    if (!$studyyear) {
-        $params = ['fw' => $frameworkid];
-        $catwhere = '';
-        if ($instance->categoryid && ($category = core_course_category::get($instance->categoryid, IGNORE_MISSING, true))) {
-            $catwhere = 'AND (cat.id = :catid OR ' . $DB->sql_like('cat.path', ':catpath') . ')';
-            $params += ['catid' => $category->id, 'catpath' => $category->path . '/%'];
+    $withmodule = array_map(fn($m) => (int) $m->course, $modules);
+    foreach (syllabusstaff_scope_courses($instance) as $other) {
+        if (in_array((int) $other->id, $withmodule, true)) {
+            continue;
         }
-        $others = $DB->get_records_sql("SELECT DISTINCT c.id, c.shortname, c.fullname
-                  FROM {competency_coursecomp} cc
-                  JOIN {competency} comp ON comp.id = cc.competencyid AND comp.competencyframeworkid = :fw
-                  JOIN {course} c ON c.id = cc.courseid
-                  JOIN {course_categories} cat ON cat.id = c.category
-                 WHERE 1 = 1 $catwhere", $params);
-        foreach ($others as $other) {
-            $columns[(int) $other->id] = $columns[(int) $other->id] ?? (object) ['courseid' => (int) $other->id,
-                'code' => $other->shortname, 'name' => $other->fullname, 'cmid' => 0];
+        $withoutmodule[(int) $other->id] = $other;
+        if (!$studyyear && $DB->record_exists('syllabus_complink', ['courseid' => $other->id, 'syllabusid' => 0])) {
+            $columns[(int) $other->id] = (object) ['courseid' => (int) $other->id, 'code' => $other->shortname,
+                'name' => $other->fullname, 'cmid' => 0];
         }
     }
     core_collator::asort_objects_by_property($columns, 'code', core_collator::SORT_NATURAL);
 }
 $tree = $frameworkid ? syllabus_get_framework_tree($frameworkid) : [];
 $matrix = $frameworkid ? syllabus_competency_matrix($frameworkid, array_keys($columns)) : [];
-$symbols = [-1 => '•', 0 => '✓'];
-foreach (array_keys(syllabus_competency_levels()) as $level) {
-    $symbols[$level] = get_string('levelshort_' . $level, 'mod_syllabus');
-}
-
-// Couverture de chaque compétence.
+$symbol = function (?stdClass $cell): string {
+    return $cell ? get_string('levelshort_' . $cell->level, 'mod_syllabus') . ($cell->coursewide ? '*' : '') : '';
+};
 $coverage = [];
-foreach ($tree as $competencyid => $competency) {
-    $coverage[$competencyid] = 0;
-    foreach ($columns as $column) {
-        if (isset($matrix[$column->courseid][$competencyid])) {
-            $coverage[$competencyid]++;
-        }
-    }
+foreach ($tree as $compid => $comp) {
+    $coverage[$compid] = count(array_filter($columns, fn($c) => isset($matrix[$c->courseid][$compid])));
 }
 
 if ($download === 'csv' && $frameworkid) {
     $csv = new csv_export_writer('semicolon');
-    $csv->set_filename('competences-' . clean_filename($frameworks[$frameworkid]->shortname));
+    $csv->set_filename('competences-' . clean_filename($frameworks[$frameworkid]->idnumber));
     $csv->add_data(array_merge(
-        [get_string('competency', 'mod_syllabus'), get_string('idnumber')],
+        [get_string('code', 'mod_syllabusstaff'), get_string('competency', 'mod_syllabus')],
         array_map(fn($c) => $c->code, array_values($columns)),
         [get_string('coverage', 'mod_syllabusstaff')]
     ));
-    foreach ($tree as $competencyid => $competency) {
-        $line = [str_repeat('  ', $competency->depth) . $competency->shortname, $competency->idnumber];
+    foreach ($tree as $compid => $comp) {
+        $line = [$comp->idnumber, str_repeat('  ', $comp->depth) . $comp->name];
         foreach ($columns as $column) {
-            $line[] = isset($matrix[$column->courseid][$competencyid]) ? $symbols[$matrix[$column->courseid][$competencyid]] : '';
+            $line[] = $symbol($matrix[$column->courseid][$compid] ?? null);
         }
-        $line[] = $coverage[$competencyid];
+        $line[] = $coverage[$compid];
         $csv->add_data($line);
     }
     $csv->download_file();
@@ -118,62 +104,62 @@ echo $OUTPUT->header();
 echo syllabusstaff_navlinks($cm, 'competencies', $canmanageall);
 echo $OUTPUT->heading(get_string('competencymatrix', 'mod_syllabusstaff'), 3);
 echo html_writer::tag('p', get_string('competencymatrix_help', 'mod_syllabusstaff'));
-if (!syllabus_competencies_enabled()) {
-    echo $OUTPUT->notification(get_string('competenciesdisabled', 'mod_syllabus'), 'info');
-    echo $OUTPUT->footer();
-    exit;
-}
 if (!$frameworks) {
-    echo $OUTPUT->notification(get_string('noframeworks', 'mod_syllabus'), 'info');
+    echo $OUTPUT->notification(get_string($canmanageall ? 'noframeworksdeve' : 'noframeworks', $canmanageall
+        ? 'mod_syllabusstaff' : 'mod_syllabus'), 'info');
     echo $OUTPUT->footer();
     exit;
 }
 
-$options = array_map(fn($f) => format_string($f->shortname), $frameworks);
 $url = new moodle_url('/mod/syllabusstaff/competencies.php', ['id' => $cm->id]);
 echo html_writer::div($OUTPUT->single_select(
     new moodle_url($url, ['studyyear' => $studyyear]),
     'frameworkid',
-    $options,
+    array_map(fn($f) => format_string($f->name), $frameworks),
     $frameworkid,
     null,
     null,
     ['label' => get_string('framework', 'mod_syllabus')]
-) . ' '
-    . $OUTPUT->single_select(
-        new moodle_url($url, ['frameworkid' => $frameworkid]),
-        'studyyear',
-        syllabus_studyyear_options(),
-        $studyyear,
-        null,
-        null,
-        ['label' => get_string('studyyear', 'mod_syllabus')]
-    ), 'mb-2');
+) . ' ' . $OUTPUT->single_select(
+    new moodle_url(
+        $url,
+        ['frameworkid' => $frameworkid]
+    ),
+    'studyyear',
+    syllabus_studyyear_options(),
+    $studyyear,
+    null,
+    null,
+    ['label' => get_string('studyyear', 'mod_syllabus')]
+), 'mb-2');
 
 $leaves = array_filter($tree, fn($c) => $c->isleaf);
-$covered = array_filter($leaves, fn($c) => $coverage[$c->id] > 0);
-echo html_writer::tag('p', get_string('coveragesummary', 'mod_syllabusstaff', (object) ['covered' => count($covered),
-    'total' => count($leaves), 'courses' => count($columns)]));
+echo html_writer::tag('p', get_string('coveragesummary', 'mod_syllabusstaff', (object) [
+    'covered' => count(array_filter($leaves, fn($c) => $coverage[$c->id] > 0)), 'total' => count($leaves),
+    'courses' => count($columns)]));
 echo html_writer::tag('p', get_string('matrixlegend', 'mod_syllabusstaff'), ['class' => 'small text-muted']);
 
 $table = new html_table();
 $table->attributes['class'] = 'generaltable syllabusstaff-matrix';
 $table->head = [get_string('competency', 'mod_syllabus')];
 foreach ($columns as $column) {
-    $link = $column->cmid ? new moodle_url('/mod/syllabus/competencies.php', ['id' => $column->cmid])
-        : new moodle_url('/admin/tool/lp/coursecompetencies.php', ['courseid' => $column->courseid]);
+    $link = $column->cmid ? new moodle_url('/mod/syllabus/competencies.php', ['id' => $column->cmid,
+        'frameworkid' => $frameworkid]) : new moodle_url('/mod/syllabusstaff/courselink.php', ['id' => $cm->id,
+        'courseid' => $column->courseid, 'frameworkid' => $frameworkid]);
     $table->head[] = html_writer::link($link, s($column->code), ['title' => format_string($column->name)]);
 }
 $table->head[] = get_string('coverage', 'mod_syllabusstaff');
-foreach ($tree as $competencyid => $competency) {
-    $label = html_writer::span(format_string($competency->shortname), $competency->isleaf ? '' : 'font-weight-bold');
-    $row = new html_table_row([html_writer::div($label, '', ['style' => 'padding-left:' . (1.2 * $competency->depth) . 'rem'])]);
+foreach ($tree as $compid => $comp) {
+    $label = html_writer::span(s($comp->idnumber), 'small text-muted') . ' ' . html_writer::span(
+        format_string($comp->name),
+        $comp->isleaf ? '' : 'font-weight-bold'
+    );
+    $row = new html_table_row([html_writer::div($label, '', ['style' => 'padding-left:' . (1.2 * $comp->depth) . 'rem'])]);
     foreach ($columns as $column) {
-        $value = $matrix[$column->courseid][$competencyid] ?? null;
-        $row->cells[] = new html_table_cell($value === null ? '' : $symbols[$value]);
+        $row->cells[] = new html_table_cell($symbol($matrix[$column->courseid][$compid] ?? null));
     }
-    $row->cells[] = new html_table_cell((string) $coverage[$competencyid]);
-    if ($competency->isleaf && !$coverage[$competencyid]) {
+    $row->cells[] = new html_table_cell((string) $coverage[$compid]);
+    if ($comp->isleaf && !$coverage[$compid]) {
         $row->attributes['class'] = 'table-warning';
     }
     $table->data[] = $row;
@@ -182,6 +168,24 @@ echo html_writer::div(html_writer::table($table), 'table-responsive');
 echo html_writer::link(
     new moodle_url($url, ['frameworkid' => $frameworkid, 'studyyear' => $studyyear, 'download' => 'csv']),
     get_string('downloadcsv', 'mod_syllabus'),
-    ['class' => 'btn btn-secondary']
+    ['class' => 'btn btn-secondary mr-2']
 );
+
+// Lier un cours du périmètre qui n'a pas de module (DEVE).
+if ($canmanageall && $withoutmodule) {
+    $options = [];
+    foreach ($withoutmodule as $other) {
+        $options[$other->id] = format_string($other->fullname);
+    }
+    echo html_writer::div($OUTPUT->single_select(
+        new moodle_url('/mod/syllabusstaff/courselink.php', ['id' => $cm->id,
+        'frameworkid' => $frameworkid]),
+        'courseid',
+        $options,
+        '',
+        ['' => get_string('linkcourse', 'mod_syllabusstaff')],
+        null,
+        ['label' => get_string('coursewithoutmodule', 'mod_syllabusstaff')]
+    ), 'mt-3');
+}
 echo $OUTPUT->footer();

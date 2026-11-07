@@ -38,14 +38,17 @@ l'activité « Suivi des modules », page **Référentiel commun**, par la DEVE
 
 ## Compétences
 
-Le référentiel est celui de Moodle (**Administration du site > Compétences**, compétences
-activées dans les fonctions avancées, ce qui est le réglage par défaut) : un ou plusieurs
-référentiels en arbre, créés à la main ou importés en CSV. Chaque module y est lié depuis sa
-page **Compétences**, avec un niveau (introduite, approfondie, maîtrisée) ; les liens sont ceux
-de Moodle (compétence liée au cours, puis à l'activité), le niveau est propre au module. Lier
-demande `moodle/competency:coursecompetencymanage` dans le cours (enseignant éditeur). Le
-suivi des modules donne la matrice compétences × cours de son périmètre (couverture, export
-CSV).
+Les référentiels de compétences sont propres à ces modules et tenus par la DEVE dans le suivi
+des modules (**Référentiels de compétences**, droit `mod/syllabusstaff:manageall`) : référentiels
+en arbre, compétences saisies à la main ou importées en CSV (`Code;Code parent;Intitulé;Description`).
+Ni l'administration du site ni les compétences de Moodle ne sont utilisées. Chaque module est lié
+depuis sa page **Compétences** par ses responsables ou la DEVE, avec un niveau (introduite,
+approfondie, maîtrisée) ; la DEVE lie aussi les cours sans module depuis la matrice
+compétences × cours (couverture, export CSV).
+
+La mise à jour depuis la 1.1.0 (compétences de Moodle) recopie les référentiels utilisés et les
+liens avec leur niveau, puis supprime la table `syllabus_competency` ; les référentiels de Moodle
+ne sont pas touchés.
 
 ## Tâche
 

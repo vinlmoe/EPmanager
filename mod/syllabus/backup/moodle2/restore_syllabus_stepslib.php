@@ -121,31 +121,25 @@ class restore_syllabus_activity_structure_step extends restore_activity_structur
     }
 
     /**
-     * Niveau de contribution à une compétence : la compétence est retrouvée par les identifiants
-     * de son référentiel et d'elle-même, sinon par son numéro s'il existe sur ce site ; à défaut,
-     * le niveau est abandonné.
+     * Compétence visée : retrouvée par le code de son référentiel et le sien ; à défaut (référentiel
+     * absent du site de destination), le lien est abandonné.
      *
      * @param array $data
      */
     protected function process_syllabus_competency($data) {
         global $DB;
         $data = (object) $data;
-        $competencyid = 0;
-        if ((string) ($data->competencyidnumber ?? '') !== '' && (string) ($data->frameworkidnumber ?? '') !== '') {
-            $competencyid = (int) $DB->get_field_sql('SELECT c.id FROM {competency} c
-                    JOIN {competency_framework} f ON f.id = c.competencyframeworkid
-                   WHERE c.idnumber = ? AND f.idnumber = ?', [$data->competencyidnumber, $data->frameworkidnumber]);
-        }
-        if (!$competencyid && $DB->record_exists('competency', ['id' => $data->competencyid])) {
-            $competencyid = (int) $data->competencyid;
-        }
-        if (!$competencyid) {
+        $compid = (int) $DB->get_field_sql('SELECT c.id FROM {syllabus_comp} c
+                JOIN {syllabus_framework} f ON f.id = c.frameworkid
+               WHERE c.idnumber = ? AND f.idnumber = ?', [(string) $data->compidnumber, (string) $data->frameworkidnumber]);
+        if (!$compid) {
             return;
         }
         $syllabusid = $this->get_new_parentid('syllabus');
-        if (!$DB->record_exists('syllabus_competency', ['syllabusid' => $syllabusid, 'competencyid' => $competencyid])) {
-            $DB->insert_record('syllabus_competency', (object) ['syllabusid' => $syllabusid, 'competencyid' => $competencyid,
-                'level' => (int) $data->level, 'timecreated' => $data->timecreated, 'timemodified' => $data->timemodified]);
+        $link = ['courseid' => $this->get_courseid(), 'syllabusid' => $syllabusid, 'compid' => $compid];
+        if (!$DB->record_exists('syllabus_complink', $link)) {
+            $DB->insert_record('syllabus_complink', (object) ($link + ['level' => max(1, min(3, (int) $data->level)),
+                'timecreated' => $data->timecreated, 'timemodified' => $data->timemodified]));
         }
     }
 

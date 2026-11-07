@@ -150,7 +150,7 @@ function syllabus_delete_instance($id) {
     }
     foreach (
         ['syllabus_version', 'syllabus_teacher', 'syllabus_question', 'syllabus_response', 'syllabus_participant',
-            'syllabus_competency'] as $table
+            'syllabus_complink'] as $table
     ) {
         $DB->delete_records($table, ['syllabusid' => $id]);
     }
@@ -203,12 +203,13 @@ function syllabus_extend_settings_navigation(settings_navigation $settingsnav, n
             'syllabusevaluation'
         );
     }
-    if (\core_competency\api::is_enabled()) {
-        $node->add(get_string('competencies', 'mod_syllabus'), new moodle_url(
-            '/mod/syllabus/competencies.php',
-            ['id' => $cm->id]
-        ), navigation_node::TYPE_SETTING, null, 'syllabuscompetencies');
-    }
+    $node->add(
+        get_string('competencies', 'mod_syllabus'),
+        new moodle_url('/mod/syllabus/competencies.php', ['id' => $cm->id]),
+        navigation_node::TYPE_SETTING,
+        null,
+        'syllabuscompetencies'
+    );
     if ($rights->canseeresults) {
         $node->add(
             get_string('results', 'mod_syllabus'),

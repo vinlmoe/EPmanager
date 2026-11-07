@@ -24,144 +24,125 @@ require_once($CFG->dirroot . '/backup/util/includes/backup_includes.php');
 require_once($CFG->dirroot . '/backup/util/includes/restore_includes.php');
 
 /**
- * Compétences : liens de Moodle au cours et au module, niveaux, matrice, fiche, sauvegarde.
+ * Référentiel de compétences tenu dans le suivi des modules : arbre, contrôles, import CSV, liens
+ * des modules et des cours, matrice, sauvegarde.
  *
  * @package   mod_syllabus
  * @copyright 2026 Sébastien Lefebvre
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers    ::syllabus_set_module_competencies
+ * @covers    ::syllabus_save_comp
+ * @covers    ::syllabus_import_comps
+ * @covers    ::syllabus_set_links
  * @covers    ::syllabus_competency_matrix
  */
 final class competency_test extends \advanced_testcase {
+    /** @var int */
+    protected $frameworkid;
+    /** @var array idnumber => id */
+    protected $comps = [];
     /** @var \stdClass */
     protected $course;
     /** @var \stdClass */
     protected $syllabus;
-    /** @var \stdClass */
-    protected $cm;
-    /** @var \stdClass */
-    protected $leader;
-    /** @var \stdClass */
-    protected $framework;
-    /** @var array Compétences : domaine, puis trois compétences. */
-    protected $comps = [];
 
     protected function setUp(): void {
         global $DB;
         parent::setUp();
         $this->resetAfterTest();
+        $this->frameworkid = syllabus_save_framework((object) ['name' => 'Référentiel vétérinaire', 'idnumber' => 'REF']);
+        $csv = "Code;Code parent;Intitulé;Description\nC1.1;C1;Examen clinique;\nC1;;Démarche clinique;Domaine\n"
+            . "C1.2;C1;Diagnostic;\nC2;;Thérapeutique;\nC2.1;C2;Prescrire;\n";
+        $result = syllabus_import_comps($this->frameworkid, $csv);
+        $this->assertSame(5, $result->created);
+        $this->assertSame([], $result->errors);
+        $this->comps = $DB->get_records_menu('syllabus_comp', ['frameworkid' => $this->frameworkid], '', 'idnumber, id');
         $gen = $this->getDataGenerator();
-        $cgen = $gen->get_plugin_generator('core_competency');
-        $this->framework = $cgen->create_framework(['shortname' => 'Référentiel vétérinaire', 'idnumber' => 'REF']);
-        $fid = $this->framework->get('id');
-        $domain = $cgen->create_competency(['competencyframeworkid' => $fid, 'shortname' => 'Clinique', 'idnumber' => 'C']);
-        $this->comps[] = $domain;
-        foreach (['Examen clinique', 'Diagnostic', 'Traitement'] as $i => $name) {
-            $this->comps[] = $cgen->create_competency(['competencyframeworkid' => $fid, 'parentid' => $domain->get('id'),
-                'shortname' => $name, 'idnumber' => 'C' . ($i + 1)]);
-        }
         $this->course = $gen->create_course();
-        $this->leader = $gen->create_and_enrol($this->course, 'editingteacher');
-        $this->setUser($this->leader);
+        $this->setAdminUser();
         $record = $gen->create_module('syllabus', ['course' => $this->course->id]);
         $this->syllabus = $DB->get_record('syllabus', ['id' => $record->id]);
-        $this->cm = get_coursemodule_from_instance('syllabus', $record->id);
     }
 
     /**
-     * Arbre du référentiel, avec la profondeur.
+     * Import : un parent cité avant d'être défini est rattaché ; l'arbre suit l'ordre des sœurs.
      */
-    public function test_framework_tree(): void {
-        $tree = syllabus_get_framework_tree($this->framework->get('id'));
-        $this->assertSame(
-            ['Clinique', 'Examen clinique', 'Diagnostic', 'Traitement'],
-            array_values(array_map(fn($c) => $c->shortname, $tree))
-        );
-        $this->assertSame([0, 1, 1, 1], array_values(array_map(fn($c) => $c->depth, $tree)));
-        $this->assertFalse(reset($tree)->isleaf);
-    }
-
-    /**
-     * Lier : la compétence est liée au cours puis au module (liens de Moodle), avec son niveau ;
-     * changer un niveau ; retirer du module garde le lien au cours.
-     */
-    public function test_link_update_unlink(): void {
-        global $DB;
-        [, $exam, $diag] = $this->comps;
-        $fid = (int) $this->framework->get('id');
-        $result = syllabus_set_module_competencies($this->syllabus, $this->cm, $fid, [$exam->get('id') => 1,
-            $diag->get('id') => 3]);
-        $this->assertSame(2, $result->added);
-        $this->assertTrue($DB->record_exists('competency_coursecomp', ['courseid' => $this->course->id,
-            'competencyid' => $exam->get('id')]));
-        $this->assertTrue($DB->record_exists('competency_modulecomp', ['cmid' => $this->cm->id,
-            'competencyid' => $diag->get('id')]));
-        $linked = syllabus_get_module_competencies($this->syllabus, (int) $this->cm->id);
-        $this->assertEquals(3, $linked[$diag->get('id')]->level);
-
-        $result = syllabus_set_module_competencies($this->syllabus, $this->cm, $fid, [$exam->get('id') => 2]);
+    public function test_import_builds_tree(): void {
+        $tree = syllabus_get_framework_tree($this->frameworkid);
+        $this->assertSame(['C1', 'C1.1', 'C1.2', 'C2', 'C2.1'], array_values(array_map(fn($c) => $c->idnumber, $tree)));
+        $this->assertSame([0, 1, 1, 0, 1], array_values(array_map(fn($c) => $c->depth, $tree)));
+        // Réimport : mise à jour, pas de doublon.
+        $result = syllabus_import_comps($this->frameworkid, "Code;Intitulé\nC2;Thérapeutique et prescription\n");
         $this->assertSame(1, $result->updated);
-        $this->assertSame(1, $result->removed);
-        $this->assertFalse($DB->record_exists('competency_modulecomp', ['cmid' => $this->cm->id,
-            'competencyid' => $diag->get('id')]));
-        $this->assertTrue($DB->record_exists('competency_coursecomp', ['courseid' => $this->course->id,
-            'competencyid' => $diag->get('id')]));
-        $this->assertFalse($DB->record_exists('syllabus_competency', ['competencyid' => $diag->get('id')]));
+        $tree = syllabus_get_framework_tree($this->frameworkid);
+        $this->assertSame('Thérapeutique et prescription', $tree[$this->comps['C2']]->name);
+    }
 
-        // La fiche les montre.
+    /**
+     * Contrôles : code unique dans le référentiel, parent qui ne descend pas de la compétence.
+     */
+    public function test_save_comp_checks(): void {
+        try {
+            syllabus_save_comp((object) ['frameworkid' => $this->frameworkid, 'idnumber' => 'C1', 'name' => 'Doublon']);
+            $this->fail('Code en double accepté');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('errorduplicatecode', $e->errorcode);
+        }
+        $this->expectExceptionMessage(get_string('errorparent', 'mod_syllabus'));
+        syllabus_save_comp((object) ['id' => $this->comps['C1'], 'frameworkid' => $this->frameworkid,
+            'parentid' => $this->comps['C1.1'], 'idnumber' => 'C1', 'name' => 'Démarche clinique']);
+    }
+
+    /**
+     * Déplacement parmi les sœurs.
+     */
+    public function test_move(): void {
+        syllabus_move_comp((int) $this->comps['C1.2'], -1);
+        $tree = syllabus_get_framework_tree($this->frameworkid);
+        $this->assertSame(['C1', 'C1.2', 'C1.1', 'C2', 'C2.1'], array_values(array_map(fn($c) => $c->idnumber, $tree)));
+    }
+
+    /**
+     * Liens du module et d'un cours sans module ; matrice ; suppression refusée tant qu'une
+     * compétence est visée ; fiche.
+     */
+    public function test_links_and_matrix(): void {
+        $result = syllabus_set_links(
+            (int) $this->course->id,
+            (int) $this->syllabus->id,
+            $this->frameworkid,
+            [$this->comps['C1.1'] => 1, $this->comps['C1.2'] => 3, $this->comps['C2.1'] => 0]
+        );
+        $this->assertSame(2, $result->added);
+        $result = syllabus_set_links(
+            (int) $this->course->id,
+            (int) $this->syllabus->id,
+            $this->frameworkid,
+            [$this->comps['C1.1'] => 2]
+        );
+        $this->assertSame([1, 1, 0], [$result->updated, $result->removed, $result->added]);
         $this->assertStringContainsString('Examen clinique', \mod_syllabus\output\fiche::competencies($this->syllabus));
-    }
 
-    /**
-     * Un enseignant non éditeur, même responsable, ne peut pas lier (capacité de Moodle).
-     */
-    public function test_non_editing_teacher_cannot_link(): void {
-        $teacher = $this->getDataGenerator()->create_and_enrol($this->course, 'teacher');
-        syllabus_set_teachers($this->syllabus, \context_module::instance($this->cm->id), [$teacher->id]);
-        $rights = syllabus_get_rights($this->syllabus, \context_module::instance($this->cm->id), (int) $teacher->id);
-        $this->assertTrue($rights->canedit);
-        $this->setUser($teacher);
-        $this->assertFalse(syllabus_can_link_competencies($rights, (int) $this->course->id));
-        $this->expectException(\required_capability_exception::class);
-        syllabus_set_module_competencies(
-            $this->syllabus,
-            $this->cm,
-            (int) $this->framework->get('id'),
-            [$this->comps[1]->get('id') => 1]
-        );
-    }
-
-    /**
-     * Matrice : niveau du module, ou lien au cours seulement (-1).
-     */
-    public function test_matrix(): void {
-        [, $exam, $diag, $treat] = $this->comps;
-        syllabus_set_module_competencies(
-            $this->syllabus,
-            $this->cm,
-            (int) $this->framework->get('id'),
-            [$exam->get('id') => 2]
-        );
-        \core_competency\api::add_competency_to_course($this->course->id, $treat->get('id'));
         $other = $this->getDataGenerator()->create_course();
-        $matrix = syllabus_competency_matrix((int) $this->framework->get('id'), [(int) $this->course->id, (int) $other->id]);
-        $this->assertSame([(int) $exam->get('id') => 2, (int) $treat->get('id') => -1], $matrix[$this->course->id]);
-        $this->assertSame([], $matrix[$other->id]);
-        $this->assertArrayNotHasKey($diag->get('id'), $matrix[$this->course->id]);
+        syllabus_set_links((int) $other->id, 0, $this->frameworkid, [$this->comps['C2.1'] => 3]);
+        $matrix = syllabus_competency_matrix($this->frameworkid, [(int) $this->course->id, (int) $other->id]);
+        $this->assertSame(2, $matrix[$this->course->id][$this->comps['C1.1']]->level);
+        $this->assertFalse($matrix[$this->course->id][$this->comps['C1.1']]->coursewide);
+        $this->assertTrue($matrix[$other->id][$this->comps['C2.1']]->coursewide);
+        $this->assertCount(1, $matrix[$this->course->id]);
+
+        $this->assertFalse(syllabus_delete_comp((int) $this->comps['C2']));
+        $this->assertFalse(syllabus_delete_framework($this->frameworkid));
+        delete_course($other, false);
+        $this->assertTrue(syllabus_delete_comp((int) $this->comps['C2']));
+        $this->assertCount(3, syllabus_get_framework_tree($this->frameworkid));
     }
 
     /**
-     * Copie du cours : liens de Moodle et niveaux suivent.
+     * Copie du cours : les compétences du module suivent, retrouvées par leurs codes.
      */
-    public function test_backup_restore_keeps_levels(): void {
+    public function test_backup_restore_keeps_links(): void {
         global $DB, $USER;
-        syllabus_set_module_competencies(
-            $this->syllabus,
-            $this->cm,
-            (int) $this->framework->get('id'),
-            [$this->comps[2]->get('id') => 3]
-        );
-        $this->setAdminUser();
+        syllabus_set_links((int) $this->course->id, (int) $this->syllabus->id, $this->frameworkid, [$this->comps['C1.2'] => 3]);
         $bc = new \backup_controller(
             \backup::TYPE_1COURSE,
             $this->course->id,
@@ -186,9 +167,9 @@ final class competency_test extends \advanced_testcase {
         $rc->execute_plan();
         $rc->destroy();
         $restored = $DB->get_record('syllabus', ['course' => $newcourse->id], '*', MUST_EXIST);
-        $cm = get_coursemodule_from_instance('syllabus', $restored->id);
-        $linked = syllabus_get_module_competencies($restored, (int) $cm->id);
-        $this->assertCount(1, $linked);
-        $this->assertEquals(3, reset($linked)->level);
+        $links = syllabus_get_module_competencies($restored);
+        $this->assertCount(1, $links);
+        $this->assertEquals(3, reset($links)->level);
+        $this->assertSame('C1.2', reset($links)->idnumber);
     }
 }

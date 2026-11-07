@@ -4,9 +4,9 @@
 \documentclass[11pt,a4paper]{article}
 
 \newcommand{\titreguide}{Syllabus et évaluation des modules}
-\newcommand{\versionguide}{1.1}
+\newcommand{\versionguide}{1.2}
 \newcommand{\dateguide}{novembre 2026}
-\newcommand{\versionep}{1.1.0}
+\newcommand{\versionep}{1.2.0}
 \newcommand{\versionsynthese}{1.0.0}
 
 \usepackage{guide-commun}
@@ -51,6 +51,9 @@
 enseignants, 200 étudiants, après rédaction, relecture et évaluation de tous les modules. \\
 1.1 & novembre 2026 & Référentiel de compétences : modules et cours liés aux compétences, avec
 un niveau ; matrice compétences $\times$ cours. \\
+1.2 & novembre 2026 & Les référentiels de compétences sont tenus par la DEVE dans le suivi des
+modules (création, arbre, import CSV), sans passer par l'administration du site ; la DEVE lie
+aussi les cours sans module. \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -80,18 +83,20 @@ comprises) ou couvrent tout le site.
 
 \section{Compétences}\label{sec:competences}
 
-Le \textbf{référentiel de compétences} est celui de Moodle (\chemin{Administration du site >
-Compétences > Référentiels de compétences}) : un ou plusieurs référentiels, chacun en arbre
-(domaines, puis compétences), créés à la main ou importés d'un fichier CSV. Les modules et les
+Les \textbf{référentiels de compétences} sont tenus par la DEVE dans le \textbf{suivi des
+modules} (\chemin{Référentiels de compétences}) ; l'administration du site n'intervient pas.
+Un référentiel est un arbre (domaines, puis compétences, sur autant de niveaux que voulu),
+saisi à la main ou importé d'un fichier CSV. Il est commun à tout le site. Les modules et les
 cours s'y rattachent :
 \begin{itemize}
   \item un \textbf{module} vise des compétences, avec un \textbf{niveau} : \statut{Introduite},
-    \statut{Approfondie} ou \statut{Maîtrisée} ;
-  \item un \textbf{cours} peut viser des compétences sans passer par un module (page
-    \og Compétences\fg{} du cours, dans Moodle).
+    \statut{Approfondie} ou \statut{Maîtrisée} ; ses responsables les choisissent dans la page
+    \og Compétences\fg{} du module ;
+  \item un \textbf{cours sans module} (un stage, par exemple) peut viser des compétences : la
+    DEVE les lie depuis la matrice.
 \end{itemize}
-Les liens sont ceux de Moodle (compétence liée au cours, puis à l'activité) : ils servent aussi
-aux plans de formation et aux preuves de Moodle. Le niveau est propre au module.
+Les compétences visées figurent sur la fiche du module, et la matrice compétences $\times$
+cours montre la couverture du référentiel.
 
 \section{Qui fait quoi}
 
@@ -250,9 +255,9 @@ enseignants du cours ; celui qui ajoute l'activité en devient responsable.
 
 \capture{sy-ens-competences}{Compétences visées par le module et liaison au référentiel.}
 
-Une compétence retirée du module reste liée au cours : celui-ci peut la viser par ailleurs.
-Lier des compétences demande, en plus d'être responsable, le droit de gérer les compétences du
-cours (enseignant éditeur).
+Les responsables du module et la DEVE peuvent lier ; les autres enseignants du cours voient
+les compétences sans pouvoir les modifier. Si aucun référentiel n'est proposé, la DEVE n'en a
+pas encore créé.
 
 \section{Préparer l'évaluation}
 
@@ -327,19 +332,52 @@ avec le formulaire de décision : \bouton{Publier}, \bouton{Renvoyer aux respons
 
 \capture{sy-deve-relecture}{Relecture d'une fiche soumise.}
 
+\section{Référentiels de compétences}
+
+\chemin{Référentiels de compétences} (suivi des modules) liste les référentiels.
+\begin{etapes}
+  \item \bouton{Ajouter un référentiel} : un \textbf{code} court et unique (\og REFVET\fg{}),
+    un nom, une description.
+  \item Ouvrez-le, puis ajoutez les compétences : code (\og D1.2\fg{}), intitulé, compétence
+    parente (aucune pour un domaine), description. Chaque ligne de l'arbre se modifie, reçoit
+    des sous-compétences, monte ou descend parmi ses s\oe urs, ou se supprime.
+  \item Ou importez un fichier \textbf{CSV} : une ligne d'en-tête, puis une ligne par
+    compétence, colonnes \og Code\fg{}, \og Code parent\fg{} (vide pour un domaine),
+    \og Intitulé\fg{}, \og Description\fg{} ; séparateur point-virgule, virgule ou tabulation.
+    L'ordre des lignes est libre (un parent peut venir après ses enfants) ; une compétence dont
+    le code existe déjà est mise à jour, ce qui permet de réimporter un fichier corrigé.
+\end{etapes}
+
+\begin{verbatim}
+Code;Code parent;Intitulé;Description
+D1;;Démarche clinique;
+D1.1;D1;Réaliser un examen clinique;Examen général et spécialisé.
+\end{verbatim}
+
+\capture{sy-deve-referentiels}{Un référentiel : l'arbre des compétences et ses actions.}
+
+Une compétence visée par un module ou un cours (elle ou une de ses sous-compétences) ne se
+supprime pas, ni le référentiel qui la contient : retirez d'abord les liens. Les codes servent
+à retrouver les compétences d'un module restauré sur un autre site : gardez-les stables.
+
 \section{Matrice des compétences}
 
 \chemin{Compétences} (suivi des modules) croise un référentiel avec les cours du périmètre :
-une ligne par compétence, une colonne par cours. Une case porte le niveau donné par le module
-(I, A, M), \og $\checkmark$\fg{} pour un lien au module sans niveau, \og \textbullet\fg{} pour un lien au cours
-seulement. La dernière colonne compte les cours qui visent la compétence ; une compétence
-qu'aucun cours ne vise est surlignée. Filtre par année d'étude, export CSV. Les enseignants y
-ont accès aussi.
+une ligne par compétence, une colonne par cours (cours de module, et cours sans module liés).
+Une case porte le niveau (I, A, M), suivi de \og *\fg{} quand la compétence est visée par le
+cours lui-même (cours sans module). La dernière colonne compte les cours qui visent la
+compétence ; une compétence qu'aucun cours ne vise est surlignée. Filtre par année d'étude,
+export CSV. Les enseignants y ont accès aussi.
 
 \capture{sy-deve-competences}{Matrice compétences $\times$ cours, avec la couverture du référentiel.}
 
-L'en-tête d'une colonne ouvre la page \og Compétences\fg{} du module (ou, pour un cours sans
-module, la page des compétences du cours de Moodle).
+L'en-tête d'une colonne ouvre la page \og Compétences\fg{} du module, ou celle du cours sans
+module. Pour lier un cours qui n'a pas de module (un stage, par exemple), choisissez-le dans
+\og Lier un cours sans module\dots\fg{} sous la matrice, puis donnez un niveau à chaque
+compétence qu'il vise, comme pour un module. Un cours qui a un module renvoie à la page du
+module.
+
+\capture{sy-deve-cours-sans-module}{Compétences d'un cours sans module, liées par la DEVE.}
 
 \section{Résultats comparés}
 
@@ -376,24 +414,27 @@ le \emph{cron} doit tourner.
 résultats \\
 \texttt{mod/syllabus:evaluate} & Étudiants : évaluer \\
 \texttt{mod/syllabusstaff:view} & Enseignants : leurs modules \\
-\texttt{mod/syllabusstaff:manageall} & Gestionnaire (DEVE) : tous les modules, référentiel \\
+\texttt{mod/syllabusstaff:manageall} & Gestionnaire (DEVE) : tous les modules, référentiel
+commun, référentiels de compétences, cours sans module \\
 \texttt{mod/syllabusstudent:view} & Étudiants : leurs modules \\
-\texttt{moodle/competency:coursecompetencymanage} & Enseignants éditeurs (Moodle) : lier des
-compétences au cours et au module \\
 \bottomrule
 \end{tabularx}
 \end{center}
 
-Les compétences doivent être activées sur le site (\chemin{Administration du site >
-Fonctions avancées}, activé par défaut) ; les référentiels se gèrent dans \chemin{Administration
-du site > Compétences}, avec \texttt{moodle/competency:competencymanage}.
+Les référentiels de compétences sont propres à ces modules : ils n'utilisent ni les
+compétences de Moodle ni l'administration du site, et n'ont pas besoin que celles-ci soient
+activées. Une mise à jour depuis la version 1.1.0, qui s'appuyait sur les compétences de
+Moodle, recopie les référentiels utilisés et les liens avec leur niveau ; l'ancienne table est
+ensuite supprimée, les référentiels de Moodle restent intacts.
 
 La sauvegarde Moodle du cours comprend la fiche, ses versions et les questions du module ;
 avec les données des utilisateurs, les responsables et l'évaluation (réponses anonymes et
 participations), et les liens aux compétences avec leur niveau (retrouvés par les identifiants
-du référentiel et de la compétence sur un autre site). La réinitialisation du cours peut effacer les réponses : l'évaluation est
-alors de nouveau modifiable. Le référentiel commun n'appartient à aucun cours : il n'est pas
-sauvegardé avec eux.
+du référentiel et de la compétence sur un autre site). La réinitialisation du cours peut
+effacer les réponses : l'évaluation est alors de nouveau modifiable. Le référentiel commun et
+les référentiels de compétences n'appartiennent à aucun cours : ils ne sont pas sauvegardés
+avec eux (sur un autre site, importez d'abord le référentiel par CSV). Les liens d'un cours
+supprimé sont effacés avec lui.
 
 \newpage
 % ===========================================================================
@@ -413,11 +454,16 @@ sauvegardé avec eux.
   \item[La DEVE a modifié une question commune, mais l'ancienne est posée.] L'évaluation de ce
     module était déjà ouverte : elle garde ses questions. La nouvelle vaudra pour les
     évaluations ouvertes ensuite.
-  \item[La page « Compétences » du module ne propose pas de lier.] Il faut le droit de gérer les
-    compétences du cours (enseignant éditeur) ; un enseignant non éditeur, même responsable,
-    voit les compétences sans pouvoir les modifier.
-  \item[Aucun référentiel n'est proposé.] Aucun référentiel visible n'existe : l'administrateur
-    ou la DEVE en crée ou en importe un dans \chemin{Administration du site > Compétences}.
+  \item[La page « Compétences » du module ne propose pas de lier.] Seuls les responsables du
+    module et la DEVE lient ; les autres enseignants du cours voient les compétences.
+  \item[Aucun référentiel n'est proposé.] La DEVE n'en a pas encore créé : \chemin{Suivi des
+    modules > Référentiels de compétences}.
+  \item[Une compétence ne se supprime pas.] Elle, ou une de ses sous-compétences, est visée par
+    un module ou un cours : retirez ces liens (la matrice les montre).
+  \item[L'import CSV signale des lignes en erreur.] Une ligne sans code ou sans intitulé est
+    ignorée ; une compétence dont le code parent ne se trouve ni dans le fichier ni dans le
+    référentiel reste à la racine. Les autres lignes sont importées : corrigez le fichier et
+    réimportez-le, les compétences déjà créées sont mises à jour.
   \item[Peut-on savoir qui a répondu quoi ?] Non, par aucune page ni aucun export ; seul le fait
     d'avoir répondu est noté (voir l'encadré de la section~\ref{sec:principe-evaluation}).
 \end{description}

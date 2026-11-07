@@ -43,7 +43,7 @@ class fiche {
     }
 
     /**
-     * Compétences visées par le module (référentiel de compétences de Moodle), s'il en a.
+     * Compétences visées par le module (référentiel tenu dans le suivi des modules), s'il en a.
      *
      * @param stdClass $syllabus
      * @return string HTML
@@ -52,11 +52,7 @@ class fiche {
         global $CFG;
         require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
 
-        if (!syllabus_competencies_enabled()) {
-            return '';
-        }
-        $cm = get_coursemodule_from_instance('syllabus', $syllabus->id, $syllabus->course, false, IGNORE_MISSING);
-        $competencies = $cm ? syllabus_get_module_competencies($syllabus, (int) $cm->id) : [];
+        $competencies = syllabus_get_module_competencies($syllabus);
         if (!$competencies) {
             return '';
         }
