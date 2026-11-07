@@ -159,6 +159,7 @@ if (process.env.SYLLABUS) {
     ['sy-deve-tous', deve, `/mod/syllabusstaff/all.php?id=${sy.staffcmid}`],
     ['sy-deve-a-relire', deve, `/mod/syllabusstaff/review.php?id=${sy.staffcmid}`],
     ['sy-deve-relecture', deve, `/mod/syllabus/view.php?id=${m2.cmid}&show=working`],
+    ['sy-deve-decision', deve, `/mod/syllabus/view.php?id=${m2.cmid}&show=working`, '#review'],
     ['sy-deve-referentiel', deve, `/mod/syllabusstaff/referential.php?id=${sy.staffcmid}`],
     ['sy-deve-resultats', deve, `/mod/syllabusstaff/results.php?id=${sy.staffcmid}`],
   );

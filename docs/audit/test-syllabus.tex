@@ -8,16 +8,16 @@
 \usepackage[margin=2.2cm]{geometry}
 \hypersetup{colorlinks=true, linkcolor=blue!50!black, urlcolor=blue!50!black}
 \newcommand{\code}[1]{\texttt{\detokenize{#1}}}
-\title{Test des modules syllabus et de leur évaluation}
+\title{Test des modules syllabus et des avis des étudiants}
 \author{Sébastien Lefebvre}
-\date{Novembre 2026 -- version 1.4.0 des modules}
+\date{Novembre 2026 -- version 1.5.0 des modules}
 
 \begin{document}
 \maketitle
 
 \section{Objet et méthode}
 
-Les trois nouveaux modules -- \code{mod_syllabus} (fiche et évaluation de chaque module
+Les trois nouveaux modules -- \code{mod_syllabus} (fiche et avis des étudiants de chaque module
 d'enseignement), \code{mod_syllabusstaff} (suivi des enseignants et de la DEVE) et
 \code{mod_syllabusstudent} (« Mes modules » des étudiants) -- ont été exercés par leurs pages
 web, comme par des navigateurs (\code{docs/audit/banc/syllabus_interactions.py}), sur le banc
@@ -54,12 +54,12 @@ Niveaux en base ; DEVE : « Stage clinique » (sans module) lié depuis la matri
 Matrice compétences $\times$ cours (une case par lien, cours sans module compris), compétence
 non couverte signalée, export CSV, compétences sur la fiche, matrice ouverte aux enseignants &
 54 cases \\
-Fenêtre d'évaluation des 12 modules fixée en lot & conforme \\
-Tâche d'ouverture : questions figées, étudiants prévenus & 2\,400 messages, 22 s \\
-200 étudiants (40 en parallèle) : « Mes modules » (12 modules chacun), puis 9 évaluations sur 10,
-chacune suivie du retour à « Mes modules » & 2\,145 réponses en 121 s \\
+Fenêtre du recueil des avis des 12 modules fixée en lot & conforme \\
+Tâche d'ouverture : questions figées, étudiants prévenus & 2\,400 messages, 24 s \\
+200 étudiants (40 en parallèle) : « Mes modules » (12 modules chacun), puis 9 avis sur 10,
+chacun suivi du retour à « Mes modules » & 2\,140 réponses en 121 s \\
 Seconde réponse d'un étudiant & refusée \\
-Une réponse anonyme par participation, réponses obligatoires toutes présentes & 2\,145 / 2\,145 \\
+Une réponse anonyme par participation, réponses obligatoires toutes présentes & 2\,140 / 2\,140 \\
 Table des réponses : ni étudiant ni heure (\code{id}, \code{syllabusid}, \code{daysubmitted}) &
 conforme \\
 Questions par module : 3 communes, + 1 pour les modules « Clinique », + 2 de l'enseignant &
@@ -68,6 +68,11 @@ Résultats du module cachés au responsable avant la fermeture, visibles après 
 conforme \\
 Synthèse comparée de la DEVE (moyennes par question commune), liste filtrée, fiche PDF &
 conforme \\
+Nouvelle année universitaire : recueil de l'an dernier archivé avec ses réponses, module remis à
+zéro, 20 étudiants qui donnent de nouveau leur avis, nouvelle fenêtre dans la même année sans
+archive & conforme \\
+Résultats par année (choix de l'année, évolution des moyennes), résultats de l'an dernier,
+synthèse de la DEVE pour l'an dernier & conforme \\
 Livret du cursus (PDF) : titre, sommaire, modules et crédits, 12 fiches & 16 pages, 0,5 s \\
 Livret redemandé : même fichier, un seul conservé & 0,06 s \\
 Livret de la 2\textsuperscript{e} année (un enseignant), du semestre S3 : exactement leurs
@@ -81,14 +86,15 @@ Anomalies dans les pages & 0 \\
 \end{tabularx}
 \end{center}
 
-Résultat : \textbf{44 contrôles sur 44}. S'y ajoutent 44 tests unitaires (droits, circuit de
+Résultat : \textbf{51 contrôles sur 51}. S'y ajoutent 48 tests unitaires (droits, circuit de
 relecture, figeage des questions, anonymat, seuil, visibilité des résultats, tâche,
 réinitialisation, sauvegarde et restauration, RGPD, synthèses, compétences : import CSV en
 arbre, contrôle des parents, déplacement, liaison et retrait, suppression refusée d'une
 compétence visée, matrice, restauration des niveaux ; cursus : ordre des périodes, choix
 d'édition, livret et ses signets, conservation du livret, constats de progression, liens d'un
 sous-arbre ; référentiel commun, messages, suppressions, périmètre, fiche incomplète refusée à
-la soumission) et le test de conformité RGPD de Moodle, réussi pour les trois modules. La
+la soumission ; avis annuels : année universitaire, archivage, seuil, réinitialisation,
+sauvegarde, évolution) et le test de conformité RGPD de Moodle, réussi pour les trois modules. La
 charge à l'échelle d'une école et l'audit des parcours font l'objet du rapport \emph{Modules
 syllabus à l'échelle d'une école}.
 
@@ -98,7 +104,7 @@ ancienne table supprimée.
 
 \section{Défauts trouvés et corrigés}
 
-Les captures du guide ont montré le formulaire d'évaluation avec une réponse \textbf{déjà
+Les captures du guide ont montré le formulaire de l'avis avec une réponse \textbf{déjà
 cochée} : le premier choix d'une question à choix (et « Non » pour une question oui/non). Le
 bouton de valeur 0 était coché d'office, une valeur absente étant égale à 0 pour PHP. Un
 étudiant pressé envoyait donc ce choix sans l'avoir fait, et le contrôle des réponses

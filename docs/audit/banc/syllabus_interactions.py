@@ -365,7 +365,10 @@ out = subprocess.run(['sudo', '-u', 'www-data', 'php', 'admin/cli/scheduled_task
                       '--execute=\\mod_syllabus\\task\\open_evaluations'], cwd=MOODLE, capture_output=True, text=True).stdout
 report['tache_ouverture_s'] = round(time.time() - t, 1)
 expect('questions_figees', sql(f"select count(*) from mdl_syllabus where id in ({idlist}) and evalfrozen = 1") == '12')
-sent = int(sql(f"select count(*) from mdl_notifications where component='mod_syllabus' and eventtype='evaluationopen' and timecreated >= {now - 5}"))
+# Seuls les messages des modules du scénario (le banc peut porter d'autres jeux de données).
+cmids = '|'.join(str(m['cmid']) for m in MODULES)
+sent = int(sql(f"select count(*) from mdl_notifications where component='mod_syllabus' and eventtype='evaluationopen' "
+               f"and timecreated >= {now - 5} and contexturl ~ 'evaluate\\.php\\?id=({cmids})$'"))
 expect('etudiants_prevenus', sent == 2400, f'{sent} messages')
 
 # 5. Étudiants.
@@ -450,9 +453,8 @@ sql(f"update mdl_syllabus set evalyear = '{lastyear}' where id = {first['id']}")
 deve.post(f'/mod/syllabusstaff/all.php?id={STAFF}', [('sesskey', deve.sesskey), ('setwindow', 1),
           ('evalopen', local(now - 120)), ('evalclose', local(now + 86400)), ('syllabusids[]', first['id'])])
 archive = sql(f"select evalyear || '|' || responses from mdl_syllabus_evalarchive where syllabusid = {first['id']}")
-expect('annee_precedente_archivee', archive == f'{lastyear}|{before}' and sql(
-    f"select count(*) || '|' || max(evalyear) from mdl_syllabus_response r join mdl_syllabus s on s.id = r.syllabusid "
-    f"where s.id = {first['id']}") == f'0|', f'{archive}')
+expect('annee_precedente_archivee', archive == f'{lastyear}|{before}'
+       and sql(f"select count(*) from mdl_syllabus_response where syllabusid = {first['id']}") == '0', archive)
 expect('recueil_de_l_annee', sql(f"select evalyear from mdl_syllabus where id = {first['id']}") == thisyear)
 
 
@@ -519,10 +521,11 @@ for selection, wanted in (('y2', [m for m in MODULES if m['studyyear'] == 2]),
     expect(f'livret_{selection}', titled == {m['name'] for m in wanted}, f'{len(wanted)} fiches, {pages} pages')
 
 prog = f'/mod/syllabusstaff/progression.php?id={STAFF}'
-best = int(sql("select compid from mdl_syllabus_complink where syllabusid > 0 group by compid "
+best = int(sql(f"select compid from mdl_syllabus_complink where syllabusid in ({idlist}) group by compid "
                "order by count(*) desc, compid limit 1"))
 rows = [line.split('|') for line in sql(f"""select s.studyyear, s.semester, l.level from mdl_syllabus_complink l
-    join mdl_syllabus s on s.id = l.syllabusid where l.compid = {best} order by s.studyyear, s.semester""").splitlines()]
+    join mdl_syllabus s on s.id = l.syllabusid where l.compid = {best} and s.id in ({idlist})
+    order by s.studyyear, s.semester""").splitlines()]
 
 
 def summary(rows):
@@ -558,7 +561,7 @@ csv = deve.get(prog + f'&compid={best}&download=csv')
 expect('progression_csv', csv.text.strip().count('\n') == len(rows), f'{len(rows)} lignes')
 domain = int(sql(f"select parentid from mdl_syllabus_comp where id = {best}"))
 modules_in_domain = int(sql(f"""select count(distinct l.syllabusid) from mdl_syllabus_complink l
-    join mdl_syllabus_comp c on c.id = l.compid where l.syllabusid > 0 and (c.parentid = {domain} or c.id = {domain})"""))
+    join mdl_syllabus_comp c on c.id = l.compid where l.syllabusid in ({idlist}) and (c.parentid = {domain} or c.id = {domain})"""))
 r = deve.get(prog + f'&compid={domain}')
 expect('progression_d_un_domaine', r.text.count('syllabusstaff-progression-module') == modules_in_domain,
        f'{modules_in_domain} modules')

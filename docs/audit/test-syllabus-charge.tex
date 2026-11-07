@@ -116,7 +116,31 @@ attendent à peu près autant : aucune ne se distingue sous charge. L'envoi d'un
 deux requêtes (l'envoi et la page de retour). 1\,136 avis ont été enregistrés pendant le
 test, sans réponse orpheline ni participation sans réponse.
 
-ENDURANCE
+\section{Endurance}
+
+Cent utilisateurs virtuels pendant 30 minutes, sans temps de réflexion (version 1.4.0) :
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}r R R R R r r@{}}
+\toprule
+\textbf{Fenêtre} & \textbf{pages/s} & \textbf{médiane} & \textbf{95\,\%} & \textbf{max.} &
+  \textbf{erreurs} & \textbf{mémoire} \\
+\midrule
+0--5 min   & 52,9 & 1,78 s & 2,12 s & 4,0 s & 0 & 2,49 Go \\
+5--10 min  & 56,1 & 1,76 s & 2,04 s & 3,7 s & 0 & 2,46 Go \\
+10--15 min & 55,7 & 1,77 s & 2,07 s & 3,7 s & 0 & 2,54 Go \\
+15--20 min & 55,9 & 1,76 s & 2,14 s & 4,5 s & 0 & 2,58 Go \\
+20--25 min & 53,2 & 1,85 s & 2,20 s & 4,0 s & 0 & 2,57 Go \\
+25--30 min & 50,9 & 1,94 s & 2,32 s & 4,3 s & 0 & 2,54 Go \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Ni erreur ni fuite de mémoire en près de 100\,000 pages. Les avis du second semestre, ouverts
+au début, sont tous donnés dans les cinq premières minutes (200), d'où aucune écriture ensuite ;
+en fin de test, 1\,375 réponses en base, aucune orpheline. Le débit fléchit de 9~\% dans les
+dix dernières minutes, sans erreur ni hausse de mémoire ; la cause n'a pas été isolée (les
+journaux de Moodle, qui reçoivent une ligne par page vue, grossissent pendant le test).
 
 \section{Ruée à l'ouverture des avis}
 
@@ -171,7 +195,33 @@ script les lançait tous dans la même session de la DEVE, et Moodle sert l'une 
 requêtes d'une même session (verrou de session). Avec une session par traitement, ils prennent
 1 à 1,3~s.
 
-PROFIL
+\section{Où va le temps}
+
+Profil CPU par échantillonnage (Excimer, \code{syllabus_profil.py}), 20 ouvertures par page :
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}X r r r r r@{}}
+\toprule
+\textbf{Page} & \textbf{ms CPU} & \textbf{module} & \textbf{base} & \textbf{rendu} & \textbf{c\oe ur} \\
+\midrule
+Étudiant : Mes modules & 51 & 3\,\% & 22\,\% & 28\,\% & 47\,\% \\
+Étudiant : fiche du module & 50 & 2\,\% & 15\,\% & 26\,\% & 57\,\% \\
+Enseignant : mes modules (suivi) & 44 & 1\,\% & 14\,\% & 30\,\% & 54\,\% \\
+Enseignant : rédaction de la fiche & 67 & 3\,\% & 15\,\% & 33\,\% & 49\,\% \\
+Enseignant : résultats & 54 & 1\,\% & 12\,\% & 23\,\% & 64\,\% \\
+Enseignant : matrice des compétences & 62 & 10\,\% & 9\,\% & 32\,\% & 49\,\% \\
+DEVE : tous les modules (50 lignes) & 91 & 5\,\% & 38\,\% & 17\,\% & 40\,\% \\
+DEVE : résultats comparés & 68 & 1\,\% & 35\,\% & 20\,\% & 44\,\% \\
+\textit{Référence : profil Moodle de l'utilisateur} & 40 & -- & 20\,\% & 35\,\% & 45\,\% \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Le code des modules ne pèse que 1 à 10~\% du temps de ses pages ; l'essentiel est le socle de
+Moodle (session, droits, navigation, thème), comme pour une page ordinaire. Les deux pages de la
+DEVE les plus coûteuses le doivent au compte, module par module, des étudiants appelés à
+répondre (14~ms sur 91 pour 50 lignes).
 
 \section{Parcours et ergonomie}\label{sec:parcours}
 
@@ -190,7 +240,7 @@ les pages web (section~\ref{sec:validation}).
 \textbf{Parcours} & \textbf{Avant} & \textbf{Après} \\
 \midrule
 Étudiant : donner son avis sur ses 12 modules depuis « Mes modules » & 46 clics, 46 pages & 24 clics, 24 pages \\
-Étudiant : formulaire de l'avis (5 questions) & HAUTAVANT & HAUTAPRES \\
+Étudiant : formulaire de l'avis (5 questions) & plus de 1\,500 pixels & 1\,265 pixels \\
 Enseignant : rédiger la fiche avec 3 enregistrements intermédiaires & 8 clics, 8 pages & 5 clics, 5 pages \\
 Enseignant : savoir ce qu'il reste à faire sur son module & 4 pages & 1 encadré, liens directs \\
 DEVE : relire 12 fiches depuis « Fiches à relire » & 57 clics & 24 clics \\
@@ -305,8 +355,8 @@ qui donnent de nouveau leur avis, résultats des deux années et évolution des 
 \section{Tests et validation}\label{sec:validation}
 
 \begin{itemize}
-  \item \textbf{Tests unitaires} : 44 (37 pour \code{mod_syllabus}, 6 pour le suivi, 1 pour
-    « Mes modules »), dont 12 nouveaux : réglages communs et leurs bornes, types (suppression
+  \item \textbf{Tests unitaires} : 48 (41 pour \code{mod_syllabus}, 6 pour le suivi, 1 pour
+    « Mes modules »), dont 12 nouveaux pour les parcours et 4 pour les avis annuels : réglages communs et leurs bornes, types (suppression
     refusée s'ils servent), questions communes et de l'enseignant (contrôles, portée par type,
     ordre, module figé intouchable), état du recueil, messages (DEVE à la soumission,
     responsables à la décision, étudiants n'ayant pas répondu à l'ouverture), événement
@@ -315,8 +365,10 @@ qui donnent de nouveau leur avis, résultats des deux années et évolution des 
     incomplète refusée à la soumission, fiches publiées lues en groupe. Test de conformité RGPD
     de Moodle réussi pour les trois modules ; contrôle de style Moodle sans remarque.
   \item \textbf{Scénario de bout en bout} (\code{syllabus_interactions.py}, rapport
-    \emph{Test des modules syllabus}) rejoué sur la version 1.4.0 : \textbf{44 contrôles sur 44},
-    dont les nouveaux parcours -- retour à « Mes modules » après chaque avis (2\,145 avis), décision de la DEVE sous la fiche et retour à la liste des fiches à relire.
+    \emph{Test des modules syllabus}) rejoué sur la version 1.5.0 : \textbf{51 contrôles sur 51},
+    dont les nouveaux parcours -- retour à « Mes modules » après chaque avis (2\,140
+    avis), décision de la DEVE sous la fiche et retour à la liste des fiches à relire, nouvelle
+    année universitaire (archive, nouveau recueil, résultats par année et évolution).
 \end{itemize}
 
 \paragraph{Défauts du banc trouvés.} La remise à zéro du scénario effaçait tous les référentiels

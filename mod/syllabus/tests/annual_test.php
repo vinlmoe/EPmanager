@@ -189,9 +189,12 @@ final class annual_test extends \advanced_testcase {
             $this->course->id,
             \backup::FORMAT_MOODLE,
             \backup::INTERACTIVE_NO,
-            \backup::MODE_SAMESITE,
+            \backup::MODE_IMPORT,
             $USER->id
         );
+        // Les archives viennent des réponses : elles suivent les données des utilisateurs.
+        $bc->get_plan()->get_setting('users')->set_status(\backup_setting::NOT_LOCKED);
+        $bc->get_plan()->get_setting('users')->set_value(true);
         $bc->execute_plan();
         $backupid = $bc->get_backupid();
         $bc->destroy();
@@ -200,10 +203,12 @@ final class annual_test extends \advanced_testcase {
             $backupid,
             $newcourse->id,
             \backup::INTERACTIVE_NO,
-            \backup::MODE_SAMESITE,
+            \backup::MODE_IMPORT,
             $USER->id,
             \backup::TARGET_EXISTING_ADDING
         );
+        $rc->get_plan()->get_setting('users')->set_status(\backup_setting::NOT_LOCKED);
+        $rc->get_plan()->get_setting('users')->set_value(true);
         $rc->execute_precheck();
         $rc->execute_plan();
         $rc->destroy();
