@@ -1,113 +1,127 @@
 # Enseignement personnalisé (mod_ep)
 
-Module d'activité qui gère les ECTS d'enseignement personnalisé (EP) d'une
-promotion : le catalogue des EP académiques internes auxquels les étudiants
-s'inscrivent, les EP déclarés hors catalogue (engagement étudiant, expérience
-professionnelle, sport, académique externe) et les EP de type stage, attribués
-automatiquement d'après les stages complémentaires déjà validés par la DEVE.
+Module d'activité qui gère les enseignements personnalisés (EP) d'une promotion : le
+catalogue des EP auxquels les étudiants s'inscrivent, avec leurs syllabus ; les EP déclarés
+hors catalogue ; les EP attribués d'après les stages complémentaires ; leur validation par des
+circuits réglables ; le décompte des ECTS face aux minimums annuels ; la validation des années ;
+le supplément au diplôme certifié.
 
-Il fonctionne en binôme avec `mod_epsynthesis`, exactement comme `mod_stage`
-avec `mod_stagesynthesis` : cette activité-ci est celle de la promotion (DEVE
-et étudiants), l'autre regroupe pour chaque enseignant tout ce qu'il a à
-valider, toutes promotions confondues.
+Il fonctionne en binôme avec `mod_epsynthesis`, comme `mod_stage` avec `mod_stagesynthesis` :
+cette activité-ci est celle de la promotion (DEVE, enseignants, étudiants), l'autre regroupe
+pour chaque enseignant ce qu'il a à traiter, toutes promotions confondues.
 
-- **Prérequis** : `mod_stage` installé (dépendance déclarée dans
-  `version.php`). Les EP de type stage et l'identification des enseignants
-  référents sont lus dans ses tables ; rien n'y est écrit.
+- **Moodle 4.3 ou plus récent**, PHP 8.0 ou plus récent.
+- **Prérequis** : `mod_stage` installé (dépendance déclarée dans `version.php`). Les EP de type
+  stage et l'identification des enseignants référents sont lus dans ses tables ; rien n'y est
+  écrit.
 
-## Installation
+## Installation et mise à niveau
 
-Copier le dossier `mod/ep` dans `<moodle>/mod/ep`, puis lancer la mise à jour
-de la base :
+Copier le dossier `mod/ep` dans `<moodle>/mod/ep`, puis :
 
 ```bash
 php admin/cli/upgrade.php
 ```
 
-## Mise en place
+La mise à niveau depuis la version 0.1.0 convertit les données existantes (types, crédits,
+historique des décisions, catalogue) sans perte ; elle a été répétée sur une copie d'un site
+réel (`docs/audit/banc/migration_avant.php` et `migration_apres.php`). Faire une sauvegarde de
+la base avant, comme pour toute mise à niveau.
 
-1. Dans le cours de la promotion — celui qui porte déjà l'activité « Gestion
-   des stages » —, ajouter une activité **Enseignement personnalisé**.
-2. Renseigner l'**année d'étude courante** (elle détermine quelles années sont
-   présentées comme exigibles) et, le cas échéant, le **minimum d'ECTS sur
-   l'ensemble du cursus**.
-3. Depuis **Administration → Types d'EP et plafonds** :
-   - fixer le **maximum d'ECTS retenus** de chaque type, sur le cursus et/ou
-     par année (0 = pas de plafond) ;
-   - pour le type **stage**, fixer le **nombre d'ECTS par jour** de stage
-     complémentaire validé par la DEVE ;
-   - désactiver les types qui ne sont pas utilisés ;
-   - rédiger la consigne affichée à l'étudiant pour chaque type déclarable.
-4. Depuis **Administration → Minimums d'ECTS**, saisir le minimum à valider
-   pour chaque année d'étude.
-5. Depuis **Administration → Catalogue des EP internes**, créer les EP
-   proposés (intitulé, ECTS, années concernées, nombre de places) et désigner
-   pour chacun son ou ses **responsables** : ce sont eux qui valideront les
-   inscriptions.
+Aucun réglage d'administration du site n'est nécessaire : tout le paramétrage se fait dans
+l'activité, depuis son **panneau d'administration**, par la DEVE (capacité `mod/ep:manage`).
 
-## Les six types et leur circuit
+## Mise en place dans une promotion
 
-| Type | Comment l'ECTS arrive | Qui valide |
+1. Dans le cours de la promotion — celui qui porte l'activité « Gestion des stages » —, ajouter
+   une activité **Enseignement personnalisé** et renseigner l'**année d'étude courante**.
+2. Si une autre activité de l'école est déjà paramétrée, le plus simple est
+   **Administration → Transférer le paramétrage → Copier depuis une autre activité** : types,
+   minimums, supplément, courriels et catalogue sont repris en une fois. Sinon :
+3. **Types d'EP** : six types sont créés d'office (académique interne, stage, engagement
+   étudiant, expérience professionnelle, sport, académique externe). Pour chacun, ou pour un
+   type ajouté sans programmation :
+   - **mode d'acquisition** : inscription au catalogue, déclaration de l'étudiant, automatique
+     d'après les stages, ou saisie par la DEVE seule ;
+   - **circuit de validation**, en une à trois étapes : responsable de l'EP, enseignant référent,
+     DEVE (par exemple « référent puis DEVE »), ou aucun (validé d'office) ;
+   - **évaluation** : sans note (validé / non validé) ou notée (note maximale, seuil) ;
+   - **justificatifs** : aucun, facultatifs ou obligatoires, et formats acceptés ;
+   - **plafonds** d'ECTS retenus sur le cursus et par année, ECTS par jour (stages), consigne
+     affichée à l'étudiant, présence dans le supplément au diplôme.
+4. **Minimums d'ECTS** par année d'étude et sur le cursus.
+5. **Catalogue** : créer les EP (ou les importer en CSV, voir `docs/formats-import.tex`) avec
+   leurs ECTS, années, places, périodes d'inscription et de déroulement, responsables,
+   prérequis (EP exigés, ECTS minimum), état (brouillon, proposé, publié, clos, archivé).
+6. **Supplément au diplôme** : textes des rubriques fixes en français et en anglais, catégories
+   d'éléments complémentaires, circuit et preuves, préfixe des numéros, cachet et signataire.
+7. **Éditions PDF et courriels** : en-tête, pied de page et logo des PDF ; texte des courriels.
+
+## Ce que chacun fait
+
+| Qui | Où | Quoi |
 | --- | --- | --- |
-| Académique interne | Inscription à un EP du catalogue, qui porte son propre nombre d'ECTS | Le responsable de cet EP |
-| Stage | Automatiquement, d'après les stages complémentaires (EP) validés par la DEVE dans `mod_stage`, à raison de N ECTS par jour retenu | Personne : aucune vérification n'est demandée |
-| Engagement étudiant | Déclaration de l'étudiant, avec justificatifs | Son enseignant référent |
-| Expérience professionnelle | idem | idem |
-| Sport | idem | idem |
-| Académique externe | idem | idem |
+| Étudiant | Tableau de bord, catalogue, déclarer, mon supplément | S'inscrire, déclarer un EP avec justificatifs, suivre ses décisions et ses ECTS, demander des éléments pour son supplément, télécharger son supplément émis |
+| Enseignant responsable d'un EP | Validation, participants, propositions | Inscrire ou retirer des étudiants en cours de session, noter ou valider (une par une, en lot ou par import CSV), proposer un nouvel EP ou mettre à jour le syllabus du sien |
+| Enseignant référent | Validation, éléments du supplément | Trancher les déclarations de ses étudiants et leurs éléments du supplément, à son étape du circuit |
+| DEVE | Panneau d'administration, validation, pilotage | Tout le paramétrage ; trancher et corriger toute décision ; examiner les propositions ; valider les années ; émettre les suppléments ; importer, exporter, restaurer |
 
-L'enseignant référent d'un étudiant n'est pas ressaisi ici : c'est celui qui
-lui est attribué dans l'activité « Gestion des stages » du même cours
-(`stage_entry_teacher`). Retirer une attribution là-bas la retire donc
-immédiatement ici. Sans référent attribué, la demande revient à la DEVE
-(capacité `mod/ep:validatedeve`).
-
-## Plafonds et minimums
-
-Les ECTS validés au-delà d'un plafond de type **restent acquis** : ils cessent
-seulement d'être comptés, et reviennent au décompte si le plafond est relevé —
-sans avoir à revalider quoi que ce soit. Les bilans les affichent en colonne
-« non retenus ».
-
-Le plafond annuel d'un type s'applique d'abord à chaque année, puis le plafond
-de cursus se consomme par années croissantes : les ECTS acquis en premier sont
-retenus en premier, si bien qu'une année déjà validée ne peut pas être remise
-en cause par un EP saisi plus tard.
-
-Les minimums annuels et le minimum de cursus se cumulent : atteindre chaque
-minimum annuel ne suffit pas nécessairement à atteindre celui du cursus.
+Les décisions suivent le circuit du type, étape par étape, et chacune est gardée dans
+l'historique de la demande (qui, quand, à quel titre, note, commentaire). Deux personnes qui
+tranchent la même demande en même temps ne peuvent pas l'enregistrer deux fois : la seconde est
+prévenue que la demande a changé.
 
 ## Attribution automatique depuis les stages
 
-Un stage donne des ECTS d'EP s'il remplit trois conditions dans `mod_stage` :
-il appartient à une activité « Gestion des stages » du même cours (ou à celle
-désignée dans les paramètres), il est marqué **complémentaire (EP)** et il est
-**validé par la DEVE**. Le crédit vaut alors `durée retenue × ECTS par jour`.
+Un stage donne des ECTS d'EP s'il appartient à une activité « Gestion des stages » du même cours
+(ou à celle désignée dans les paramètres), s'il est marqué **complémentaire (EP)** et
+**validé par la DEVE**. Le crédit vaut `durée retenue × ECTS par jour` ; il suit son stage
+d'origine. Recalcul chaque nuit (tâche `mod_ep\task\sync_stage_credits`), à l'ouverture des
+pages au plus toutes les cinq minutes, et à la demande depuis la page des types.
 
-Ces crédits suivent leur stage d'origine : ils sont mis à jour si la durée
-retenue change, et retirés si le stage est dévalidé, annulé ou repassé en
-obligatoire. Ils ne sont donc ni modifiables ni validables à la main — c'est le
-stage d'origine qu'il faut reprendre dans `mod_stage`.
+## Supplément au diplôme
 
-Le recalcul a lieu :
+Au modèle Europass (huit rubriques). La rubrique 4.3 reprend les EP retenus ; la rubrique 6.1
+les éléments complémentaires validés. La DEVE émet un supplément **certifié** : numéro unique,
+empreinte SHA-256 du contenu imprimée sur le document, PDF conservé ; une nouvelle émission
+remplace la précédente. Émission groupée pour toute une promotion (tâche ad hoc, avec message
+à la fin). Toute personne peut vérifier un supplément, sans compte, sur
+`/mod/ep/supplement_verify.php`, avec son numéro et son code.
 
-- chaque nuit, par la tâche planifiée
-  `mod_ep\task\sync_stage_credits` (5 h 15) ;
-- à l'ouverture des pages de l'activité, au plus une fois toutes les cinq
-  minutes ;
-- à la demande, depuis le bouton « Resynchroniser les EP de type stage » de la
-  page des types.
+## Imports, exports, sauvegarde
+
+- Imports CSV du catalogue, des séances des syllabus et des crédits, avec prévisualisation
+  (formats dans `docs/formats-import.tex`, exemples dans `docs/exemples/`).
+- Export complet (ZIP : classeur Excel lisible, paramétrage, données des étudiants, fichiers)
+  et restauration dans une autre activité, sans doublon.
+- La sauvegarde et la restauration Moodle du cours comprennent toute l'activité.
+- Réinitialisation du cours : dossiers des étudiants, décisions d'année, suppléments, journal
+  des imports, au choix ; le paramétrage et le catalogue sont conservés.
+
+## Tâches
+
+| Tâche | Quand | Rôle |
+| --- | --- | --- |
+| `mod_ep\task\sync_stage_credits` | chaque nuit, 5 h 15 | EP de type stage |
+| `mod_ep\task\send_pending_reminders` | le lundi, 6 h 40 | Relance des validateurs qui ont des demandes en attente depuis plus d'une semaine |
+| `mod_ep\task\issue_supplements` | ad hoc | Émission groupée des suppléments |
 
 ## Capacités
 
-| Capacité | Pour qui |
+| Capacité | Pour qui (par défaut) |
 | --- | --- |
 | `mod/ep:view` | Tous les inscrits |
-| `mod/ep:submit` | Étudiants : s'inscrire au catalogue, déclarer un EP |
-| `mod/ep:evaluateteacher` | Enseignants : valider ce dont ils ont la charge |
-| `mod/ep:validatedeve` | DEVE : valider et retirer pour tout le monde |
-| `mod/ep:manage` | DEVE : types, catalogue, minimums |
+| `mod/ep:submit` | Étudiants : s'inscrire, déclarer, demander des éléments du supplément |
+| `mod/ep:evaluateteacher` | Enseignants : trancher ce dont ils ont la charge (EP dont ils sont responsables, étudiants dont ils sont référents) |
+| `mod/ep:propose` | Enseignants : proposer un EP, mettre à jour le syllabus du leur |
+| `mod/ep:validatedeve` | DEVE : trancher et corriger pour tout le monde, valider les années |
+| `mod/ep:manage` | DEVE : paramétrage, catalogue, supplément, imports |
 | `mod/ep:viewall` | DEVE : voir tous les étudiants, exporter |
+
+Par défaut, `validatedeve`, `manage` et `viewall` sont données aux rôles « enseignant
+éditeur » et « gestionnaire » : dans une école où les enseignants ont le rôle « enseignant
+éditeur » dans le cours de la promotion, les leur retirer au niveau de l'activité ou du cours,
+et donner à la DEVE le rôle « gestionnaire ».
 
 ## Tests
 
@@ -115,5 +129,6 @@ Le recalcul a lieu :
 vendor/bin/phpunit --testsuite mod_ep_testsuite
 ```
 
-Les tests de `tests/stage_sync_test.php` utilisent le générateur de `mod_stage`
-et supposent donc les deux modules installés.
+Les tests utilisent le générateur de `mod_stage` et supposent donc les deux modules installés.
+Banc de charge et de concurrence : `docs/audit/` (rapports `test-de-charge.pdf` et
+`test-de-concurrence.pdf`).

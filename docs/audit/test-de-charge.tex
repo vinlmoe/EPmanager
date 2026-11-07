@@ -1,0 +1,173 @@
+% Test de charge de mod_ep : jeu de données d'une grande promotion, chronométrage des pages et
+% des fonctions, corrections.
+% Compilation : latexmk -pdf test-de-charge.tex
+\documentclass[11pt,a4paper]{article}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype,booktabs,tabularx,longtable,xcolor,hyperref,array}
+\usepackage[margin=2.2cm]{geometry}
+\hypersetup{colorlinks=true, linkcolor=blue!50!black, urlcolor=blue!50!black}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcolumntype{R}{>{\raggedleft\arraybackslash}p{1.75cm}}
+\title{Test de charge de \code{mod_ep}}
+\author{Sébastien Lefebvre}
+\date{Novembre 2026 -- version 0.8.0 du module}
+
+\begin{document}
+\maketitle
+
+\section{Méthode}
+
+Le test porte sur un \textbf{vrai Moodle~4.5} (PostgreSQL~16, PHP~8.3), avec les quatre modules
+\code{mod_ep}, \code{mod_epsynthesis}, \code{mod_stage} et \code{mod_stagesynthesis} installés,
+servi par le serveur intégré de PHP à huit processus, sur une machine de quatre c\oe urs et
+15~Go de mémoire. Le jeu de données (\code{docs/audit/banc/charge_setup.php}) représente une
+promotion plusieurs fois plus grosse que celles d'une école vétérinaire :
+\begin{itemize}
+  \item un cours, une activité « Gestion des stages » (référents) et une activité EP ;
+  \item 2\,000 étudiants répartis sur les six années, 150 enseignants (chacun référent d'environ
+    treize étudiants et responsable d'un ou deux EP), 4 membres de la DEVE ;
+  \item 200 EP au catalogue, chacun avec un syllabus publié de huit séances, un ou deux
+    responsables, et pour un sur dix un prérequis ;
+  \item 59\,550 crédits (30 par étudiant : inscriptions au catalogue, déclarations, ajouts de
+    la DEVE) à tous les états -- 80~\% validés, 12~\% en attente à la première étape de leur
+    circuit, 8~\% refusés -- avec l'historique de leurs décisions ;
+  \item 6\,000 éléments du supplément au diplôme et 5\,000 décisions d'année.
+\end{itemize}
+
+Trois mesures :
+\begin{enumerate}
+  \item \textbf{Pages} (\code{pages.py}) : chaque page de l'activité, ouverte par un étudiant, un
+    enseignant et un membre de la DEVE ; durée médiane de trois ouvertures, taille, nombre de
+    lectures et d'écritures en base (pied de page de Moodle avec \code{perfdebug}), erreurs.
+  \item \textbf{Fonctions} (\code{fonctions.php}) : fonctions de lecture de \code{locallib.php},
+    médiane de cinq appels.
+  \item \textbf{Traitements lourds} : export complet, restauration de cet export dans une autre
+    activité, durée et mémoire.
+\end{enumerate}
+Les scripts sont dans \code{docs/audit/banc/} et rejouables (\code{README.md}).
+
+\section{Problèmes trouvés et corrections}
+
+La première mesure a relevé six points, tous corrigés dans la version~0.8.0 :
+
+\begin{longtable}{@{}p{4.2cm}p{5.3cm}p{6.2cm}@{}}
+\toprule
+\textbf{Page ou traitement} & \textbf{Constat} & \textbf{Correction} \\
+\midrule\endhead
+Validation (DEVE) & 3,8~Mo et 0,8~s : la file « En attente de votre décision » affichait les
+  7\,000 demandes en attente, sans pagination. & File paginée en base (40 par page), avec son
+  total. \\
+Éléments du supplément (DEVE) & 2\,083 requêtes, 1,6~s, 2,4~Mo : 2\,000 éléments en attente
+  affichés d'un coup, preuves lues élément par élément, liste complète paginée en PHP après
+  lecture de tout. & File et liste paginées en base ; preuves de la page lues en une requête. \\
+Catalogue (étudiant) & 315 requêtes : prérequis manquants calculés EP par EP, deux fois par
+  ligne. & Calcul groupé pour tout le catalogue (4 requêtes). \\
+Participants d'un EP & Prérequis recalculés étudiant par étudiant. & Calcul groupé pour tous les
+  inscrits en attente. \\
+Export complet & 34~s, plus de 1~Go de mémoire (épuisement en ligne de commande), 66\,500
+  requêtes : classeur PhpSpreadsheet tenu en mémoire (800\,000 cellules), fichiers lus crédit
+  par crédit. & Classeur écrit en flux (OpenSpout, fourni avec Moodle), données JSON écrites en
+  un passage sur les crédits lus par paquets, fichiers lus par zone, bilans par paquets de 500
+  étudiants : \textbf{10~s, 102~Mo, 970 requêtes}. \\
+Restauration de l'export & 7~min sous verrou, 198\,000 requêtes : un contrôle de doublon par
+  ligne, dans une table qui grossit à chaque insertion, devenait de plus en plus lent. & Index
+  des enregistrements présents lu une fois, décisions insérées par lots : \textbf{15~s,
+  70\,800 requêtes} pour 59\,550 crédits. \\
+\bottomrule
+\end{longtable}
+
+\section{Pages, après correction}
+
+Durées médianes côté serveur, une seule personne connectée. Les pages HTML ne dépassent pas
+0,2~s ; le nombre de requêtes ne dépend plus de la taille de la promotion, sauf pour l'émission
+des suppléments, dont chaque ligne rassemble le supplément de l'étudiant (20 étudiants par page,
+voir plus bas).
+
+\begin{longtable}{@{}p{1.9cm}p{7.6cm}RRR@{}}
+\toprule
+\textbf{Rôle} & \textbf{Page} & \textbf{Durée (s)} & \textbf{Requêtes} & \textbf{Taille (Ko)} \\
+\midrule\endhead
+Étudiant & Tableau de bord (\code{view.php}) & 0,11 & 41 & 175 \\
+ & Catalogue (200 EP) & 0,11 & 44 & 330 \\
+ & Déclarer un EP & 0,11 & 64 & 216 \\
+ & Mon supplément au diplôme & 0,08 & 55 & 160 \\
+ & Fiche du syllabus & 0,06 & 40 & 159 \\
+ & Fiche du syllabus en PDF & 0,10 & -- & 146 \\
+Enseignant & Tableau de bord & 0,12 & 45 & 163 \\
+ & Validation & 0,09 & 47 & 210 \\
+ & Pilotage & 0,08 & 45 & 163 \\
+ & Propositions & 0,06 & 39 & 157 \\
+ & Éléments du supplément & 0,07 & 43 & 170 \\
+ & Participants d'un EP & 0,12 & 51 & 338 \\
+DEVE & Tableau de bord & 0,12 & 46 & 184 \\
+ & Pilotage (2\,000 étudiants, paginé) & 0,10 & 46 & 184 \\
+ & Pilotage, recherche, page 5 & 0,09 & 46 & 184 \\
+ & Situation d'un étudiant & 0,07 & 48 & 184 \\
+ & Validation & 0,12 & 46 & 217 \\
+ & Validation, filtre « en attente », page 3 & 0,10 & 46 & 218 \\
+ & Catalogue & 0,10 & 44 & 382 \\
+ & Gestion du catalogue & 0,10 & 44 & 426 \\
+ & Participants d'un EP & 0,13 & 48 & 321 \\
+ & Types, minimums, administration & 0,06--0,07 & 40--42 & 163--169 \\
+ & Validation des années & 0,09 & 48 & 216 \\
+ & Éléments du supplément & 0,10 & 48 & 235 \\
+ & Émission des suppléments & 0,18 & 363 & 218 \\
+ & Supplément d'un étudiant, aperçu PDF & 0,09 / 0,13 & 59 / -- & 168 / 152 \\
+ & Réglages du supplément & 0,10 & 71 & 267 \\
+ & Rentrée, transfert du paramétrage, export complet, import du catalogue & 0,08--0,09 & 44--64 &
+   164--204 \\
+ & Export CSV par étudiant & 0,70 & -- & 186 \\
+ & Export CSV détaillé (59\,550 lignes) & 3,58 & -- & 9\,738 \\
+ & Livret PDF du catalogue (200 EP) & 5,47 & -- & 1\,261 \\
+ & Paramétrage JSON avec catalogue & 0,15 & -- & 1\,425 \\
+\bottomrule
+\end{longtable}
+
+\section{Fonctions de lecture}
+
+\begin{longtable}{@{}p{10cm} R R@{}}
+\toprule
+\textbf{Fonction} & \textbf{ms} & \textbf{Requêtes} \\
+\midrule\endhead
+Demandes en attente de la DEVE : total & 7,4 & 1 \\
+Demandes en attente de la DEVE : une page de 40 & 8,7 & 1 \\
+Demandes en attente d'un enseignant (toutes) & 1,0 & 1 \\
+Liste filtrée avec recherche sur le nom, page 3 & 24,2 & 1 \\
+Bilan d'une page de pilotage (40 étudiants) & 11,4 & 5 \\
+Bilan de 500 étudiants & 114,3 & 5 \\
+Bilan d'un étudiant & 0,4 & 3 \\
+Places prises et statuts de tous les EP & 8--9 & 1 \\
+Prérequis manquants d'un étudiant, catalogue entier & 1,0 & 4 \\
+Contenu du supplément d'un étudiant & 2,3 & 13 \\
+Éléments du supplément en attente, page de 40 & 2,6 & 1 \\
+Décisions d'année de 500 étudiants & 3,1 & 1 \\
+Export du paramétrage avec catalogue & 86,7 & 812 \\
+\bottomrule
+\end{longtable}
+
+\section{Points restants}
+
+\begin{itemize}
+  \item \textbf{Émission des suppléments} : environ 18 requêtes par étudiant de la page (le
+    contenu complet du supplément est rassemblé pour signaler ce qui manque), soit 360 pour une
+    page de 20 et 0,18~s : borné par la pagination, sans effet perceptible.
+  \item \textbf{Export du paramétrage} : quatre requêtes par EP du catalogue (prérequis, syllabus,
+    séances, intervenants), soit 0,09~s pour 200 EP. Opération rare.
+  \item \textbf{Restauration} : le fichier \code{donnees.json} est lu d'un bloc (300~Mo de
+    mémoire pour 60\,000 crédits). La page relève la limite de mémoire de PHP pour cette
+    opération ; au-delà de 150\,000 crédits dans une même activité, mieux vaut restaurer en
+    ligne de commande (\code{docs/audit/concurrence/worker.php}).
+  \item \textbf{Livret PDF} : 5,5~s pour 200 EP de huit pages de syllabus chacun ; il est produit à
+    la demande et non à chaque affichage.
+\end{itemize}
+
+\section{Conclusion}
+
+Avec 2\,000 étudiants, 200 EP et 60\,000 crédits dans une seule activité, toutes les pages
+s'ouvrent en moins de 0,2~s côté serveur, avec un nombre de requêtes qui ne dépend pas de la
+taille de la promotion. Les traitements de masse restent dans des durées acceptables pour une
+requête web (export complet 10~s, restauration 15~s, livret 5~s) et une mémoire bornée. La
+tenue sous accès simultanés fait l'objet du rapport \emph{Test de concurrence}.
+\end{document}
