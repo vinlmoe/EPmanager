@@ -57,11 +57,13 @@ Voir [`mod/ep/INSTALL.md`](mod/ep/INSTALL.md) puis
 
 | Document | Pour qui |
 | --- | --- |
+| `docs/guides/guide-utilisateur.pdf` | Guide complet, tous les rôles : principes, étudiant, enseignant, DEVE, administrateur, questions fréquentes |
 | `docs/guides/guide-parametrage.pdf` | DEVE : mise en place, paramétrage, fin d'année, supplément |
 | `docs/guides/guide-enseignant.pdf` | Enseignants : responsables d'EP, référents, propositions |
 | `docs/guides/guide-etudiant.pdf` | Étudiants |
 | `docs/formats-import.pdf` | Formats des imports et des exports |
 | `docs/audit/test-de-charge.pdf`, `docs/audit/test-de-concurrence.pdf` | Mesures sur une promotion de 2 000 étudiants |
+| `docs/audit/test-des-interactions.pdf` | Une promotion de 1 000 étudiants de l'inscription au supplément émis, par l'interface web, avec contrôles en base |
 | `docs/audit/test-de-stress.pdf` | Montée en charge jusqu'à saturation, endurance et traitements lourds sur six promotions |
 | `docs/plan-mise-a-niveau.pdf` | Plan de la mise à niveau 1.0 |
 | `CHANGELOG.md` | Historique des versions |

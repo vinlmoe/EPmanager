@@ -26,3 +26,19 @@ PHP_CLI_SERVER_WORKERS=8 php -d max_input_vars=5000 -d memory_limit=512M \
 - `fonctions.php site-<tag>.json` : chronométrage des fonctions de lecture de `locallib.php`.
 - `migration_avant.php`, `migration_apres.php` : répétition de la mise à niveau depuis la
   version 0.1.0 sur un site réel (voir le lot 1).
+
+Options de `charge_setup.php` (variables d'environnement) : `PERSONNEL=<tag>` reprend les
+enseignants et la DEVE d'une promotion déjà créée ; `VIERGE=1` crée une promotion sans aucun
+crédit, élément ni décision (minimum de 6 ECTS en 3e année), pour `interactions.py`.
+
+- `synthese_setup.php site-<tag>.json` : synthèse enseignant liée à la promotion (affiche son
+  identifiant de module de cours).
+- `interactions.py site-<tag>.json <synthèse>` : une promotion vierge vécue de bout en bout par
+  l'interface web (inscriptions, déclarations et éléments avec fichiers, décisions des
+  responsables, des référents et de la DEVE, validation des années, émission des suppléments,
+  vérification publique, exports), puis contrôles en base (rapport
+  `../test-des-interactions.tex`). Variables `PHASES`, `DEBUT`, `LIMITE`, `REFERENTS` pour en
+  rejouer une partie.
+- `stress.py`, `profil.py`, `lourds.py`, `ruee.py` : test de stress (`../test-de-stress.tex`).
+- `muc_modinfo.php` : associe le cache `core/coursemodinfo` au magasin fichier quand le cache
+  applicatif est dans APCu (voir `mod/ep/INSTALL.md`).

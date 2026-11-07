@@ -97,6 +97,13 @@ foreach ($types as $type) {
 $catalogtype = $bycode[EP_TYPE_ACADEMIC];
 $declarable = array_values(array_filter($types, fn($t) => ep_type_is_declarable($t)));
 
+// Promotion vierge (variable VIERGE=1) : aucun crédit, élément ni décision d'année générés, EP
+// ouverts à toutes les années ; tout viendra des interactions du test (interactions.py).
+$vierge = (bool) getenv('VIERGE');
+if ($vierge) {
+    ep_set_year_requirement($ep->id, 3, 6);
+}
+
 // Catalogue : EP publiés avec un ou deux responsables, syllabus de huit séances, prérequis.
 $activities = [];
 $kinds = array_keys(ep_session_kind_options());
@@ -108,8 +115,8 @@ for ($i = 1; $i <= $nactivities; $i++) {
         'name' => "Enseignement personnalisé n° $i",
         'description' => str_repeat("Description de l'EP $i. ", 10),
         'ects' => [1, 1.5, 2, 2.5, 3][$i % 5],
-        'minstudyyear' => $minyear,
-        'maxstudyyear' => min(6, $minyear + 2),
+        'minstudyyear' => $vierge ? 0 : $minyear,
+        'maxstudyyear' => $vierge ? 0 : min(6, $minyear + 2),
         'capacity' => $i % 3 === 0 ? 0 : 40,
         'state' => EP_ACTIVITY_PUBLISHED,
         'grading' => $i % 4 === 0 ? EP_GRADING_GRADE : '',
@@ -226,7 +233,7 @@ $categories = array_values(ep_get_supplement_categories($ep->id));
 $DB->set_field('ep', 'supplementflow', 'referent,deve', ['id' => $ep->id]);
 $DB->set_field('ep', 'supplementevidence', EP_EVIDENCE_OPTIONAL, ['id' => $ep->id]);
 $transaction = $DB->start_delegated_transaction();
-foreach ($users['students'] as $k => $studentid) {
+foreach ($vierge ? [] : $users['students'] as $k => $studentid) {
     for ($i = 0; $i < 3; $i++) {
         $status = [EP_STATUS_VALIDATED, EP_STATUS_PENDING, EP_STATUS_REJECTED][($k + $i) % 3];
         $DB->insert_record('ep_supplement_item', (object) [

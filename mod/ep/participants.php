@@ -60,6 +60,9 @@ $graded = $grading->grading === EP_GRADING_GRADE;
 $activestatuses = [EP_STATUS_PENDING, EP_STATUS_VALIDATED];
 // Séparateur « libellé : valeur » de la langue courante (espace avant les deux-points en français).
 $labelsep = get_string('labelsep', 'langconfig');
+// Le même séparateur en texte brut, pour les libellés échappés par s() : « &nbsp;: » s'y
+// afficherait tel quel.
+$plainsep = html_entity_decode($labelsep, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
 // Export CSV de la liste. Ses intitulés de colonnes sont ceux que grades_importer reconnaît, et
 // les inscriptions retirées n'y figurent pas : complété des notes ou des décisions, le fichier se
@@ -136,10 +139,10 @@ if ($action === 'sheet') {
     $dates = [];
     $dateformat = get_string('strftimedate');
     if (!empty($activity->datestart)) {
-        $dates[] = get_string('activitydatestart', 'mod_ep') . $labelsep . userdate($activity->datestart, $dateformat);
+        $dates[] = get_string('activitydatestart', 'mod_ep') . $plainsep . userdate($activity->datestart, $dateformat);
     }
     if (!empty($activity->dateend)) {
-        $dates[] = get_string('activitydateend', 'mod_ep') . $labelsep . userdate($activity->dateend, $dateformat);
+        $dates[] = get_string('activitydateend', 'mod_ep') . $plainsep . userdate($activity->dateend, $dateformat);
     }
     if ($dates) {
         $html .= html_writer::tag('p', s(implode(' - ', $dates)));
@@ -373,7 +376,7 @@ echo html_writer::link(new moodle_url('/mod/ep/credits.php', ['id' => $cm->id]),
 $taken = ep_get_activity_taken_places($activity->id);
 $teachers = ep_get_activity_teachers($activity->id);
 if ($graded) {
-    $gradinglabel = get_string('grading_grade', 'mod_ep') . ' (' . get_string('gradepass', 'mod_ep') . $labelsep
+    $gradinglabel = get_string('grading_grade', 'mod_ep') . ' (' . get_string('gradepass', 'mod_ep') . $plainsep
         . get_string('gradeoutof', 'mod_ep', (object) [
             'grade' => ep_format_ects($grading->gradepass),
             'max' => ep_format_ects($grading->grademax),

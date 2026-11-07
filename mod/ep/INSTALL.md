@@ -138,6 +138,14 @@ temps de réflexion, et en continu. Réglages, du plus au moins rentable :
 | JIT de PHP : `opcache.jit = tracing`, `opcache.jit_buffer_size = 128M` | `php.ini` de PHP-FPM | +5 à +8 % |
 | OPcache sans vérification des fichiers : `opcache.validate_timestamps = 0` | `php.ini` de PHP-FPM | ≈ +2 % |
 
+- Avec APCu, **associer la définition `core/coursemodinfo` (cache des activités de chaque cours)
+  au magasin fichier par défaut** (*Administration du site > Plugins > Caches*, correspondances de
+  cette définition). APCu n'a pas de verrouillage natif : dans
+  Moodle 4.5, une requête qui doit reconstruire le cache d'un cours pendant qu'une autre le fait
+  échoue aussitôt (« Unable to acquire a lock for caching ») au lieu d'attendre. Sur le banc,
+  après un redémarrage de PHP-FPM (qui vide APCu) ou une purge des caches, 12 à 14 des 40 premières
+  connexions simultanées échouaient ainsi ; avec ce cache sur le magasin fichier, aucune, sans
+  perte de débit mesurable (rapport `test-des-interactions.pdf`). Redis convient aussi.
 - Avec APCu ou `validate_timestamps = 0`, **redémarrer PHP-FPM après chaque mise à jour** du code
   ou mise à niveau faite en ligne de commande : le cache en mémoire et le code compilé ne sont
   pas partagés avec les scripts en ligne de commande.

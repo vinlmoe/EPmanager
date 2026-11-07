@@ -3,6 +3,30 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## 1.0.3 — mod_ep 2026111700, mod_epsynthesis 2026111600 (17 novembre 2026)
+
+Test des interactions de bout en bout d'une promotion de 1 000 étudiants
+(`docs/audit/test-des-interactions.pdf`) et guide utilisateur complet.
+
+### Module
+- **Participants d'un EP** : le barème (« Seuil de validation : 10 / 20 ») et les dates de la
+  feuille d'émargement affichaient l'entité `&nbsp;` en clair ; même défaut dans la colonne de
+  résultat de la prévisualisation d'un import de notes.
+- **Vérifier un supplément** : le titre de la page n'est plus affiché deux fois.
+
+### Déploiement (documenté dans `mod/ep/INSTALL.md`)
+- Avec APCu, associer la définition `core/coursemodinfo` au magasin fichier : APCu n'ayant pas de
+  verrouillage natif, Moodle 4.5 refusait aussitôt (« Unable to acquire a lock for caching ») une
+  partie des premières connexions simultanées après un redémarrage de PHP-FPM ou une purge des
+  caches (12 à 14 sur 40) ; aucune avec ce réglage, sans perte de débit.
+
+### Documentation
+- `docs/guides/guide-utilisateur.pdf` : tous les rôles en un document (principes, étudiant,
+  enseignant, DEVE, administrateur, questions fréquentes), captures prises sur la promotion de
+  1 000 étudiants du test ; captures des trois guides par rôle refaites.
+- Banc : `interactions.py` (scénario complet, contrôles en base, phases rejouables),
+  `muc_modinfo.php`.
+
 ## 1.0.2 — mod_ep 2026111600, mod_epsynthesis 2026111600 (16 novembre 2026)
 
 Optimisations supplémentaires, mesurées sur le banc du test de stress.

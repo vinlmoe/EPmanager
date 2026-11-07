@@ -10,7 +10,7 @@ require_once($CFG->dirroot . '/lib/phpunit/classes/util.php');
 \core\session\manager::set_user(get_admin());
 $gen = phpunit_util::get_data_generator();
 $sites = array_map(fn($f) => json_decode(file_get_contents($f), true), array_slice($argv, 1));
-$course = $gen->create_course(['fullname' => 'Équipe enseignante EP', 'shortname' => 'EQUIPE-EP']);
+$course = $gen->create_course(['fullname' => 'Équipe enseignante EP', 'shortname' => 'EQUIPE-EP-' . $sites[0]['tag']]);
 $synthesis = $gen->create_module('epsynthesis', ['course' => $course->id, 'name' => 'Suivi de l\'enseignement personnalisé']);
 epsynthesis_set_links($synthesis->id, array_map(fn($s) => (int) $s['cmid'], $sites));
 $roles = $DB->get_records_menu('role', null, '', 'shortname, id');

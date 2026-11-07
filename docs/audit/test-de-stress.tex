@@ -194,6 +194,11 @@ OPcache sans vérification des fichiers & 60,7 & 59,2 & 62,0 & $\approx$ +2~\% \
   \item \textbf{OPcache sans vérification des fichiers} : gain faible, dans le bruit de mesure.
   \item Avec APCu ou sans vérification des fichiers, il faut redémarrer PHP-FPM après chaque mise
     à jour du code ou mise à niveau faite en ligne de commande.
+  \item \emph{Ajout ultérieur.} Le test des interactions à 1\,000 étudiants a montré qu'avec
+    APCu, juste après un redémarrage de PHP-FPM ou une purge des caches, des connexions
+    simultanées échouent sur le verrou du cache des activités des cours (\code{core/coursemodinfo}),
+    qu'APCu ne sait pas tenir : ce cache doit rester sur le magasin fichier
+    (rapport \emph{Test des interactions à 1\,000 étudiants}).
 \end{itemize}
 
 \subsection{Résultat}

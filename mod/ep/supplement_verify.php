@@ -45,8 +45,8 @@ $PAGE->set_pagelayout('standard');
 $PAGE->set_title(get_string('supplementverify', 'mod_ep'));
 $PAGE->set_heading(get_string('supplementverify', 'mod_ep'));
 
+// Le titre de la page, affiché par l'en-tête de Moodle, sert de titre : pas de second titre.
 echo $OUTPUT->header();
-echo $OUTPUT->heading(get_string('supplementverify', 'mod_ep'));
 echo html_writer::tag('p', get_string('supplementverify_help', 'mod_ep'));
 
 echo html_writer::start_tag('form', ['method' => 'get', 'action' => $PAGE->url->out(false), 'class' => 'mb-4']);

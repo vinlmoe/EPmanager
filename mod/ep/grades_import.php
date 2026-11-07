@@ -60,6 +60,8 @@ $grading = ep_activity_grading($activity);
 $graded = $grading->grading === EP_GRADING_GRADE;
 // Séparateur « libellé : valeur » de la langue courante (espace avant les deux-points en français).
 $labelsep = get_string('labelsep', 'langconfig');
+// En texte brut pour le résultat de chaque ligne, échappé par s().
+$plainsep = html_entity_decode($labelsep, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
 // Prévisualisation en attente de confirmation : un fichier temporaire propre à l'utilisateur et à
 // l'EP plutôt que la session, qu'une longue liste alourdirait. Il ne contient que des lignes déjà
@@ -160,7 +162,7 @@ rename($tmppath, $previewpath);
 // une inscription en attente est tranchée par qui peut statuer à son étape ; une inscription déjà
 // tranchée n'est reprise que par une correction de note de la DEVE ; tout le reste est ignoré.
 $types = ep_get_types($ep->id);
-$outcome = function (stdClass $credit, stdClass $row) use ($rights, $graded, $grading, $types, $labelsep) {
+$outcome = function (stdClass $credit, stdClass $row) use ($rights, $graded, $grading, $types, $plainsep) {
     $status = (int) $credit->status;
     $skipped = get_string('skipped');
     if ($status === EP_STATUS_VALIDATED || $status === EP_STATUS_REJECTED) {
@@ -171,7 +173,7 @@ $outcome = function (stdClass $credit, stdClass $row) use ($rights, $graded, $gr
             return get_string('nochange');
         }
         $passed = $row->grade >= $grading->gradepass;
-        return get_string('decision_corrected', 'mod_ep') . $labelsep
+        return get_string('decision_corrected', 'mod_ep') . $plainsep
             . get_string($passed ? 'decisionvalidate' : 'decisionreject', 'mod_ep');
     }
     if ($status !== EP_STATUS_PENDING) {
