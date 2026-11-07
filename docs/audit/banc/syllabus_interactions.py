@@ -9,7 +9,8 @@ Usage : python3 syllabus_interactions.py site-x.json syllabus.json > syllabus-re
    chaque module dans ses réglages.
 2. Responsables (12 modules en parallèle) : fiche rédigée et soumise, deux questions posées.
 3. DEVE : relecture, onze fiches publiées, une renvoyée ; le responsable la corrige, elle est
-   publiée.
+   publiée. Chaque responsable lie son module à des compétences du référentiel, avec un niveau ;
+   la DEVE consulte la matrice compétences × cours et l'exporte.
 4. DEVE : même fenêtre d'évaluation pour les 12 modules, en lot ; tâche d'ouverture (questions
    figées, étudiants prévenus).
 5. 200 étudiants (40 en parallèle) : « Mes modules », puis évaluation de chaque module (neuf sur
@@ -271,6 +272,46 @@ deve.post(f'/mod/syllabus/view.php?id={returned["cmid"]}&show=working', {'sesske
           'reviewcomment': ''})
 expect('fiches_publiees', sql(f"select count(*) from mdl_syllabus_version where syllabusid in ({idlist}) "
                               "and status='published'") == '12')
+# 3 bis. Compétences : chaque responsable lie son module à 3 à 6 compétences du référentiel, avec
+# un niveau, par la page « Compétences » du module.
+FRAMEWORK, LEAVES = SETUP['frameworkid'], SETUP['competencies']
+expected_links = {}
+
+
+def leader_links(k_module):
+    k, module = k_module
+    u = Web(module['leaders'][0])
+    url = f'/mod/syllabus/competencies.php?id={module["cmid"]}&frameworkid={FRAMEWORK}'
+    page = u.get(url).text
+    rng = random.Random(k)
+    chosen = rng.sample(LEAVES[:19], rng.randint(3, 6))
+    levels = {c: rng.randint(1, 3) for c in chosen}
+    data = [('sesskey', u.sesskey), ('save', 1)] + [(f'levels[{c}]', levels.get(c, 0)) for c in map(int, re.findall(
+        r'name="levels\[(\d+)\]"', page))]
+    r = u.post(url, data)
+    if 'ajoutée' not in r.text:
+        anomaly(f'{module["leaders"][0]}: compétences non confirmées')
+    with lock:
+        expected_links[module['id']] = levels
+
+
+phase('3 bis. responsables : compétences des modules', leader_links, list(enumerate(MODULES)))
+links = sql(f"select count(*) from mdl_competency_modulecomp mc join mdl_course_modules cm on cm.id = mc.cmid "
+            f"where cm.instance in ({idlist}) and cm.module = (select id from mdl_modules where name='syllabus')")
+expect('competences_liees_aux_modules', int(links) == sum(len(v) for v in expected_links.values()), links)
+levels_ok = all(sql(f"select string_agg(competencyid || ':' || level, ',' order by competencyid) from mdl_syllabus_competency "
+                    f"where syllabusid={sid}") == ','.join(f'{c}:{l}' for c, l in sorted(v.items()))
+                for sid, v in expected_links.items())
+expect('niveaux_enregistres', levels_ok)
+r = deve.get(f'/mod/syllabusstaff/competencies.php?id={STAFF}&frameworkid={FRAMEWORK}')
+cells = len(re.findall(r'<td class="cell[^"]*"[^>]*>(I|A|M|•)</td>', r.text))
+expect('matrice_des_competences', cells == int(links) + 1, f'{cells} cellules')
+expect('competence_non_couverte_signalee', 'table-warning' in r.text)
+csv = deve.get(f'/mod/syllabusstaff/competencies.php?id={STAFF}&frameworkid={FRAMEWORK}&download=csv')
+expect('export_csv_des_competences', csv.text.count('\n') >= 26, f'{csv.text.count(chr(10))} lignes')
+fiche = Web(SETUP['students'][0]).get(f'/mod/syllabus/view.php?id={MODULES[0]["cmid"]}')
+expect('competences_sur_la_fiche', 'Compétences visées' in fiche.text)
+
 # 4. Fenêtre en lot, tâche d'ouverture.
 now = int(time.time())
 deve.post(f'/mod/syllabusstaff/all.php?id={STAFF}', [('sesskey', deve.sesskey), ('setwindow', 1),

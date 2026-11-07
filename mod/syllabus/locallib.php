@@ -1525,3 +1525,263 @@ function syllabus_common_means(array $syllabusids): array {
     $rs->close();
     return $means;
 }
+
+// Compétences. Le référentiel est celui de Moodle (core_competency) ; les liens d'un cours et
+// d'un module aux compétences sont ceux de Moodle (competency_coursecomp, competency_modulecomp),
+// écrits par son API. Ce module n'ajoute que le niveau de contribution (syllabus_competency).
+
+/** Compétence introduite par le module. */
+define('SYLLABUS_LEVEL_INTRODUCED', 1);
+/** Compétence approfondie. */
+define('SYLLABUS_LEVEL_DEVELOPED', 2);
+/** Compétence maîtrisée à l'issue du module. */
+define('SYLLABUS_LEVEL_MASTERED', 3);
+
+/**
+ * Les compétences sont-elles activées sur le site ?
+ *
+ * @return bool
+ */
+function syllabus_competencies_enabled(): bool {
+    return \core_competency\api::is_enabled();
+}
+
+/**
+ * Niveaux de contribution.
+ *
+ * @param bool $withnone Avec « non visée » (0).
+ * @return array niveau => libellé
+ */
+function syllabus_competency_levels(bool $withnone = false): array {
+    $levels = $withnone ? [0 => get_string('level_0', 'mod_syllabus')] : [];
+    foreach ([SYLLABUS_LEVEL_INTRODUCED, SYLLABUS_LEVEL_DEVELOPED, SYLLABUS_LEVEL_MASTERED] as $level) {
+        $levels[$level] = get_string('level_' . $level, 'mod_syllabus');
+    }
+    return $levels;
+}
+
+/**
+ * Référentiels visibles.
+ *
+ * @return array id => stdClass
+ */
+function syllabus_get_frameworks(): array {
+    global $DB;
+    return $DB->get_records('competency_framework', ['visible' => 1], 'shortname ASC', 'id, shortname, idnumber, description');
+}
+
+/**
+ * Compétences d'un référentiel, dans l'ordre de l'arbre, avec leur profondeur.
+ *
+ * @param int $frameworkid
+ * @return array id => stdClass {id, shortname, idnumber, parentid, depth}
+ */
+function syllabus_get_framework_tree(int $frameworkid): array {
+    global $DB;
+
+    $all = $DB->get_records(
+        'competency',
+        ['competencyframeworkid' => $frameworkid],
+        'sortorder ASC, id ASC',
+        'id, shortname, idnumber, parentid, sortorder'
+    );
+    $children = [];
+    foreach ($all as $competency) {
+        $children[(int) $competency->parentid][] = $competency;
+    }
+    $tree = [];
+    $walk = function (int $parentid, int $depth) use (&$walk, &$tree, $children) {
+        foreach ($children[$parentid] ?? [] as $competency) {
+            $competency->depth = $depth;
+            $competency->isleaf = empty($children[(int) $competency->id]);
+            $tree[(int) $competency->id] = $competency;
+            $walk((int) $competency->id, $depth + 1);
+        }
+    };
+    $walk(0, 0);
+    return $tree;
+}
+
+/**
+ * Compétences liées à un module (lien de Moodle sur l'activité), avec leur niveau et leur
+ * référentiel.
+ *
+ * @param stdClass $syllabus
+ * @param int $cmid
+ * @return array competencyid => stdClass {id, shortname, idnumber, frameworkid, framework, level}
+ */
+function syllabus_get_module_competencies(stdClass $syllabus, int $cmid): array {
+    global $DB;
+    return $DB->get_records_sql(
+        "SELECT c.id, c.shortname, c.idnumber, c.competencyframeworkid AS frameworkid, f.shortname AS framework,
+                COALESCE(sc.level, 0) AS level
+           FROM {competency_modulecomp} mc
+           JOIN {competency} c ON c.id = mc.competencyid
+           JOIN {competency_framework} f ON f.id = c.competencyframeworkid
+      LEFT JOIN {syllabus_competency} sc ON sc.syllabusid = :syllabusid AND sc.competencyid = c.id
+          WHERE mc.cmid = :cmid
+       ORDER BY f.shortname, c.path, c.sortorder",
+        ['syllabusid' => $syllabus->id, 'cmid' => $cmid]
+    );
+}
+
+/**
+ * Compétences liées au cours (lien de Moodle sur le cours).
+ *
+ * @param int $courseid
+ * @return array competencyid => stdClass {id, shortname, idnumber, frameworkid, framework}
+ */
+function syllabus_get_course_competencies(int $courseid): array {
+    global $DB;
+    return $DB->get_records_sql(
+        "SELECT c.id, c.shortname, c.idnumber, c.competencyframeworkid AS frameworkid, f.shortname AS framework
+           FROM {competency_coursecomp} cc
+           JOIN {competency} c ON c.id = cc.competencyid
+           JOIN {competency_framework} f ON f.id = c.competencyframeworkid
+          WHERE cc.courseid = :courseid
+       ORDER BY f.shortname, c.path, c.sortorder",
+        ['courseid' => $courseid]
+    );
+}
+
+/**
+ * L'utilisateur peut-il lier des compétences à ce module ? Il faut rédiger le module et pouvoir
+ * gérer les compétences du cours (capacité de Moodle, donnée aux enseignants éditeurs).
+ *
+ * @param stdClass $rights Voir syllabus_get_rights().
+ * @param int $courseid
+ * @return bool
+ */
+function syllabus_can_link_competencies(stdClass $rights, int $courseid): bool {
+    return ($rights->canedit || $rights->canmanage) && syllabus_competencies_enabled()
+        && has_capability('moodle/competency:coursecompetencymanage', context_course::instance($courseid));
+}
+
+/**
+ * Lie le module aux compétences d'un référentiel, avec leur niveau : une compétence visée est
+ * liée au cours (si elle ne l'est pas) puis à l'activité, par l'API de Moodle ; une compétence
+ * qui ne l'est plus est retirée de l'activité (le cours la garde : il peut la viser par
+ * ailleurs). Seules les compétences du référentiel donné sont touchées.
+ *
+ * @param stdClass $syllabus
+ * @param stdClass $cm
+ * @param int $frameworkid
+ * @param array $levels competencyid => niveau (0 = non visée)
+ * @return stdClass {added, removed, updated}
+ */
+function syllabus_set_module_competencies(stdClass $syllabus, $cm, int $frameworkid, array $levels): stdClass {
+    global $DB;
+
+    $result = (object) ['added' => 0, 'removed' => 0, 'updated' => 0];
+    $tree = syllabus_get_framework_tree($frameworkid);
+    $current = array_filter(
+        syllabus_get_module_competencies($syllabus, (int) $cm->id),
+        fn($c) => (int) $c->frameworkid === $frameworkid
+    );
+    $course = array_keys(syllabus_get_course_competencies((int) $cm->course));
+    $valid = array_keys(syllabus_competency_levels());
+    $now = time();
+
+    foreach ($tree as $competencyid => $competency) {
+        $level = (int) ($levels[$competencyid] ?? 0);
+        $level = in_array($level, $valid, true) ? $level : 0;
+        $linked = isset($current[$competencyid]);
+        if (!$level) {
+            if ($linked) {
+                \core_competency\api::remove_competency_from_course_module($cm->id, $competencyid);
+                $DB->delete_records('syllabus_competency', ['syllabusid' => $syllabus->id, 'competencyid' => $competencyid]);
+                $result->removed++;
+            }
+            continue;
+        }
+        if (!$linked) {
+            if (!in_array((int) $competencyid, array_map('intval', $course), true)) {
+                \core_competency\api::add_competency_to_course($cm->course, $competencyid);
+            }
+            \core_competency\api::add_competency_to_course_module($cm->id, $competencyid);
+            $result->added++;
+        } else if ((int) $current[$competencyid]->level !== $level) {
+            $result->updated++;
+        } else {
+            continue;
+        }
+        $existing = $DB->get_record('syllabus_competency', ['syllabusid' => $syllabus->id, 'competencyid' => $competencyid]);
+        if ($existing) {
+            $DB->update_record('syllabus_competency', (object) ['id' => $existing->id, 'level' => $level, 'timemodified' => $now]);
+        } else {
+            $DB->insert_record('syllabus_competency', (object) ['syllabusid' => $syllabus->id, 'competencyid' => $competencyid,
+                'level' => $level, 'timecreated' => $now, 'timemodified' => $now]);
+        }
+    }
+    return $result;
+}
+
+/**
+ * Matrice d'un référentiel : pour chaque cours, les compétences liées à son module (avec leur
+ * niveau) ou seulement au cours.
+ *
+ * @param int $frameworkid
+ * @param int[] $courseids
+ * @return array courseid => competencyid => niveau (1 à 3), 0 (lié au module sans niveau) ou -1 (lié au
+ *     cours seulement)
+ */
+function syllabus_competency_matrix(int $frameworkid, array $courseids): array {
+    global $DB;
+
+    $matrix = array_fill_keys($courseids, []);
+    if (!$courseids) {
+        return $matrix;
+    }
+    [$insql, $params] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED);
+    $params['fw'] = $params['fw2'] = $frameworkid;
+    $rs = $DB->get_recordset_sql(
+        "SELECT cc.id, cc.courseid, cc.competencyid
+           FROM {competency_coursecomp} cc
+           JOIN {competency} c ON c.id = cc.competencyid AND c.competencyframeworkid = :fw
+          WHERE cc.courseid $insql",
+        $params
+    );
+    foreach ($rs as $row) {
+        $matrix[(int) $row->courseid][(int) $row->competencyid] = -1;
+    }
+    $rs->close();
+    $rs = $DB->get_recordset_sql(
+        "SELECT mc.id, cm.course, mc.competencyid, COALESCE(sc.level, 0) AS level
+           FROM {competency_modulecomp} mc
+           JOIN {course_modules} cm ON cm.id = mc.cmid
+           JOIN {modules} m ON m.id = cm.module AND m.name = 'syllabus'
+           JOIN {competency} c ON c.id = mc.competencyid AND c.competencyframeworkid = :fw2
+      LEFT JOIN {syllabus_competency} sc ON sc.syllabusid = cm.instance AND sc.competencyid = mc.competencyid
+          WHERE cm.course $insql",
+        $params
+    );
+    foreach ($rs as $row) {
+        $course = (int) $row->course;
+        $matrix[$course][(int) $row->competencyid] = max((int) $row->level, $matrix[$course][(int) $row->competencyid] ?? -1);
+    }
+    $rs->close();
+    return $matrix;
+}
+
+/**
+ * Liste des compétences visées par un module, groupées par référentiel, avec leur niveau.
+ *
+ * @param array $competencies Voir syllabus_get_module_competencies().
+ * @return string HTML
+ */
+function syllabus_render_competencies(array $competencies): string {
+    if (!$competencies) {
+        return html_writer::tag('p', get_string('nocompetencies', 'mod_syllabus'), ['class' => 'text-muted']);
+    }
+    $levels = syllabus_competency_levels();
+    $table = new html_table();
+    $table->attributes = ['class' => 'generaltable syllabus-competencies', 'border' => '1', 'cellpadding' => '4'];
+    $table->head = [get_string('framework', 'mod_syllabus'), get_string('competency', 'mod_syllabus'),
+        get_string('level', 'mod_syllabus')];
+    foreach ($competencies as $competency) {
+        $table->data[] = [format_string($competency->framework), format_string($competency->shortname)
+            . ($competency->idnumber !== '' ? ' (' . s($competency->idnumber) . ')' : ''),
+            $levels[(int) $competency->level] ?? get_string('level_unspecified', 'mod_syllabus')];
+    }
+    return html_writer::table($table);
+}

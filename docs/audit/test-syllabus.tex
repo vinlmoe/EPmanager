@@ -10,7 +10,7 @@
 \newcommand{\code}[1]{\texttt{\detokenize{#1}}}
 \title{Test des modules syllabus et de leur évaluation}
 \author{Sébastien Lefebvre}
-\date{Novembre 2026 -- version 1.0.0 des trois modules}
+\date{Novembre 2026 -- version 1.1.0 des modules}
 
 \begin{document}
 \maketitle
@@ -27,7 +27,9 @@ habituel (4 c\oe urs, nginx, PHP-FPM~8.3, PostgreSQL~16, Moodle~4.5). Chaque pag
 \paragraph{Données} (\code{syllabus_setup.php}) : une catégorie de 12 cours de module, chacun
 avec son activité « Syllabus du module » et deux responsables (24 enseignants) ; 200 étudiants
 inscrits aux 12 cours ; la DEVE gestionnaire de chaque cours ; un cours d'équipe avec le suivi
-des modules ; « Mes modules » dans le cours de la promotion.
+des modules ; « Mes modules » dans le cours de la promotion ; un référentiel de compétences de
+Moodle (5 domaines de 4 compétences), dont une compétence liée à un cours sans passer par son
+module.
 
 \section{Scénario et contrôles}
 
@@ -40,6 +42,10 @@ DEVE : référentiel (relecture obligatoire, seuil de 5 réponses, 2 types, 4 qu
 communes dont une pour le type « Clinique »), type de chaque module dans ses réglages & conforme \\
 12 responsables en parallèle : fiche rédigée (rubriques, 3 séances) et soumise, 2 questions & 2,5 s \\
 Fiches à relire listées ; 11 publiées, 1 renvoyée puis corrigée et publiée & conforme \\
+12 responsables : module lié à 3 à 6 compétences avec un niveau, par la page « Compétences »
+(liens de Moodle au cours et à l'activité) & 1,2 s \\
+Liens et niveaux en base, matrice compétences $\times$ cours (une case par lien, plus le lien
+au cours seul), compétence non couverte signalée, export CSV, compétences sur la fiche & conforme \\
 Fenêtre d'évaluation des 12 modules fixée en lot & conforme \\
 Tâche d'ouverture : questions figées, étudiants prévenus & 2\,400 messages, 20 s \\
 200 étudiants (40 en parallèle) : « Mes modules » (12 modules chacun), puis 9 évaluations sur 10
@@ -59,9 +65,10 @@ Anomalies dans les pages & 0 \\
 \end{tabularx}
 \end{center}
 
-Résultat : \textbf{23 contrôles sur 23}. S'y ajoutent 22 tests unitaires (droits, circuit de
+Résultat : \textbf{29 contrôles sur 29}. S'y ajoutent 27 tests unitaires (droits, circuit de
 relecture, figeage des questions, anonymat, seuil, visibilité des résultats, tâche,
-réinitialisation, sauvegarde et restauration, RGPD, synthèses) et le test de conformité RGPD
+réinitialisation, sauvegarde et restauration, RGPD, synthèses, compétences : arbre, liaison et
+retrait, droit de Moodle, matrice, restauration des niveaux) et le test de conformité RGPD
 de Moodle, réussi pour les trois modules.
 
 \section{Défaut trouvé et corrigé}
@@ -73,7 +80,7 @@ bouton de valeur 0 était coché d'office, une valeur absente étant égale à 0
 obligatoires ne jouait plus pour ces questions. Les boutons portent désormais des valeurs
 décalées d'une unité, ramenées à la réponse à l'enregistrement ; un test unitaire vérifie
 qu'aucun bouton n'est coché et que les valeurs se ramènent aux réponses. Le scénario a été
-rejoué après correction (23/23), et les réponses enregistrées gardent leurs valeurs (0 ou 1
+rejoué après correction, et les réponses enregistrées gardent leurs valeurs (0 ou 1
 pour oui/non, 0 à 2 pour un choix parmi trois).
 
 Le scénario a aussi révélé une erreur dans le banc lui-même : les scripts appelaient un

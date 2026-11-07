@@ -43,6 +43,7 @@ class restore_syllabus_activity_structure_step extends restore_activity_structur
             new restore_path_element('syllabus_version', '/activity/syllabus/versions/version'),
             new restore_path_element('syllabus_session', '/activity/syllabus/versions/version/sessions/session'),
             new restore_path_element('syllabus_question', '/activity/syllabus/questions/question'),
+            new restore_path_element('syllabus_competency', '/activity/syllabus/competencies/competency'),
         ];
         if ($this->get_setting_value('userinfo')) {
             $paths[] = new restore_path_element('syllabus_teacher', '/activity/syllabus/teachers/teacher');
@@ -117,6 +118,35 @@ class restore_syllabus_activity_structure_step extends restore_activity_structur
             $data->typeid = 0;
         }
         $this->set_mapping('syllabus_question', $oldid, $DB->insert_record('syllabus_question', $data));
+    }
+
+    /**
+     * Niveau de contribution à une compétence : la compétence est retrouvée par les identifiants
+     * de son référentiel et d'elle-même, sinon par son numéro s'il existe sur ce site ; à défaut,
+     * le niveau est abandonné.
+     *
+     * @param array $data
+     */
+    protected function process_syllabus_competency($data) {
+        global $DB;
+        $data = (object) $data;
+        $competencyid = 0;
+        if ((string) ($data->competencyidnumber ?? '') !== '' && (string) ($data->frameworkidnumber ?? '') !== '') {
+            $competencyid = (int) $DB->get_field_sql('SELECT c.id FROM {competency} c
+                    JOIN {competency_framework} f ON f.id = c.competencyframeworkid
+                   WHERE c.idnumber = ? AND f.idnumber = ?', [$data->competencyidnumber, $data->frameworkidnumber]);
+        }
+        if (!$competencyid && $DB->record_exists('competency', ['id' => $data->competencyid])) {
+            $competencyid = (int) $data->competencyid;
+        }
+        if (!$competencyid) {
+            return;
+        }
+        $syllabusid = $this->get_new_parentid('syllabus');
+        if (!$DB->record_exists('syllabus_competency', ['syllabusid' => $syllabusid, 'competencyid' => $competencyid])) {
+            $DB->insert_record('syllabus_competency', (object) ['syllabusid' => $syllabusid, 'competencyid' => $competencyid,
+                'level' => (int) $data->level, 'timecreated' => $data->timecreated, 'timemodified' => $data->timemodified]);
+        }
     }
 
     /**

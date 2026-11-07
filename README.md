@@ -19,8 +19,8 @@ Le dépôt porte aussi trois modules pour les **modules d'enseignement** du curs
 
 | Module | Pour qui | Rôle | Documentation |
 | --- | --- | --- | --- |
-| [`mod/syllabus`](mod/syllabus) | Responsables, DEVE et étudiants, dans le cours de chaque module | Fiche du module au modèle ECTS (versions, relecture par la DEVE, PDF) ; évaluation du module par les étudiants à partir d'une date, sur les questions de la DEVE et de l'enseignant, anonyme | [`mod/syllabus/INSTALL.md`](mod/syllabus/INSTALL.md) |
-| [`mod/syllabusstaff`](mod/syllabusstaff) | Enseignants et DEVE, dans un cours d'équipe | Modules dont l'enseignant est responsable ; pour la DEVE, tous les modules, relectures, fenêtres d'évaluation en lot, résultats comparés, référentiel commun (types, questions communes) | idem |
+| [`mod/syllabus`](mod/syllabus) | Responsables, DEVE et étudiants, dans le cours de chaque module | Fiche du module au modèle ECTS (versions, relecture par la DEVE, PDF) ; compétences visées (référentiel de compétences de Moodle, avec un niveau) ; évaluation du module par les étudiants à partir d'une date, sur les questions de la DEVE et de l'enseignant, anonyme | [`mod/syllabus/INSTALL.md`](mod/syllabus/INSTALL.md) |
+| [`mod/syllabusstaff`](mod/syllabusstaff) | Enseignants et DEVE, dans un cours d'équipe | Modules dont l'enseignant est responsable ; matrice compétences × cours ; pour la DEVE, tous les modules, relectures, fenêtres d'évaluation en lot, résultats comparés, référentiel commun (types, questions communes) | idem |
 | [`mod/syllabusstudent`](mod/syllabusstudent) | Étudiants, dans le cours de la promotion | Modules des cours où l'étudiant est inscrit, fiches, évaluations à faire | idem |
 
 ## Ce que le système gère
@@ -75,7 +75,7 @@ Voir [`mod/ep/INSTALL.md`](mod/ep/INSTALL.md) puis
 | `docs/formats-import.pdf` | Formats des imports et des exports |
 | `docs/audit/test-de-charge.pdf`, `docs/audit/test-de-concurrence.pdf` | Mesures sur une promotion de 2 000 étudiants |
 | `docs/audit/test-des-interactions.pdf` | Une promotion de 1 000 étudiants de l'inscription au supplément émis, par l'interface web, avec contrôles en base |
-| `docs/audit/test-syllabus.pdf` | Modules syllabus de bout en bout : 12 modules, 200 étudiants, 2 172 évaluations |
+| `docs/audit/test-syllabus.pdf` | Modules syllabus de bout en bout : 12 modules, compétences, 200 étudiants, plus de 2 000 évaluations |
 | `docs/audit/test-de-stress.pdf` | Montée en charge jusqu'à saturation, endurance et traitements lourds sur six promotions |
 | `docs/plan-mise-a-niveau.pdf` | Plan de la mise à niveau 1.0 |
 | `CHANGELOG.md` | Historique des versions |

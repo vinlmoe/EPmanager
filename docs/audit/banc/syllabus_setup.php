@@ -23,6 +23,9 @@ if (($argv[2] ?? '') === 'reset') {
     foreach (get_coursemodules_in_course('syllabusstudent', $site['courseid']) as $cm) {
         course_delete_module($cm->id);
     }
+    if ($framework = $DB->get_record('competency_framework', ['idnumber' => 'REFVET-' . $tag])) {
+        \core_competency\api::delete_framework($framework->id);
+    }
     $DB->delete_records('syllabus_question', ['syllabusid' => 0]);
     $DB->delete_records('syllabus_type');
     echo "ok\n";
@@ -56,6 +59,23 @@ foreach ($names as $k => $name) {
     $out['modules'][] = ['cmid' => (int) $module->cmid, 'id' => (int) $module->id, 'course' => (int) $course->id,
         'name' => $name, 'leaders' => array_map(fn($u) => $u->username, $leaders)];
 }
+// Référentiel de compétences : 5 domaines de 4 compétences. Le cours de « Santé publique » vise
+// en plus une compétence au niveau du cours seulement (lien de Moodle, sans module).
+$cgen = $gen->get_plugin_generator('core_competency');
+$framework = $cgen->create_framework(['shortname' => 'Compétences du vétérinaire', 'idnumber' => 'REFVET-' . $site['tag']]);
+$domains = ['Démarche clinique', 'Santé publique vétérinaire', 'Thérapeutique', 'Communication', 'Professionnalisme'];
+$leaves = [];
+foreach ($domains as $d => $domainname) {
+    $domain = $cgen->create_competency(['competencyframeworkid' => $framework->get('id'), 'shortname' => $domainname,
+        'idnumber' => 'D' . ($d + 1)]);
+    for ($c = 1; $c <= 4; $c++) {
+        $leaves[] = $cgen->create_competency(['competencyframeworkid' => $framework->get('id'), 'parentid' => $domain->get('id'),
+            'shortname' => $domainname . ' : compétence ' . $c, 'idnumber' => 'D' . ($d + 1) . '.' . $c])->get('id');
+    }
+}
+\core_competency\api::add_competency_to_course($out['modules'][10]['course'], $leaves[19]);
+$out['frameworkid'] = (int) $framework->get('id');
+$out['competencies'] = $leaves;
 $team = $gen->create_course(['fullname' => 'Équipe pédagogique (banc ' . $site['tag'] . ')', 'shortname' => 'EQUIPE-SYL-'
     . $site['tag']]);
 for ($i = 1; $i <= 24; $i++) {

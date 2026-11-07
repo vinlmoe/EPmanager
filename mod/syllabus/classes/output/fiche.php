@@ -39,7 +39,29 @@ class fiche {
      * @return string HTML
      */
     public static function render(stdClass $syllabus, ?stdClass $version): string {
-        return self::characteristics($syllabus) . self::version($syllabus, $version);
+        return self::characteristics($syllabus) . self::version($syllabus, $version) . self::competencies($syllabus);
+    }
+
+    /**
+     * Compétences visées par le module (référentiel de compétences de Moodle), s'il en a.
+     *
+     * @param stdClass $syllabus
+     * @return string HTML
+     */
+    public static function competencies(stdClass $syllabus): string {
+        global $CFG;
+        require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
+
+        if (!syllabus_competencies_enabled()) {
+            return '';
+        }
+        $cm = get_coursemodule_from_instance('syllabus', $syllabus->id, $syllabus->course, false, IGNORE_MISSING);
+        $competencies = $cm ? syllabus_get_module_competencies($syllabus, (int) $cm->id) : [];
+        if (!$competencies) {
+            return '';
+        }
+        return html_writer::tag('h4', get_string('targetedcompetencies', 'mod_syllabus', count($competencies)))
+            . syllabus_render_competencies($competencies);
     }
 
     /**

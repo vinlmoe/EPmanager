@@ -61,7 +61,7 @@ function syllabusstaff_page_init($cm, string $path, array $params = []): array {
  * @return string HTML
  */
 function syllabusstaff_navlinks($cm, string $current, bool $canmanageall): string {
-    $pages = ['view' => 'mymodules'];
+    $pages = ['view' => 'mymodules', 'competencies' => 'competencymatrix'];
     if ($canmanageall) {
         $pages += ['all' => 'allmodules', 'review' => 'toreview', 'results' => 'resultsoverview',
             'referential' => 'referential'];

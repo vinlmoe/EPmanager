@@ -3,6 +3,22 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## Modules syllabus 1.1.0 — mod_syllabus, mod_syllabusstaff 2026112100 (21 novembre 2026)
+
+Référentiel de compétences.
+
+- Le référentiel est celui de Moodle (core_competency : référentiels en arbre, import CSV) ;
+  modules et cours y sont liés par l'API de Moodle (compétence liée au cours, puis à
+  l'activité), et servent donc aussi aux plans de formation.
+- **mod_syllabus** : page « Compétences » du module, liaison référentiel par référentiel avec un
+  niveau de contribution (introduite, approfondie, maîtrisée ; table `syllabus_competency`) ;
+  compétences visées sur la fiche et dans son PDF ; sauvegarde et restauration des niveaux
+  (compétence retrouvée par les identifiants du référentiel et de la compétence).
+- **mod_syllabusstaff** : matrice compétences × cours du périmètre (niveau du module, ou lien
+  au cours seul), couverture du référentiel, compétences non couvertes signalées, filtre par
+  année d'étude, export CSV.
+- 5 tests unitaires ; scénario de bout en bout étendu (29/29).
+
 ## Modules syllabus 1.0.0 — mod_syllabus, mod_syllabusstaff, mod_syllabusstudent 2026112000 (20 novembre 2026)
 
 Trois nouveaux modules pour les modules d'enseignement du cursus

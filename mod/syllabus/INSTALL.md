@@ -36,6 +36,17 @@ l'activité « Suivi des modules », page **Référentiel commun**, par la DEVE
    responsable, d'autres enseignants du cours peuvent l'être.
 4. Dans chaque cours de promotion, ajouter « Mes modules (étudiants) ».
 
+## Compétences
+
+Le référentiel est celui de Moodle (**Administration du site > Compétences**, compétences
+activées dans les fonctions avancées, ce qui est le réglage par défaut) : un ou plusieurs
+référentiels en arbre, créés à la main ou importés en CSV. Chaque module y est lié depuis sa
+page **Compétences**, avec un niveau (introduite, approfondie, maîtrisée) ; les liens sont ceux
+de Moodle (compétence liée au cours, puis à l'activité), le niveau est propre au module. Lier
+demande `moodle/competency:coursecompetencymanage` dans le cours (enseignant éditeur). Le
+suivi des modules donne la matrice compétences × cours de son périmètre (couverture, export
+CSV).
+
 ## Tâche
 
 | Tâche | Quand | Rôle |

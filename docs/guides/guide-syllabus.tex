@@ -4,9 +4,9 @@
 \documentclass[11pt,a4paper]{article}
 
 \newcommand{\titreguide}{Syllabus et évaluation des modules}
-\newcommand{\versionguide}{1.0}
+\newcommand{\versionguide}{1.1}
 \newcommand{\dateguide}{novembre 2026}
-\newcommand{\versionep}{1.0.0}
+\newcommand{\versionep}{1.1.0}
 \newcommand{\versionsynthese}{1.0.0}
 
 \usepackage{guide-commun}
@@ -49,6 +49,8 @@
 \midrule
 1.0 & novembre 2026 & Première version. Captures prises sur le banc : 12 modules, 24
 enseignants, 200 étudiants, après rédaction, relecture et évaluation de tous les modules. \\
+1.1 & novembre 2026 & Référentiel de compétences : modules et cours liés aux compétences, avec
+un niveau ; matrice compétences $\times$ cours. \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -75,6 +77,21 @@ enseignants, 200 étudiants, après rédaction, relecture et évaluation de tous
 
 Les deux activités de suivi se limitent, au choix, à une catégorie de cours (sous-catégories
 comprises) ou couvrent tout le site.
+
+\section{Compétences}\label{sec:competences}
+
+Le \textbf{référentiel de compétences} est celui de Moodle (\chemin{Administration du site >
+Compétences > Référentiels de compétences}) : un ou plusieurs référentiels, chacun en arbre
+(domaines, puis compétences), créés à la main ou importés d'un fichier CSV. Les modules et les
+cours s'y rattachent :
+\begin{itemize}
+  \item un \textbf{module} vise des compétences, avec un \textbf{niveau} : \statut{Introduite},
+    \statut{Approfondie} ou \statut{Maîtrisée} ;
+  \item un \textbf{cours} peut viser des compétences sans passer par un module (page
+    \og Compétences\fg{} du cours, dans Moodle).
+\end{itemize}
+Les liens sont ceux de Moodle (compétence liée au cours, puis à l'activité) : ils servent aussi
+aux plans de formation et aux preuves de Moodle. Le niveau est propre au module.
 
 \section{Qui fait quoi}
 
@@ -156,7 +173,7 @@ venir, close).
 
 Le nom d'un module ouvre sa \textbf{fiche} : caractéristiques, objectifs, acquis
 d'apprentissage, contenu, méthodes, modalités d'évaluation, programme des séances et volume
-horaire. Elle se télécharge en PDF.
+horaire, et les \textbf{compétences visées} avec leur niveau. Elle se télécharge en PDF.
 
 \capture{sy-etu-fiche}{Fiche d'un module, avec l'invitation à l'évaluer.}
 
@@ -219,6 +236,23 @@ dans les \chemin{Paramètres} de l'activité. Les \chemin{Responsables} se chois
 enseignants du cours ; celui qui ajoute l'activité en devient responsable.
 
 \capture[0.85\linewidth]{sy-ens-responsables}{Responsables du module.}
+
+\section{Lier le module aux compétences}
+
+\begin{etapes}
+  \item \chemin{Compétences} (onglets du module, ou menu \og Plus\fg{}) : la page rappelle les
+    compétences déjà visées.
+  \item Choisissez le \textbf{référentiel} : ses compétences s'affichent en arbre.
+  \item Pour chaque compétence que le module vise, choisissez le niveau ; laissez
+    \og Non visée\fg{} pour les autres.
+  \item \bouton{Enregistrer les modifications}.
+\end{etapes}
+
+\capture{sy-ens-competences}{Compétences visées par le module et liaison au référentiel.}
+
+Une compétence retirée du module reste liée au cours : celui-ci peut la viser par ailleurs.
+Lier des compétences demande, en plus d'être responsable, le droit de gérer les compétences du
+cours (enseignant éditeur).
 
 \section{Préparer l'évaluation}
 
@@ -293,6 +327,20 @@ avec le formulaire de décision : \bouton{Publier}, \bouton{Renvoyer aux respons
 
 \capture{sy-deve-relecture}{Relecture d'une fiche soumise.}
 
+\section{Matrice des compétences}
+
+\chemin{Compétences} (suivi des modules) croise un référentiel avec les cours du périmètre :
+une ligne par compétence, une colonne par cours. Une case porte le niveau donné par le module
+(I, A, M), \og $\checkmark$\fg{} pour un lien au module sans niveau, \og \textbullet\fg{} pour un lien au cours
+seulement. La dernière colonne compte les cours qui visent la compétence ; une compétence
+qu'aucun cours ne vise est surlignée. Filtre par année d'étude, export CSV. Les enseignants y
+ont accès aussi.
+
+\capture{sy-deve-competences}{Matrice compétences $\times$ cours, avec la couverture du référentiel.}
+
+L'en-tête d'une colonne ouvre la page \og Compétences\fg{} du module (ou, pour un cours sans
+module, la page des compétences du cours de Moodle).
+
 \section{Résultats comparés}
 
 \chemin{Résultats des évaluations} donne, module par module, le nombre de réponses et la
@@ -330,13 +378,20 @@ résultats \\
 \texttt{mod/syllabusstaff:view} & Enseignants : leurs modules \\
 \texttt{mod/syllabusstaff:manageall} & Gestionnaire (DEVE) : tous les modules, référentiel \\
 \texttt{mod/syllabusstudent:view} & Étudiants : leurs modules \\
+\texttt{moodle/competency:coursecompetencymanage} & Enseignants éditeurs (Moodle) : lier des
+compétences au cours et au module \\
 \bottomrule
 \end{tabularx}
 \end{center}
 
+Les compétences doivent être activées sur le site (\chemin{Administration du site >
+Fonctions avancées}, activé par défaut) ; les référentiels se gèrent dans \chemin{Administration
+du site > Compétences}, avec \texttt{moodle/competency:competencymanage}.
+
 La sauvegarde Moodle du cours comprend la fiche, ses versions et les questions du module ;
 avec les données des utilisateurs, les responsables et l'évaluation (réponses anonymes et
-participations). La réinitialisation du cours peut effacer les réponses : l'évaluation est
+participations), et les liens aux compétences avec leur niveau (retrouvés par les identifiants
+du référentiel et de la compétence sur un autre site). La réinitialisation du cours peut effacer les réponses : l'évaluation est
 alors de nouveau modifiable. Le référentiel commun n'appartient à aucun cours : il n'est pas
 sauvegardé avec eux.
 
@@ -358,6 +413,11 @@ sauvegardé avec eux.
   \item[La DEVE a modifié une question commune, mais l'ancienne est posée.] L'évaluation de ce
     module était déjà ouverte : elle garde ses questions. La nouvelle vaudra pour les
     évaluations ouvertes ensuite.
+  \item[La page « Compétences » du module ne propose pas de lier.] Il faut le droit de gérer les
+    compétences du cours (enseignant éditeur) ; un enseignant non éditeur, même responsable,
+    voit les compétences sans pouvoir les modifier.
+  \item[Aucun référentiel n'est proposé.] Aucun référentiel visible n'existe : l'administrateur
+    ou la DEVE en crée ou en importe un dans \chemin{Administration du site > Compétences}.
   \item[Peut-on savoir qui a répondu quoi ?] Non, par aucune page ni aucun export ; seul le fait
     d'avoir répondu est noté (voir l'encadré de la section~\ref{sec:principe-evaluation}).
 \end{description}

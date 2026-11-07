@@ -146,6 +146,8 @@ if (process.env.SYLLABUS) {
     ['sy-ens-seances', m1.leaders[0], `/mod/syllabus/edit.php?id=${m1.cmid}`, '#id_sessionshdr'],
     ['sy-ens-evaluation', m1.leaders[0], `/mod/syllabus/evaluation.php?id=${m1.cmid}`],
     ['sy-ens-responsables', m1.leaders[0], `/mod/syllabus/teachers.php?id=${m1.cmid}`],
+    ['sy-ens-competences', m1.leaders[0], `/mod/syllabus/competencies.php?id=${m1.cmid}&frameworkid=${sy.frameworkid}`],
+    ['sy-deve-competences', deve, `/mod/syllabusstaff/competencies.php?id=${sy.staffcmid}&frameworkid=${sy.frameworkid}`],
     ['sy-ens-resultats', m7.leaders[0], `/mod/syllabus/results.php?id=${m7.cmid}`],
     ['sy-deve-tous', deve, `/mod/syllabusstaff/all.php?id=${sy.staffcmid}`],
     ['sy-deve-a-relire', deve, `/mod/syllabusstaff/review.php?id=${sy.staffcmid}`],

@@ -61,6 +61,9 @@ class backup_syllabus_activity_structure_step extends backup_activity_structure_
         $response = new backup_nested_element('response', ['id'], ['daysubmitted']);
         $answers = new backup_nested_element('answers');
         $answer = new backup_nested_element('answer', ['id'], ['questionid', 'value', 'textvalue']);
+        $competencies = new backup_nested_element('competencies');
+        $competency = new backup_nested_element('competency', ['id'], ['competencyid', 'level', 'competencyidnumber',
+            'frameworkidnumber', 'timecreated', 'timemodified']);
         $participants = new backup_nested_element('participants');
         $participant = new backup_nested_element('participant', ['id'], ['userid']);
 
@@ -76,6 +79,8 @@ class backup_syllabus_activity_structure_step extends backup_activity_structure_
         $responses->add_child($response);
         $response->add_child($answers);
         $answers->add_child($answer);
+        $syllabus->add_child($competencies);
+        $competencies->add_child($competency);
         $syllabus->add_child($participants);
         $participants->add_child($participant);
 
@@ -83,6 +88,14 @@ class backup_syllabus_activity_structure_step extends backup_activity_structure_
         $version->set_source_table('syllabus_version', ['syllabusid' => backup::VAR_PARENTID], 'version ASC');
         $session->set_source_table('syllabus_session', ['versionid' => backup::VAR_PARENTID], 'sortorder ASC');
         $question->set_source_table('syllabus_question', ['syllabusid' => backup::VAR_PARENTID], 'sortorder ASC');
+        // Niveaux de contribution aux compétences : avec les identifiants du référentiel et de la
+        // compétence, qui permettent de les retrouver sur un autre site.
+        $competency->set_source_sql('SELECT sc.id, sc.competencyid, sc.level, c.idnumber AS competencyidnumber,
+                                            f.idnumber AS frameworkidnumber, sc.timecreated, sc.timemodified
+                                       FROM {syllabus_competency} sc
+                                       JOIN {competency} c ON c.id = sc.competencyid
+                                       JOIN {competency_framework} f ON f.id = c.competencyframeworkid
+                                      WHERE sc.syllabusid = ?', [backup::VAR_PARENTID]);
         if ($userinfo) {
             $teacher->set_source_table('syllabus_teacher', ['syllabusid' => backup::VAR_PARENTID]);
             $response->set_source_table('syllabus_response', ['syllabusid' => backup::VAR_PARENTID]);

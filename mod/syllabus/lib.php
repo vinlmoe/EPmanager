@@ -148,7 +148,10 @@ function syllabus_delete_instance($id) {
         [$insql, $params] = $DB->get_in_or_equal($responseids);
         $DB->delete_records_select('syllabus_answer', "responseid $insql", $params);
     }
-    foreach (['syllabus_version', 'syllabus_teacher', 'syllabus_question', 'syllabus_response', 'syllabus_participant'] as $table) {
+    foreach (
+        ['syllabus_version', 'syllabus_teacher', 'syllabus_question', 'syllabus_response', 'syllabus_participant',
+            'syllabus_competency'] as $table
+    ) {
         $DB->delete_records($table, ['syllabusid' => $id]);
     }
     $DB->delete_records('syllabus', ['id' => $id]);
@@ -199,6 +202,12 @@ function syllabus_extend_settings_navigation(settings_navigation $settingsnav, n
             null,
             'syllabusevaluation'
         );
+    }
+    if (\core_competency\api::is_enabled()) {
+        $node->add(get_string('competencies', 'mod_syllabus'), new moodle_url(
+            '/mod/syllabus/competencies.php',
+            ['id' => $cm->id]
+        ), navigation_node::TYPE_SETTING, null, 'syllabuscompetencies');
     }
     if ($rights->canseeresults) {
         $node->add(
