@@ -2,3 +2,5 @@
 docs/audit/banc/site-*.json
 docs/audit/banc/*.log
 docs/audit/concurrence/logs/
+docs/audit/procedures/telechargements/
+docs/audit/procedures/etat.json
