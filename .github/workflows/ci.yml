@@ -125,7 +125,7 @@ jobs:
         id: moodle_install
         run: |
           mkdir -p ci-extra-plugins
-          cp -R mod/epsynthesis ci-extra-plugins/epsynthesis
+          for p in epsynthesis syllabus syllabusstaff syllabusstudent; do cp -R mod/$p ci-extra-plugins/$p; done
           # mod_ep dépend de mod_stage (dépôt StageCompagnon) : ses deux modules sont installés en
           # plugins supplémentaires, depuis leur branche principale.
           git clone --depth 1 https://github.com/vinlmoe/StageCompagnon.git ci-stagecompagnon
@@ -145,32 +145,36 @@ jobs:
         if: ${{ !cancelled() && steps.moodle_install.outcome == 'success' }}
         run: |
           check_status=0
-          moodle-plugin-ci phplint mod/ep || check_status=1
-          moodle-plugin-ci phplint mod/epsynthesis || check_status=1
+          for p in ep epsynthesis syllabus syllabusstaff syllabusstudent; do
+            moodle-plugin-ci phplint mod/$p || check_status=1
+          done
           exit "$check_status"
 
       - name: Plugin validation
         if: ${{ !cancelled() && steps.moodle_install.outcome == 'success' }}
         run: |
           check_status=0
-          moodle-plugin-ci validate mod/ep || check_status=1
-          moodle-plugin-ci validate mod/epsynthesis || check_status=1
+          for p in ep epsynthesis syllabus syllabusstaff syllabusstudent; do
+            moodle-plugin-ci validate mod/$p || check_status=1
+          done
           exit "$check_status"
 
       - name: Upgrade savepoints
         if: ${{ !cancelled() && steps.moodle_install.outcome == 'success' }}
         run: |
           check_status=0
-          moodle-plugin-ci savepoints mod/ep || check_status=1
-          moodle-plugin-ci savepoints mod/epsynthesis || check_status=1
+          for p in ep epsynthesis syllabus syllabusstaff syllabusstudent; do
+            moodle-plugin-ci savepoints mod/$p || check_status=1
+          done
           exit "$check_status"
 
       - name: PHPDoc
         if: ${{ !cancelled() && steps.moodle_install.outcome == 'success' }}
         run: |
           check_status=0
-          moodle-plugin-ci phpdoc --max-warnings=0 mod/ep || check_status=1
-          moodle-plugin-ci phpdoc --max-warnings=0 mod/epsynthesis || check_status=1
+          for p in ep epsynthesis syllabus syllabusstaff syllabusstudent; do
+            moodle-plugin-ci phpdoc --max-warnings=0 mod/$p || check_status=1
+          done
           exit "$check_status"
 
       - name: Mustache templates
@@ -193,10 +197,10 @@ jobs:
           fi
           # moodle-plugin-ci écrit le rapport Clover dans ./coverage.xml : il est renommé après
           # chaque module pour que le second ne recouvre pas le premier.
-          moodle-plugin-ci phpunit $coverage mod/ep || check_status=1
-          [ -f coverage.xml ] && mv coverage.xml coverage-mod_ep.xml
-          moodle-plugin-ci phpunit $coverage mod/epsynthesis || check_status=1
-          [ -f coverage.xml ] && mv coverage.xml coverage-mod_epsynthesis.xml
+          for p in ep epsynthesis syllabus syllabusstaff syllabusstudent; do
+            moodle-plugin-ci phpunit $coverage mod/$p || check_status=1
+            [ -f coverage.xml ] && mv coverage.xml coverage-mod_$p.xml
+          done
           exit "$check_status"
 
       - name: Behat features

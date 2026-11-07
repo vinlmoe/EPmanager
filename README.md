@@ -13,6 +13,16 @@ StageCompagnon :
 | [`mod/ep`](mod/ep) | DEVE, enseignants et étudiants, dans le cours de la promotion | Types d'EP et circuits de validation, catalogue et syllabus, inscriptions et déclarations, notes, décompte des ECTS, validation des années, supplément au diplôme | [`mod/ep/INSTALL.md`](mod/ep/INSTALL.md) |
 | [`mod/epsynthesis`](mod/epsynthesis) | Enseignants, dans un cours d'équipe | Vue unique de ce qu'ils ont à valider, à noter et à reprendre, toutes promotions confondues | [`mod/epsynthesis/INSTALL.md`](mod/epsynthesis/INSTALL.md) |
 
+Le dépôt porte aussi trois modules pour les **modules d'enseignement** du cursus : leur fiche
+(syllabus) et leur évaluation par les étudiants. Ils sont indépendants de `mod_ep` et de
+`mod_stage`.
+
+| Module | Pour qui | Rôle | Documentation |
+| --- | --- | --- | --- |
+| [`mod/syllabus`](mod/syllabus) | Responsables, DEVE et étudiants, dans le cours de chaque module | Fiche du module au modèle ECTS (versions, relecture par la DEVE, PDF) ; évaluation du module par les étudiants à partir d'une date, sur les questions de la DEVE et de l'enseignant, anonyme | [`mod/syllabus/INSTALL.md`](mod/syllabus/INSTALL.md) |
+| [`mod/syllabusstaff`](mod/syllabusstaff) | Enseignants et DEVE, dans un cours d'équipe | Modules dont l'enseignant est responsable ; pour la DEVE, tous les modules, relectures, fenêtres d'évaluation en lot, résultats comparés, référentiel commun (types, questions communes) | idem |
+| [`mod/syllabusstudent`](mod/syllabusstudent) | Étudiants, dans le cours de la promotion | Modules des cours où l'étudiant est inscrit, fiches, évaluations à faire | idem |
+
 ## Ce que le système gère
 
 - **Types d'EP définis par la DEVE**, sans programmation : mode d'acquisition (inscription au
@@ -61,9 +71,11 @@ Voir [`mod/ep/INSTALL.md`](mod/ep/INSTALL.md) puis
 | `docs/guides/guide-parametrage.pdf` | DEVE : mise en place, paramétrage, fin d'année, supplément |
 | `docs/guides/guide-enseignant.pdf` | Enseignants : responsables d'EP, référents, propositions |
 | `docs/guides/guide-etudiant.pdf` | Étudiants |
+| `docs/guides/guide-syllabus.pdf` | Modules syllabus : étudiants, responsables, DEVE, administrateur |
 | `docs/formats-import.pdf` | Formats des imports et des exports |
 | `docs/audit/test-de-charge.pdf`, `docs/audit/test-de-concurrence.pdf` | Mesures sur une promotion de 2 000 étudiants |
 | `docs/audit/test-des-interactions.pdf` | Une promotion de 1 000 étudiants de l'inscription au supplément émis, par l'interface web, avec contrôles en base |
+| `docs/audit/test-syllabus.pdf` | Modules syllabus de bout en bout : 12 modules, 200 étudiants, 2 172 évaluations |
 | `docs/audit/test-de-stress.pdf` | Montée en charge jusqu'à saturation, endurance et traitements lourds sur six promotions |
 | `docs/plan-mise-a-niveau.pdf` | Plan de la mise à niveau 1.0 |
 | `CHANGELOG.md` | Historique des versions |
@@ -73,6 +85,9 @@ Voir [`mod/ep/INSTALL.md`](mod/ep/INSTALL.md) puis
 ```bash
 vendor/bin/phpunit --testsuite mod_ep_testsuite
 vendor/bin/phpunit --testsuite mod_epsynthesis_testsuite
+vendor/bin/phpunit --testsuite mod_syllabus_testsuite
+vendor/bin/phpunit --testsuite mod_syllabusstaff_testsuite
+vendor/bin/phpunit --testsuite mod_syllabusstudent_testsuite
 ```
 
 Intégration continue : `.github/workflows/ci.yml` (moodle-plugin-ci : phpcs, phpdoc,

@@ -3,6 +3,26 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## Modules syllabus 1.0.0 — mod_syllabus, mod_syllabusstaff, mod_syllabusstudent 2026112000 (20 novembre 2026)
+
+Trois nouveaux modules pour les modules d'enseignement du cursus
+(`docs/guides/guide-syllabus.pdf`, `docs/audit/test-syllabus.pdf`).
+
+- **mod_syllabus**, une activité par cours de module : caractéristiques (code, ECTS, période,
+  année, type de module) ; fiche au modèle ECTS reprise d'EP Manager (rubriques, séances sans
+  date, volume horaire), versionnée, relue par la DEVE si le référentiel l'exige, PDF ;
+  responsables ; évaluation par les étudiants à partir d'une date, sur les questions communes
+  de la DEVE (tous les modules ou un type) et celles de l'enseignant, figées à l'ouverture ;
+  réponses anonymes, une par étudiant ; résultats au-delà d'un seuil, visibles des
+  responsables après la fermeture (réglable) ; export CSV ; message d'ouverture ; RGPD,
+  sauvegarde, réinitialisation.
+- **mod_syllabusstaff**, dans un cours d'équipe : mes modules ; pour la DEVE, tous les modules
+  (filtres, fenêtre d'évaluation en lot), fiches à relire, résultats comparés par question
+  commune, référentiel commun.
+- **mod_syllabusstudent**, dans le cours de la promotion : modules de l'étudiant, fiches,
+  évaluations à faire.
+- 22 tests unitaires ; scénario web de bout en bout (23 contrôles) ; CI étendue.
+
 ## 1.0.5 — mod_ep 2026111900, mod_epsynthesis 2026111600 (19 novembre 2026)
 
 Liaison avec « Gestion des stages » (mod_stage), vérifiée de bout en bout

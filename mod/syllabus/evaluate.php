@@ -55,7 +55,7 @@ if ($mform->is_cancelled()) {
     foreach ($questions as $question) {
         $name = 'q' . $question->id;
         if (isset($data->$name)) {
-            $answers[$question->id] = $data->$name;
+            $answers[$question->id] = \mod_syllabus\form\evaluate_form::answer_value($question, $data->$name);
         }
     }
     $errors = syllabus_submit_response($syllabus, $context, (int) $USER->id, $answers);

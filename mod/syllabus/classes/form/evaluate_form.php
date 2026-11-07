@@ -67,14 +67,43 @@ class evaluate_form extends \moodleform {
             } else {
                 $choices = syllabus_question_options($question);
             }
+            // Aucune valeur de bouton ne vaut 0 : QuickForm cocherait d'office le bouton de valeur 0
+            // (une valeur absente est égale à 0 pour PHP), ce qui fausserait les réponses et rendrait
+            // inopérant le contrôle des réponses obligatoires. Voir self::radio_value().
             $radios = [];
             foreach ($choices as $value => $choicelabel) {
-                $radios[] = $mform->createElement('radio', $name, '', s($choicelabel), $value);
+                $radios[] = $mform->createElement('radio', $name, '', s($choicelabel), self::radio_value($question, $value));
             }
             $mform->addGroup($radios, $name . 'group', $label, \html_writer::empty_tag('br'), false);
             $mform->setType($name, PARAM_INT);
         }
         $this->add_action_buttons(true, get_string('submitevaluation', 'mod_syllabus'));
+    }
+
+    /**
+     * Valeur d'un bouton radio : la valeur de la réponse, décalée de 1 pour les questions oui/non
+     * et à choix (dont la première valeur est 0).
+     *
+     * @param \stdClass $question
+     * @param int $value
+     * @return int
+     */
+    public static function radio_value(\stdClass $question, int $value): int {
+        return $question->kind === 'scale' ? $value : $value + 1;
+    }
+
+    /**
+     * Valeur de la réponse d'après le bouton coché (inverse de radio_value()).
+     *
+     * @param \stdClass $question
+     * @param mixed $submitted
+     * @return mixed La réponse, ou la valeur reçue telle quelle si elle n'est pas un entier positif.
+     */
+    public static function answer_value(\stdClass $question, $submitted) {
+        if ($question->kind === 'text' || !is_numeric($submitted) || (int) $submitted < 1) {
+            return $submitted;
+        }
+        return $question->kind === 'scale' ? (int) $submitted : (int) $submitted - 1;
     }
 
     /**
@@ -89,7 +118,10 @@ class evaluate_form extends \moodleform {
         foreach ($this->_customdata['questions'] as $question) {
             $name = 'q' . $question->id;
             $value = $data[$name] ?? null;
-            if ($question->required && ($value === null || trim((string) $value) === '')) {
+            if (
+                $question->required && ($value === null || trim((string) $value) === '' || ($question->kind !== 'text'
+                    && (int) $value === 0))
+            ) {
                 $errors[$question->kind === 'text' ? $name : $name . 'group'] = get_string('required');
             }
         }

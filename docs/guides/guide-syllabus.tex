@@ -1,0 +1,365 @@
+% Guide des modules syllabus : mod_syllabus, mod_syllabusstaff, mod_syllabusstudent.
+% Compilation : latexmk -pdf guide-syllabus.tex
+% Captures : SYLLABUS=syllabus.json node captures.js site-x.json sy-... (voir captures.js).
+\documentclass[11pt,a4paper]{article}
+
+\newcommand{\titreguide}{Syllabus et évaluation des modules}
+\newcommand{\versionguide}{1.0}
+\newcommand{\dateguide}{novembre 2026}
+\newcommand{\versionep}{1.0.0}
+\newcommand{\versionsynthese}{1.0.0}
+
+\usepackage{guide-commun}
+\setcounter{tocdepth}{2}
+\newlist{etapes}{enumerate}{1}
+\setlist[etapes]{label=\textbf{\arabic*.}, leftmargin=*, itemsep=3pt}
+
+% La page de garde commune cite mod_ep et mod_epsynthesis : celle-ci cite les trois modules.
+\renewcommand{\pagedegarde}[2]{%
+  \begin{titlepage}
+    \centering
+    \vspace*{3cm}
+    {\Huge\bfseries \titreguide\par}
+    \vspace{0.6cm}
+    {\large #1\par}
+    \vspace{1.5cm}
+    \setlength{\fboxsep}{0pt}
+    \fcolorbox{cadre}{white}{\includegraphics[width=0.85\linewidth]{captures/#2}}
+    \vfill
+    {\large Sébastien Lefebvre\par}
+    \vspace{0.3cm}
+    {\large Version \versionguide{} -- \dateguide\par}
+    {\small Modules couverts : \texttt{mod\_syllabus}, \texttt{mod\_syllabusstaff},
+     \texttt{mod\_syllabusstudent} \versionep\par}
+  \end{titlepage}}
+
+\begin{document}
+
+\pagedegarde{La fiche de chaque module d'enseignement, sa relecture par la DEVE, et son
+évaluation par les étudiants}{sy-etu-mes-modules}
+
+\tableofcontents
+
+\section*{Historique des versions}
+\addcontentsline{toc}{section}{Historique des versions}
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l l X@{}}
+\toprule
+\textbf{Version} & \textbf{Date} & \textbf{Modifications} \\
+\midrule
+1.0 & novembre 2026 & Première version. Captures prises sur le banc : 12 modules, 24
+enseignants, 200 étudiants, après rédaction, relecture et évaluation de tous les modules. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\newpage
+% ===========================================================================
+\part{Principes}\label{part:principes}
+% ===========================================================================
+
+\section{Trois activités}
+
+\begin{description}
+  \item[Syllabus du module] (\texttt{mod\_syllabus}) une activité dans le cours de chaque module
+    d'enseignement. Elle porte la \textbf{fiche} du module (au modèle ECTS) et son
+    \textbf{évaluation} par les étudiants du cours.
+  \item[Suivi des modules] (\texttt{mod\_syllabusstaff}) une activité dans un cours d'équipe.
+    Chaque enseignant y retrouve les modules dont il est responsable, dans tous les cours. La
+    DEVE y voit tous les modules, relit les fiches, fixe les évaluations, compare les résultats
+    et tient le \textbf{référentiel commun} (types de module, questions communes, réglages).
+  \item[Mes modules] (\texttt{mod\_syllabusstudent}) une activité dans le cours de la
+    promotion. Chaque étudiant y voit les modules des cours où il est inscrit, leur fiche, et
+    les évaluations qu'il a à faire.
+\end{description}
+
+Les deux activités de suivi se limitent, au choix, à une catégorie de cours (sous-catégories
+comprises) ou couvrent tout le site.
+
+\section{Qui fait quoi}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+\textbf{Rôle} & \textbf{Ce qu'il fait} \\
+\midrule
+Responsable du module & Enseignant désigné : rédige la fiche, pose ses questions
+d'évaluation, fixe la fenêtre d'évaluation, voit les résultats (après la fermeture, sauf
+réglage contraire). \\
+DEVE & Tout : désigne les responsables, relit et publie les fiches, fixe les fenêtres en lot,
+définit les types de module et les questions communes, voit tous les résultats. \\
+Étudiant & Lit les fiches, évalue chaque module pendant sa fenêtre, une fois, anonymement. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{La fiche et ses versions}
+
+Une fiche passe par des \textbf{versions} :
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+\textbf{État} & \textbf{Signification} \\
+\midrule
+\statut{Brouillon} & En cours de rédaction ; les étudiants voient la version publiée. \\
+\statut{Soumise à la DEVE} & Attend la relecture ; ne se modifie plus. \\
+\statut{Renvoyée par la DEVE} & À reprendre, avec le commentaire de la DEVE. \\
+\statut{Publiée} & Celle que lisent les étudiants. \\
+\statut{Refusée} & Écartée par la DEVE. \\
+\statut{Remplacée} & Ancienne version publiée, gardée dans l'historique. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Si la DEVE a désactivé la relecture (référentiel), la fiche est publiée dès sa soumission.
+
+\section{L'évaluation}\label{sec:principe-evaluation}
+
+\begin{itemize}
+  \item Elle s'ouvre à une \textbf{date} (et se ferme à une autre, facultative). À l'ouverture,
+    les étudiants du cours sont prévenus par un message.
+  \item Les étudiants répondent d'abord aux \textbf{questions de la DEVE} : celles posées à
+    tous les modules, puis celles posées aux modules de leur type ; ensuite aux
+    \textbf{questions de l'enseignant}.
+  \item Formes de réponse : échelle de 1 (pas du tout d'accord) à 5 (tout à fait d'accord),
+    oui ou non, choix dans une liste, réponse libre ; chaque question peut être obligatoire.
+  \item À l'ouverture, les questions sont \textbf{figées} : celles de la DEVE sont copiées dans
+    le module. Les modifier ensuite ne change pas une évaluation déjà ouverte, et les résultats
+    portent toujours sur les questions effectivement posées.
+  \item Les réponses sont \textbf{anonymes} : la réponse ne porte ni le nom de l'étudiant ni
+    l'heure (seulement le jour) ; seul le fait qu'il a répondu est noté, à part, pour qu'il ne
+    réponde qu'une fois.
+  \item Les résultats ne s'affichent qu'à partir d'un \textbf{nombre minimal de réponses}
+    (réglage de la DEVE, 3 par défaut), pour qu'on ne puisse pas deviner qui a répondu quoi.
+\end{itemize}
+
+\begin{attention}
+L'anonymat vaut pour toutes les pages et tous les exports. Un administrateur qui lirait
+directement la base de données pourrait, en rapprochant l'ordre des enregistrements, deviner
+approximativement l'auteur d'une réponse : l'accès à la base doit rester restreint, comme pour
+toute donnée sensible.
+\end{attention}
+
+\newpage
+% ===========================================================================
+\part{Étudiant}\label{part:etudiant}
+% ===========================================================================
+
+\section{Mes modules}
+
+Dans le cours de votre promotion, ouvrez l'activité \og Mes modules\fg{}. En tête, les
+\textbf{évaluations à faire}, la plus urgente d'abord ; en dessous, tous vos modules : type,
+ECTS, période, responsables, et où vous en êtes de l'évaluation (\statut{Évalué}, ouverture à
+venir, close).
+
+\capture{sy-etu-mes-modules}{Mes modules : évaluations à faire, puis tous les modules.}
+
+Le nom d'un module ouvre sa \textbf{fiche} : caractéristiques, objectifs, acquis
+d'apprentissage, contenu, méthodes, modalités d'évaluation, programme des séances et volume
+horaire. Elle se télécharge en PDF.
+
+\capture{sy-etu-fiche}{Fiche d'un module, avec l'invitation à l'évaluer.}
+
+\section{Évaluer un module}
+
+\begin{etapes}
+  \item Cliquez sur \bouton{Évaluer} (dans \og Mes modules\fg{}) ou \bouton{Évaluer ce module}
+    (sur la fiche).
+  \item Répondez aux questions de la DEVE, puis à celles de l'enseignant. Les questions
+    marquées d'un astérisque sont obligatoires ; aucune réponse n'est cochée d'avance.
+  \item Cliquez sur \bouton{Envoyer mon évaluation}.
+\end{etapes}
+
+\capture{sy-etu-evaluer}{Formulaire d'évaluation.}
+
+Vous ne pouvez répondre qu'une fois, pendant la fenêtre d'évaluation. Vos réponses sont
+anonymes (section~\ref{sec:principe-evaluation}).
+
+\newpage
+% ===========================================================================
+\part{Enseignant responsable}\label{part:enseignant}
+% ===========================================================================
+
+\section{Mes modules}
+
+L'activité \og Suivi des modules\fg{} du cours d'équipe liste les modules dont vous êtes
+responsable : état de la fiche, de l'évaluation, nombre de réponses, et les liens vers la fiche,
+l'évaluation et les résultats. Un bandeau signale les modules sans fiche publiée ou dont la
+fiche a été renvoyée.
+
+\capture{sy-ens-mes-modules}{Suivi des modules : mes modules.}
+
+Sur la page du module, deux encadrés résument l'évaluation (fenêtre, réponses) et la rédaction
+(version publiée, version en cours), avec les boutons utiles.
+
+\capture{sy-ens-fiche}{Page du module vue par son responsable.}
+
+\section{Rédiger la fiche}
+
+\begin{etapes}
+  \item \bouton{Rédiger la fiche} (ou \bouton{Mettre à jour la fiche}) : la version en cours
+    reprend la version publiée.
+  \item Renseignez les rubriques : objectifs, acquis d'apprentissage visés, prérequis, contenu,
+    méthodes, modalités d'évaluation, seconde session, bibliographie ; la langue
+    d'enseignement et les heures de travail personnel.
+  \item Décrivez le \textbf{programme des séances} : intitulé, nature (cours magistral,
+    travaux dirigés, travaux pratiques, clinique, terrain, projet, autre), durée et intervenant
+    (un enseignant du cours, ou le nom d'un intervenant extérieur). Les séances ne sont pas
+    datées : la fiche décrit le module, pas le calendrier de l'année.
+  \item \bouton{Enregistrer le brouillon} autant que nécessaire, puis \bouton{Enregistrer et
+    soumettre à la DEVE} (ou \bouton{Enregistrer et publier} si la relecture est désactivée).
+\end{etapes}
+
+\capture{sy-ens-redaction}{Rédaction de la fiche.}
+
+\capture{sy-ens-seances}{Programme des séances.}
+
+Les caractéristiques du module (code, ECTS, période, année d'étude, type de module) se règlent
+dans les \chemin{Paramètres} de l'activité. Les \chemin{Responsables} se choisissent parmi les
+enseignants du cours ; celui qui ajoute l'activité en devient responsable.
+
+\capture[0.85\linewidth]{sy-ens-responsables}{Responsables du module.}
+
+\section{Préparer l'évaluation}
+
+\chemin{Évaluation du module} réunit :
+\begin{itemize}
+  \item la \textbf{fenêtre} : ouverture et, au besoin, fermeture ;
+  \item les \textbf{questions de la DEVE} qui s'appliqueront à votre module (pour information) ;
+  \item \textbf{vos questions} : ajoutez-les, modifiez-les, réordonnez-les jusqu'à l'ouverture.
+\end{itemize}
+
+\capture{sy-ens-evaluation}{Évaluation du module ouverte : fenêtre et questions figées.}
+
+\section{Lire les résultats}
+
+\chemin{Résultats de l'évaluation} donne le nombre de réponses sur le nombre d'étudiants, et
+pour chaque question la moyenne (échelle), la répartition des réponses, ou la liste des
+réponses libres (dans l'ordre alphabétique, rien ne rappelant l'ordre des réponses). Les
+résultats s'exportent en CSV. Ils sont visibles après la fermeture de l'évaluation, sauf si la
+DEVE les a ouverts dès l'ouverture, et seulement au-delà du nombre minimal de réponses.
+
+\capture{sy-ens-resultats}{Résultats de l'évaluation d'un module.}
+
+\newpage
+% ===========================================================================
+\part{DEVE}\label{part:deve}
+% ===========================================================================
+
+\section{Mise en place}
+
+\begin{etapes}
+  \item Dans un cours d'équipe, ajoutez une activité \og Suivi des modules\fg{} (périmètre :
+    la catégorie des cours de modules, ou tout le site). Donnez-vous le rôle
+    \og gestionnaire\fg{} dans ce cours.
+  \item Dans \chemin{Référentiel commun} : réglages, types de module, questions communes.
+  \item Dans chaque cours de module : une activité \og Syllabus du module\fg{} (ajoutée par
+    l'enseignant, ou par vous) ; vous devez y avoir le rôle \og gestionnaire\fg{} (par exemple
+    au niveau de la catégorie) pour relire et fixer les fenêtres.
+  \item Dans le cours de chaque promotion : une activité \og Mes modules\fg{}.
+\end{etapes}
+
+\section{Référentiel commun}
+
+Il vaut pour tous les modules du site.
+\begin{description}
+  \item[Réglages] relecture des fiches par la DEVE avant publication ; nombre minimal de
+    réponses pour afficher des résultats ; résultats visibles des responsables après la
+    fermeture ou dès l'ouverture.
+  \item[Types de module] (fondamental, clinique, optionnel\dots) : chaque module en porte un
+    (dans ses paramètres) ; un type porté par des modules ne se supprime pas.
+  \item[Questions communes] posées à tous les modules, ou aux modules d'un type ; forme de
+    réponse, obligation, activation, ordre.
+\end{description}
+
+\capture{sy-deve-referentiel}{Référentiel commun : réglages, types, questions.}
+
+\section{Tous les modules}
+
+\chemin{Tous les modules} liste les modules du périmètre, filtrables par nom ou code, type,
+état de la fiche et état de l'évaluation. Cochez des modules, saisissez une ouverture (et une
+fermeture), puis \bouton{Appliquer} : la même fenêtre est fixée pour tous, là où vous avez le
+rôle de la DEVE (les autres sont signalés). Laisser l'ouverture vide retire l'évaluation.
+
+\capture{sy-deve-tous}{Tous les modules, avec la fenêtre d'évaluation en lot.}
+
+\section{Relire les fiches}
+
+\chemin{Fiches à relire} liste les fiches soumises. \bouton{Relire} ouvre la version proposée,
+avec le formulaire de décision : \bouton{Publier}, \bouton{Renvoyer aux responsables} ou
+\bouton{Refuser} (un commentaire est alors obligatoire). Les responsables sont prévenus.
+
+\capture{sy-deve-a-relire}{Fiches à relire.}
+
+\capture{sy-deve-relecture}{Relecture d'une fiche soumise.}
+
+\section{Résultats comparés}
+
+\chemin{Résultats des évaluations} donne, module par module, le nombre de réponses et la
+moyenne de chaque question commune à échelle : les mêmes questions, posées partout, se
+comparent d'un module à l'autre. Les modules sous le seuil d'anonymat n'ont pas de moyenne.
+Export CSV.
+
+\capture{sy-deve-resultats}{Résultats comparés des évaluations closes.}
+
+\newpage
+% ===========================================================================
+\part{Administrateur du site}\label{part:admin}
+% ===========================================================================
+
+\section{Installation}
+
+Copier \texttt{mod/syllabus}, \texttt{mod/syllabusstaff} et \texttt{mod/syllabusstudent} dans
+\texttt{<moodle>/mod/}, puis \texttt{php admin/cli/upgrade.php}. Moodle 4.3 ou plus récent.
+Les deux activités de suivi dépendent de \texttt{mod\_syllabus}. Une tâche planifiée,
+\texttt{mod\_syllabus\textbackslash task\textbackslash open\_evaluations} (tous les quarts
+d'heure), fige les questions des évaluations qui viennent d'ouvrir et prévient les étudiants :
+le \emph{cron} doit tourner.
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+\textbf{Capacité} & \textbf{Pour qui (par défaut)} \\
+\midrule
+\texttt{mod/syllabus:view} & Tous : lire la fiche publiée \\
+\texttt{mod/syllabus:edit} & Enseignants : pouvoir être responsable \\
+\texttt{mod/syllabus:manage} & Gestionnaire (DEVE) : responsables, relecture, fenêtre,
+résultats \\
+\texttt{mod/syllabus:evaluate} & Étudiants : évaluer \\
+\texttt{mod/syllabusstaff:view} & Enseignants : leurs modules \\
+\texttt{mod/syllabusstaff:manageall} & Gestionnaire (DEVE) : tous les modules, référentiel \\
+\texttt{mod/syllabusstudent:view} & Étudiants : leurs modules \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+La sauvegarde Moodle du cours comprend la fiche, ses versions et les questions du module ;
+avec les données des utilisateurs, les responsables et l'évaluation (réponses anonymes et
+participations). La réinitialisation du cours peut effacer les réponses : l'évaluation est
+alors de nouveau modifiable. Le référentiel commun n'appartient à aucun cours : il n'est pas
+sauvegardé avec eux.
+
+\newpage
+% ===========================================================================
+\part{Questions fréquentes}\label{part:faq}
+% ===========================================================================
+
+\begin{description}
+  \item[Un enseignant du cours ne peut pas rédiger la fiche.] Il n'est pas désigné responsable
+    (\chemin{Responsables}). Tant qu'un module n'a aucun responsable, tout enseignant du cours
+    peut le rédiger.
+  \item[Je ne peux plus modifier mes questions.] L'évaluation est ouverte : les questions sont
+    figées pour que toutes les réponses portent sur les mêmes questions.
+  \item[Je ne vois pas les résultats.] Ils s'affichent après la fermeture (sauf réglage de la
+    DEVE) et à partir du nombre minimal de réponses.
+  \item[Un étudiant ne voit pas un module dans « Mes modules ».] Il n'est pas inscrit au cours
+    du module, l'activité est cachée, ou le cours est hors du périmètre de l'activité.
+  \item[La DEVE a modifié une question commune, mais l'ancienne est posée.] L'évaluation de ce
+    module était déjà ouverte : elle garde ses questions. La nouvelle vaudra pour les
+    évaluations ouvertes ensuite.
+  \item[Peut-on savoir qui a répondu quoi ?] Non, par aucune page ni aucun export ; seul le fait
+    d'avoir répondu est noté (voir l'encadré de la section~\ref{sec:principe-evaluation}).
+\end{description}
+
+\end{document}

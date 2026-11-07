@@ -1,0 +1,101 @@
+% Test de bout en bout des modules syllabus (mod_syllabus, mod_syllabusstaff, mod_syllabusstudent).
+% Compilation : latexmk -pdf test-syllabus.tex
+\documentclass[11pt,a4paper]{article}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype,booktabs,tabularx,xcolor,hyperref,array}
+\usepackage[margin=2.2cm]{geometry}
+\hypersetup{colorlinks=true, linkcolor=blue!50!black, urlcolor=blue!50!black}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\title{Test des modules syllabus et de leur évaluation}
+\author{Sébastien Lefebvre}
+\date{Novembre 2026 -- version 1.0.0 des trois modules}
+
+\begin{document}
+\maketitle
+
+\section{Objet et méthode}
+
+Les trois nouveaux modules -- \code{mod_syllabus} (fiche et évaluation de chaque module
+d'enseignement), \code{mod_syllabusstaff} (suivi des enseignants et de la DEVE) et
+\code{mod_syllabusstudent} (« Mes modules » des étudiants) -- ont été exercés par leurs pages
+web, comme par des navigateurs (\code{docs/audit/banc/syllabus_interactions.py}), sur le banc
+habituel (4 c\oe urs, nginx, PHP-FPM~8.3, PostgreSQL~16, Moodle~4.5). Chaque page est contrôlée
+(erreur PHP, exception, code 500), puis la base.
+
+\paragraph{Données} (\code{syllabus_setup.php}) : une catégorie de 12 cours de module, chacun
+avec son activité « Syllabus du module » et deux responsables (24 enseignants) ; 200 étudiants
+inscrits aux 12 cours ; la DEVE gestionnaire de chaque cours ; un cours d'équipe avec le suivi
+des modules ; « Mes modules » dans le cours de la promotion.
+
+\section{Scénario et contrôles}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}X l@{}}
+\toprule
+\textbf{Étape} & \textbf{Résultat} \\
+\midrule
+DEVE : référentiel (relecture obligatoire, seuil de 5 réponses, 2 types, 4 questions
+communes dont une pour le type « Clinique »), type de chaque module dans ses réglages & conforme \\
+12 responsables en parallèle : fiche rédigée (rubriques, 3 séances) et soumise, 2 questions & 2,5 s \\
+Fiches à relire listées ; 11 publiées, 1 renvoyée puis corrigée et publiée & conforme \\
+Fenêtre d'évaluation des 12 modules fixée en lot & conforme \\
+Tâche d'ouverture : questions figées, étudiants prévenus & 2\,400 messages, 20 s \\
+200 étudiants (40 en parallèle) : « Mes modules » (12 modules chacun), puis 9 évaluations sur 10
+& 2\,172 réponses en 99 s \\
+Seconde réponse d'un étudiant & refusée \\
+Une réponse anonyme par participation, réponses obligatoires toutes présentes & 2\,172 / 2\,172 \\
+Table des réponses : ni étudiant ni heure (\code{id}, \code{syllabusid}, \code{daysubmitted}) &
+conforme \\
+Questions par module : 3 communes, + 1 pour les modules « Clinique », + 2 de l'enseignant &
+5 ou 6 \\
+Résultats du module cachés au responsable avant la fermeture, visibles après ; export CSV &
+conforme \\
+Synthèse comparée de la DEVE (moyennes par question commune), liste filtrée, fiche PDF &
+conforme \\
+Anomalies dans les pages & 0 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Résultat : \textbf{23 contrôles sur 23}. S'y ajoutent 22 tests unitaires (droits, circuit de
+relecture, figeage des questions, anonymat, seuil, visibilité des résultats, tâche,
+réinitialisation, sauvegarde et restauration, RGPD, synthèses) et le test de conformité RGPD
+de Moodle, réussi pour les trois modules.
+
+\section{Défaut trouvé et corrigé}
+
+Les captures du guide ont montré le formulaire d'évaluation avec une réponse \textbf{déjà
+cochée} : le premier choix d'une question à choix (et « Non » pour une question oui/non). Le
+bouton de valeur 0 était coché d'office, une valeur absente étant égale à 0 pour PHP. Un
+étudiant pressé envoyait donc ce choix sans l'avoir fait, et le contrôle des réponses
+obligatoires ne jouait plus pour ces questions. Les boutons portent désormais des valeurs
+décalées d'une unité, ramenées à la réponse à l'enregistrement ; un test unitaire vérifie
+qu'aucun bouton n'est coché et que les valeurs se ramènent aux réponses. Le scénario a été
+rejoué après correction (23/23), et les réponses enregistrées gardent leurs valeurs (0 ou 1
+pour oui/non, 0 à 2 pour un choix parmi trois).
+
+Le scénario a aussi révélé une erreur dans le banc lui-même : les scripts appelaient un
+programme de tâche inexistant au lieu de \code{admin/cli/scheduled_task.php}. Corrigé ; le scénario de liaison avec « Gestion des
+stages », qui en dépendait pour sa tâche de nuit, a été rejoué (14/14).
+
+\section{Limite connue}
+
+L'anonymat vaut pour toutes les pages et tous les exports. En base, la participation et la
+réponse sont écrites dans la même transaction : l'ordre des enregistrements permettrait, à qui
+lit directement la base, un rapprochement approximatif. L'accès à la base doit donc rester
+restreint ; le guide le signale.
+
+\section{Reproduire}
+
+{\small
+\begin{verbatim}
+cd docs/audit/banc
+sudo -u www-data php syllabus_setup.php site-x.json > syllabus.json
+python3 syllabus_interactions.py site-x.json syllabus.json > syllabus-resultats.json
+sudo -u www-data php syllabus_setup.php site-x.json reset     # pour rejouer
+\end{verbatim}
+}
+
+\end{document}

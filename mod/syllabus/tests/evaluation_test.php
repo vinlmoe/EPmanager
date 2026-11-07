@@ -228,6 +228,35 @@ final class evaluation_test extends \advanced_testcase {
     }
 
     /**
+     * Le formulaire ne coche aucune réponse d'office (un bouton de valeur 0 l'était : « Non »,
+     * premier choix d'une liste) ; les valeurs des boutons se ramènent aux réponses.
+     */
+    public function test_evaluate_form_preselects_nothing(): void {
+        $this->open();
+        syllabus_freeze_questions($this->syllabus);
+        $questions = array_values(syllabus_get_module_questions((int) $this->syllabus->id));
+        $this->setUser($this->students[0]);
+        $form = new \mod_syllabus\form\evaluate_form(null, ['questions' => $questions]);
+        $html = $form->render();
+        $this->assertStringContainsString('type="radio"', $html);
+        $this->assertStringNotContainsString('checked', $html);
+
+        $class = \mod_syllabus\form\evaluate_form::class;
+        foreach ($questions as $question) {
+            if ($question->kind === 'text') {
+                $this->assertSame('Avis', $class::answer_value($question, 'Avis'));
+                continue;
+            }
+            $values = $question->kind === 'scale' ? [1, 5] : [0, 1];
+            foreach ($values as $value) {
+                $radio = $class::radio_value($question, $value);
+                $this->assertGreaterThan(0, $radio);
+                $this->assertSame($value, $class::answer_value($question, (string) $radio));
+            }
+        }
+    }
+
+    /**
      * Réinitialisation du cours : réponses effacées, évaluation de nouveau modifiable.
      */
     public function test_reset_course(): void {

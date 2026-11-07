@@ -23,7 +23,8 @@ const auteur = `ens${ST}_5`;
 const deve = `deve${ST}_1`;
 // Guide utilisateur : responsable d'un EP qui a des inscrits en attente (RESP=compte:activityid),
 // supplément émis à vérifier (VERIF=numéro:code), synthèse (SYNTHESE=cmid), EP publié de l'auteur
-// à mettre à jour (AUTEUR_EP=activityid), EP dont une mise à jour attend la DEVE (REVUE_EP).
+// à mettre à jour (AUTEUR_EP=activityid), EP dont une mise à jour attend la DEVE (REVUE_EP),
+// modules syllabus (SYLLABUS=sortie de syllabus_setup.php, voir plus bas).
 const [resp, respact] = (process.env.RESP || `${ens}:${site.activities[0]}`).split(':');
 const [verifnumber, verifcode] = (process.env.VERIF || ':').split(':');
 const SYN = process.env.SYNTHESE;
@@ -127,6 +128,32 @@ const plan = [
   ['gu-deve-import-credits', deve, `/mod/ep/import_credits.php?id=${CM}`],
   ['gu-deve-archive', deve, `/mod/ep/archive.php?id=${CM}`],
 ];
+
+// Guide des modules syllabus (SYLLABUS=chemin de la sortie de syllabus_setup.php).
+if (process.env.SYLLABUS) {
+  const sy = JSON.parse(fs.readFileSync(process.env.SYLLABUS, 'utf8'));
+  const m1 = sy.modules[0];
+  const m2 = sy.modules[1];
+  const m7 = sy.modules[6];
+  const sett = process.env.ETU || 'etux_4';
+  plan.push(
+    ['sy-etu-mes-modules', sett, `/mod/syllabusstudent/view.php?id=${sy.studentcmid}`],
+    ['sy-etu-fiche', sett, `/mod/syllabus/view.php?id=${process.env.SYEVAL || m1.cmid}`],
+    ['sy-etu-evaluer', sett, `/mod/syllabus/evaluate.php?id=${process.env.SYEVAL || m1.cmid}`],
+    ['sy-ens-mes-modules', m1.leaders[0], `/mod/syllabusstaff/view.php?id=${sy.staffcmid}`],
+    ['sy-ens-fiche', m1.leaders[0], `/mod/syllabus/view.php?id=${m1.cmid}`],
+    ['sy-ens-redaction', m1.leaders[0], `/mod/syllabus/edit.php?id=${m1.cmid}`],
+    ['sy-ens-seances', m1.leaders[0], `/mod/syllabus/edit.php?id=${m1.cmid}`, '#id_sessionshdr'],
+    ['sy-ens-evaluation', m1.leaders[0], `/mod/syllabus/evaluation.php?id=${m1.cmid}`],
+    ['sy-ens-responsables', m1.leaders[0], `/mod/syllabus/teachers.php?id=${m1.cmid}`],
+    ['sy-ens-resultats', m7.leaders[0], `/mod/syllabus/results.php?id=${m7.cmid}`],
+    ['sy-deve-tous', deve, `/mod/syllabusstaff/all.php?id=${sy.staffcmid}`],
+    ['sy-deve-a-relire', deve, `/mod/syllabusstaff/review.php?id=${sy.staffcmid}`],
+    ['sy-deve-relecture', deve, `/mod/syllabus/view.php?id=${m2.cmid}&show=working`],
+    ['sy-deve-referentiel', deve, `/mod/syllabusstaff/referential.php?id=${sy.staffcmid}`],
+    ['sy-deve-resultats', deve, `/mod/syllabusstaff/results.php?id=${sy.staffcmid}`],
+  );
+}
 
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });

@@ -220,7 +220,7 @@ expect('referent_change_dans_mod_stage', sql(f"select count(*) from mdl_stage_en
 expect('demande_suit_le_nouveau_referent', pending and see(new) and not see(old), f'demande {pending}')
 
 # 7. Tâche de la nuit et coût de l'empreinte.
-out = subprocess.run(['sudo', '-u', 'www-data', 'php', 'admin/tool/task/cli/schedule_task.php',
+out = subprocess.run(['sudo', '-u', 'www-data', 'php', 'admin/cli/scheduled_task.php',
                       '--execute=\\mod_ep\\task\\sync_stage_credits'], cwd=MOODLE, capture_output=True, text=True).stdout
 expect('tache_de_nuit_sans_rien_a_faire', stage_credits() == credits | {c0['entry']: c0['days'] * RATE, c1['entry']: c1['days'] * RATE},
        out.strip().splitlines()[-1] if out.strip() else '')

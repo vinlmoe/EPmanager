@@ -46,3 +46,7 @@ crédit, élément ni décision (minimum de 6 ECTS en 3e année), pour `interact
   modules (barème du type stage, validation en masse dans la page DEVE de mod_stage, corrections,
   annulations, changement de référent, validation des années et supplément juste après une
   validation de stage, tâche de nuit). `liaison_stage_prep.php site-x.json reset` pour rejouer.
+- `syllabus_setup.php` et `syllabus_interactions.py` : modules syllabus de bout en bout par les
+  pages web (référentiel DEVE, fiches, relecture, fenêtre en lot, tâche d'ouverture, 200
+  étudiants qui évaluent, résultats), rapport `../test-syllabus.tex`. `syllabus_setup.php
+  site-x.json reset` pour rejouer.
