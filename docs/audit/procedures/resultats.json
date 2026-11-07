@@ -1,6 +1,6 @@
 {
   "execution": "5UVL",
-  "date": "2026-11-07T00:14:32.736Z",
+  "date": "2026-11-07T00:14:42.810Z",
   "site": "http://localhost:8100",
   "ep": "Bien-être animal en élevage (5UVL)",
   "etapes": [
@@ -54,6 +54,100 @@
         "Informations manquantes signalées pour etua_301 : date de naissance inconnue, signataire non renseigné (paramétrage du supplément) — émission forcée."
       ],
       "remarques": []
+    },
+    {
+      "etape": "7.4",
+      "role": "public (sans connexion)",
+      "action": "Vérifier le numéro et le code sur supplement_verify.php",
+      "attendu": "Page accessible sans connexion ; « Ce supplément est authentique : émis le … pour Etu 301 Banc a. »",
+      "obtenu": "Texte attendu absent : « authentique » (page http://localhost:8100/mod/ep/supplement_verify.php?number=SD-2026-2-00022&code=32db68cceb03a29dE)",
+      "resultat": "échec",
+      "duree_s": 1.6,
+      "captures": [
+        "guides/captures/07-public-verification-redirigee-connexion.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [
+        "supplement_verify.php renvoie vers la page de connexion : la vérification n'est pas accessible sans compte (require_login() dans supplement_verify.php)."
+      ],
+      "remarques": []
+    },
+    {
+      "etape": "8.1",
+      "role": "étudiant (etua_301)",
+      "action": "Télécharger son supplément émis",
+      "attendu": "Le supplément figure dans « Suppléments émis » (en vigueur) et se télécharge.",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 1.7,
+      "captures": [
+        "guides/captures/08-etudiant-supplement-emis.png"
+      ],
+      "telechargements": [
+        "audit/procedures/telechargements/supplement-etudiant-SD-2026-2-00022.pdf"
+      ],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "8.2",
+      "role": "étudiant (etua_301)",
+      "action": "Voir ses décisions (inscription, déclaration, élément du supplément)",
+      "attendu": "Statuts « Validé » et commentaires des validateurs visibles ; historique des décisions de la déclaration.",
+      "obtenu": "Élément : Award or distinction Prix du meilleur poster étudiant, congrès AFVAC (5UVL) Best student poster award, AFVAC congress Poster sur la prévalence des boiteries en élevage laitier, primé au congrès nation",
+      "resultat": "réussi",
+      "duree_s": 1.5,
+      "captures": [
+        "guides/captures/08-etudiant-tableau-de-bord-decisions.png",
+        "guides/captures/08-etudiant-detail-decision.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "9.1",
+      "role": "étudiant (etua_301)",
+      "action": "Prérequis bloquant : EP030 sans avoir validé son prérequis",
+      "attendu": "Le catalogue signale le prérequis manquant et ne propose pas « S'inscrire » ; l'adresse d'inscription forgée est refusée.",
+      "obtenu": "L'inscription forcée n'est pas refusée : Skip to main content BANC Accueil",
+      "resultat": "échec",
+      "duree_s": 3.8,
+      "captures": [
+        "guides/captures/09-etudiant-catalogue-prerequis-manquant.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "9.2",
+      "role": "DEVE (devea_1)",
+      "action": "Contrôler dans le pilotage la situation d'etua_301 (année validée, ECTS retenus)",
+      "attendu": "La fiche de l'étudiant montre les 10 ECTS de l'année et la décision d'année.",
+      "obtenu": "Fiche consultée.",
+      "resultat": "réussi",
+      "duree_s": 1.3,
+      "captures": [
+        "guides/captures/09-deve-pilotage-etudiant.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "journal",
+      "role": "serveur",
+      "action": "Erreurs journalisées par le serveur pendant le parcours",
+      "attendu": "Aucune",
+      "obtenu": "Aucune",
+      "resultat": "réussi",
+      "lignes": []
     }
   ]
 }
