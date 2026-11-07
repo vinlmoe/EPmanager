@@ -205,6 +205,7 @@ if ($action === 'close') {
         redirect($baseurl, get_string('activityclosed', 'mod_ep', $result), null, \core\output\notification::NOTIFY_SUCCESS);
     }
 
+    ep_set_secondary_page_header();
     echo $OUTPUT->header();
     echo $OUTPUT->heading(get_string('closeactivity', 'mod_ep') . $labelsep . format_string($activity->name));
     echo $OUTPUT->notification(get_string('closeactivity_help', 'mod_ep'), 'info');
@@ -271,6 +272,7 @@ if ($action === 'withdraw') {
     $student = $DB->get_record('user', ['id' => $credit->userid], '*', MUST_EXIST);
     $withdrawurl = new moodle_url($baseurl, ['action' => 'withdraw', 'creditid' => $credit->id]);
 
+    ep_set_secondary_page_header();
     echo $OUTPUT->header();
     echo $OUTPUT->heading(get_string('withdrawparticipant', 'mod_ep') . $labelsep . format_string($activity->name));
     echo $OUTPUT->notification(get_string('confirmwithdraw', 'mod_ep', fullname($student)), 'warning');
@@ -360,6 +362,7 @@ if ($action === 'decide' && data_submitted() && confirm_sesskey()) {
     redirect($baseurl, get_string('decisionssaved', 'mod_ep', $result), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('participantsof', 'mod_ep', format_string($activity->name)));
 echo html_writer::link(new moodle_url('/mod/ep/credits.php', ['id' => $cm->id]), get_string('back'));
@@ -576,8 +579,32 @@ if (empty($candidates)) {
     echo $OUTPUT->notification(get_string('nostudentstoadd', 'mod_ep'), 'info');
 } else {
     echo html_writer::div(get_string('addparticipants_help', 'mod_ep'), 'text-muted mb-2');
+    // Dans une grande promotion, la liste est d'abord filtrée par une recherche (nom, numéro) :
+    // une liste de deux mille noms ne se parcourt pas.
+    $addsearch = trim(optional_param('addsearch', '', PARAM_TEXT));
+    echo html_writer::start_tag('form', ['method' => 'get', 'action' => $baseurl->out_omit_querystring(),
+        'class' => 'form-inline mb-2']);
+    foreach ($baseurl->params() as $name => $value) {
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => $name, 'value' => $value]);
+    }
+    echo html_writer::label(get_string('search'), 'addparticipants_search', false, ['class' => 'sr-only']);
+    echo html_writer::empty_tag('input', ['type' => 'search', 'name' => 'addsearch', 'value' => $addsearch,
+        'id' => 'addparticipants_search', 'class' => 'form-control mr-2', 'placeholder' => get_string('searchstudent', 'mod_ep')]);
+    echo html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('search'), 'class' => 'btn btn-secondary']);
+    echo html_writer::end_tag('form');
+    $shown = $candidates;
+    if ($addsearch !== '') {
+        $needle = core_text::strtolower($addsearch);
+        $shown = array_filter($candidates, fn($c) => core_text::strpos(core_text::strtolower(fullname($c) . ' '
+            . $c->idnumber . ' ' . $c->email), $needle) !== false);
+    }
+    $truncated = count($shown) > 200;
+    $shown = array_slice($shown, 0, 200, true);
+    if ($truncated) {
+        echo html_writer::div(get_string('addparticipantsrefine', 'mod_ep'), 'text-muted small mb-2');
+    }
     $options = [];
-    foreach ($candidates as $candidate) {
+    foreach ($shown as $candidate) {
         $label = fullname($candidate);
         if (trim((string) $candidate->idnumber) !== '') {
             $label .= ' (' . $candidate->idnumber . ')';

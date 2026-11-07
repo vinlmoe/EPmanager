@@ -45,6 +45,7 @@ $PAGE->set_title(format_string($ep->name) . ' - ' . get_string('administration',
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('administration', 'mod_ep'));
 echo html_writer::link(new moodle_url('/mod/ep/dashboard.php', ['id' => $cm->id]), get_string('back'));

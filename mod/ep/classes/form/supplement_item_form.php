@@ -92,7 +92,10 @@ class supplement_item_form extends \moodleform {
             $mform->addHelpButton('proofs', 'supplementproofs', 'mod_ep');
         }
 
-        $this->add_action_buttons();
+        $this->add_action_buttons(true, get_string(
+            empty($this->_customdata['editing']) ? 'sendrequest' : 'savechanges',
+            empty($this->_customdata['editing']) ? 'mod_ep' : 'moodle'
+        ));
     }
 
     /**

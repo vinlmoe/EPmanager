@@ -165,6 +165,7 @@ if ($action === 'zip') {
     send_temp_file($zippath, $zipname);
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading_with_help(get_string('supplementissuesadmin', 'mod_ep'), 'supplement', 'mod_ep');
 echo html_writer::link(new moodle_url('/mod/ep/administration.php', ['id' => $cm->id]), get_string('back'));
@@ -200,7 +201,7 @@ function ep_supplement_issue_form(moodle_url $url, array $hidden, $submitlabel, 
             html_writer::checkbox('force', 1, false, get_string('supplementissueforce', 'mod_ep'), [
                 'id' => 'ep-supplement-force-' . $counter, 'class' => 'mr-1',
             ]),
-            'mr-2 mb-1 small'
+            'mr-3 mb-1 small'
         );
     }
     $html .= html_writer::empty_tag('input', [

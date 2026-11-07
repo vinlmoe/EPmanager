@@ -64,6 +64,7 @@ if (optional_param('save', 0, PARAM_INT) && confirm_sesskey()) {
 
 $assigned = ep_get_activity_teachers($activity->id);
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('activityteachersfor', 'mod_ep', format_string($activity->name)));
 echo html_writer::link($returnurl, get_string('back'));

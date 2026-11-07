@@ -123,6 +123,7 @@ if ($canvalidate && (int) $credit->status === EP_STATUS_PENDING && data_submitte
     }
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('creditdetail', 'mod_ep'));
 echo html_writer::link($backurl, get_string('back'));

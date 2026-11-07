@@ -118,7 +118,10 @@ class credit_form extends \moodleform {
         $mform->addElement('filemanager', 'evidence', get_string('evidencefiles', 'mod_ep'), null, $fileoptions);
         $mform->addHelpButton('evidence', 'evidencefiles', 'mod_ep');
 
-        $this->add_action_buttons();
+        $this->add_action_buttons(true, get_string(
+            empty($this->_customdata['editing']) ? 'sendrequest' : 'savechanges',
+            empty($this->_customdata['editing']) ? 'mod_ep' : 'moodle'
+        ));
     }
 
     /**

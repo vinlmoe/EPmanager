@@ -51,11 +51,6 @@ const plan = [
     await page.goto(await link.getAttribute('href'));
   }],
   ['deve-catalogue', deve, `/mod/ep/activities.php?id=${CM}`],
-  ['deve-proposition', deve, async (page) => {
-    await page.goto(`${BASE}/mod/ep/proposals.php?id=${CM}`);
-    const link = page.locator('a[href*="syllabus.php"]').first();
-    await page.goto(await link.getAttribute('href'));
-  }],
   ['deve-pilotage', deve, `/mod/ep/dashboard.php?id=${CM}`],
   ['deve-validation-annees', deve, `/mod/ep/year_validation.php?id=${CM}`],
   ['deve-supplement-reglages', deve, `/mod/ep/supplement_settings.php?id=${CM}`],
@@ -96,9 +91,11 @@ const plan = [
       // Ni barre de pied de page Moodle ni infos de performance : seulement le contenu.
       await page.addStyleTag({ content: '#page-footer, .performanceinfo, footer, .btn-footer-popover,'
         + ' .footer-popover { display: none !important; }' });
-      const main = page.locator('#region-main');
+      // Haut de la page, sur 1 500 pixels au plus : ce que l'utilisateur voit en arrivant, avec la
+      // barre de navigation ; les longues listes sont coupées plutôt que réduites à l'illisible.
+      const height = await page.evaluate(() => document.documentElement.scrollHeight);
       const file = path.join(OUT, `${name}.png`);
-      await main.screenshot({ path: file });
+      await page.screenshot({ path: file, fullPage: true, clip: { x: 0, y: 0, width: 1280, height: Math.min(height, 1500) } });
       console.log(`${name} : ${page.url()}`);
     } catch (e) {
       console.log(`${name} : ÉCHEC ${e.message.split('\n')[0]}`);

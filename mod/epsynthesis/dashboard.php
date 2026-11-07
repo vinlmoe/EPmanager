@@ -79,7 +79,6 @@ if ($studentid) {
 }
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($epsynthesis->name));
 echo epsynthesis_render_navlinks($cm, 'dashboard', epsynthesis_count_todo($activelinks, $USER->id));
 
 if ($epsynthesis->intro) {

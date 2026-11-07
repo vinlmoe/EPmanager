@@ -82,6 +82,8 @@ class syllabus_pdf extends \pdf {
         $this->SetTitle($this->plain($ep->name));
         $this->setPrintHeader(true);
         $this->setPrintFooter(true);
+        // Pas de mention « Powered by TCPDF » en bas des documents (et du supplément certifié).
+        $this->tcpdflink = false;
         // La marge haute ne s'agrandit que s'il y a un en-tête à loger : sans logo ni texte, la
         // fiche commence en haut de la page au lieu de laisser une bande blanche.
         $hasheader = $this->logopath !== null || $this->headertext !== '';

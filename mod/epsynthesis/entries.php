@@ -57,7 +57,6 @@ $activelinks = epsynthesis_get_active_links($epsynthesis->id, $USER->id);
 $todocounts = epsynthesis_count_todo($activelinks, $USER->id);
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($epsynthesis->name));
 echo epsynthesis_render_navlinks($cm, 'entries', $todocounts);
 
 if ($epsynthesis->intro) {

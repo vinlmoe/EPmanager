@@ -66,7 +66,15 @@ const CONF = {
 // Suffixe propre à l'exécution : le parcours peut être relancé sans collision d'intitulés.
 // Reprise partielle (ETAPES=...) : le suffixe et l'état (identifiants, numéro de supplément) de
 // l'exécution précédente sont relus dans etat.json.
-const PREVIOUS = process.env.ETAPES && fs.existsSync(CONF.STATE) ? JSON.parse(fs.readFileSync(CONF.STATE, 'utf8')) : {};
+const ONLY = process.env.ETAPES ? process.env.ETAPES.split(',').map((t) => t.trim()).filter(Boolean) : null;
+const PREVIOUS = ONLY && fs.existsSync(CONF.STATE) ? JSON.parse(fs.readFileSync(CONF.STATE, 'utf8')) : {};
+// Reprise : les étapes déjà journalisées sont conservées, celles rejouées remplacées.
+const PREVIOUS_RESULTS = ONLY && fs.existsSync(CONF.RESULTS) ? JSON.parse(fs.readFileSync(CONF.RESULTS, 'utf8')).etapes || [] : [];
+
+/** Étape demandée : toutes sans ETAPES, sinon celles de la liste (« 7 » ou « 7.4 »). */
+function wanted(id) {
+    return !ONLY || ONLY.includes(id) || ONLY.includes(String(id).split('.')[0]);
+}
 const RUN = process.env.RUN || PREVIOUS.run || Date.now().toString(36).slice(-4).toUpperCase();
 const EP_NAME = `Bien-être animal en élevage (${RUN})`;
 
@@ -100,12 +108,17 @@ function epurl(file, params = {}) {
 }
 
 function saveResults() {
+    const replayed = new Set(results.map((r) => r.etape));
+    const order = (id) => (/^\d+(\.\d+)?$/.test(id) ? Number(id.split('.')[0]) * 100 + Number(id.split('.')[1] || 0) : 1e6);
+    const merged = [...PREVIOUS_RESULTS.filter((r) => !replayed.has(r.etape)), ...results]
+        .sort((a, b) => order(a.etape) - order(b.etape));
     fs.writeFileSync(CONF.RESULTS, JSON.stringify({
         execution: RUN,
         date: new Date().toISOString(),
         site: CONF.BASE,
         ep: EP_NAME,
-        etapes: results,
+        reprise: ONLY ? ONLY.join(',') : undefined,
+        etapes: merged,
     }, null, 2));
     fs.writeFileSync(CONF.STATE, JSON.stringify(state, null, 2));
 }
@@ -138,6 +151,32 @@ function check(condition, message) {
 
 function pdftext(file) {
     return execFileSync('pdftotext', ['-layout', file, '-'], { encoding: 'utf8' });
+}
+
+/** Extrait recadré autour d'un élément (une ligne d'une très longue liste), en complément de la capture pleine page. */
+async function shotAround(page, locator, name, above = 260, below = 140) {
+    await page.addStyleTag({ content: SHOT_CSS }).catch(() => {});
+    await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+    const box = await locator.boundingBox();
+    check(box, 'Élément à capturer introuvable');
+    const scroll = await page.evaluate(() => window.scrollY);
+    const y = Math.max(0, box.y + scroll - above);
+    const file = path.join(CONF.CAPTURES, name + '.png');
+    await page.screenshot({ path: file, fullPage: true, clip: { x: 0, y, width: 1280, height: box.height + above + below } });
+    if (current) {
+        current.captures.push(path.relative(path.resolve(__dirname, '../..'), file));
+    }
+}
+
+/** Haut de page seulement (titre, notifications), pour une page dont la liste est très longue. */
+async function shotTop(page, name, height = 1100) {
+    await page.addStyleTag({ content: SHOT_CSS }).catch(() => {});
+    await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+    const file = path.join(CONF.CAPTURES, name + '.png');
+    await page.screenshot({ path: file, fullPage: true, clip: { x: 0, y: 0, width: 1280, height } });
+    if (current) {
+        current.captures.push(path.relative(path.resolve(__dirname, '../..'), file));
+    }
 }
 
 /** Petit PDF valide d'une page, écrit à la volée (justificatifs et preuves). */
@@ -336,6 +375,9 @@ async function download(page, action, name) {
 
 /** Une étape du parcours : chronométrée, journalisée, capturée en cas d'échec. */
 async function step(id, role, action, attendu, fn) {
+    if (!wanted(id)) {
+        return true;
+    }
     current = {
         etape: id, role, action, attendu, obtenu: '', resultat: '', duree_s: 0,
         captures: [], telechargements: [], erreurs_page: [], anomalies: [], remarques: [],
@@ -596,8 +638,9 @@ async function procedure2() {
             if (/brouillon|propos/i.test(text)) {
                 anomaly('Le catalogue affiche encore un état non publié : ' + text);
             }
-            await row.scrollIntoViewIfNeeded();
             await shot(page, '02-deve-catalogue-ep-publie');
+            await shotAround(page, row, '02-deve-catalogue-ep-publie-extrait', 500);
+            note(`Le catalogue affiche les ${await page.locator('#region-main table tbody tr').count()} EP sur une seule page, sans pagination ni recherche.`);
             return 'Ligne du catalogue : ' + text.slice(0, 200);
         });
 }
@@ -864,7 +907,9 @@ async function ensureSynthesis() {
             await page.goto(url('/mod/epsynthesis/administration.php', { id: state.synthesiscmid }));
             const box = page.locator(`input[name="epcmid[]"][value="${CONF.CMID}"]`);
             check(await box.count(), 'L\'activité EP n\'est pas proposée au lien');
-            if (!(await box.isChecked())) {
+            if (await box.isChecked()) {
+                await shot(page, '06-admin-lier-synthese');
+            } else {
                 await box.check();
                 await shot(page, '06-admin-lier-synthese');
                 await clickAndWait(page, page.locator('#region-main form input[type="submit"], #region-main form button[type="submit"]').first());
@@ -969,6 +1014,7 @@ async function procedure7() {
             }
             await row.locator('textarea[name="validatorcomment"]').fill('Validé pour la rubrique 6.1.');
             await shot(page, '07-deve-element-supplement');
+            await shotAround(page, row, '07-deve-element-supplement-extrait', 300);
             await clickAndWait(page, row.locator('input[name="validate"]'));
             await expectText(page, 'Décision enregistrée.');
             if (CONF.PSQL) {
@@ -1031,9 +1077,11 @@ async function procedure7() {
             const text = pdftext(file);
             const flat = text.replace(/\s+/g, ' ');
             check(flat.includes(state.number), 'Le numéro ne figure pas dans le PDF');
-            const m = text.match(/Code de v[ée]rification\s*:\s*([0-9a-f\s]{16,})/i);
-            check(m, 'Code de vérification introuvable dans le PDF');
-            state.code = m[1].replace(/\s+/g, '').slice(0, 64);
+            // Le pied de page porte le code tronqué (16 car.), la rubrique 8 le code complet : on garde le plus long.
+            const codes = [...execFileSync('pdftotext', ['-raw', file, '-'], { encoding: 'utf8' })
+                .matchAll(/Code de v[ée]rification\s*:\s*([0-9a-f]{16,64})/g)].map((x) => x[1]).sort((a, b) => b.length - a.length);
+            check(codes.length, 'Code de vérification introuvable dans le PDF');
+            state.code = codes[0];
             check(flat.includes(state.item.split(' (')[0]) || flat.includes('Prix du meilleur poster'), 'L\'élément validé ne figure pas au supplément');
             check(flat.includes('Bien-être animal'), 'L\'EP validé ne figure pas au supplément');
             const verifyurl = flat.match(/https?:\/\/\S*supplement_verify\.php/);
@@ -1048,10 +1096,24 @@ async function procedure7() {
             const { page } = await session('__anonyme__');
             await page.goto(url('/mod/ep/supplement_verify.php'));
             const onlogin = /login\/index\.php/.test(page.url()) || (await page.locator('#loginbtn').count()) > 0;
+            let guest = '';
             if (onlogin) {
                 await shot(page, '07-public-verification-redirigee-connexion');
                 anomaly('supplement_verify.php renvoie vers la page de connexion : la vérification n\'est pas accessible sans compte '
                     + '(require_login() dans supplement_verify.php).');
+                // Contournement possible seulement si le site propose l'accès invité.
+                const button = page.locator('#guestlogin [type="submit"], form[action*="login/index.php"] input[name="username"][value="guest"] ~ [type="submit"]').first();
+                if (await button.count()) {
+                    await clickAndWait(page, button);
+                    if (/supplement_verify\.php/.test(page.url())) {
+                        await page.fill('#ep-verify-number', state.number);
+                        await page.fill('#ep-verify-code', state.code);
+                        await clickAndWait(page, page.locator('#region-main form input[type="submit"]'));
+                        await expectText(page, 'authentique');
+                        await shot(page, '07-public-acces-invite-verification');
+                        guest = ' Avec le bouton « accès invité » de la page de connexion, la vérification aboutit.';
+                    }
+                }
             } else {
                 await page.fill('#ep-verify-number', state.number);
                 await page.fill('#ep-verify-code', state.code);
@@ -1075,7 +1137,7 @@ async function procedure7() {
             await deve.fill('#ep-verify-code', '0'.repeat(64));
             await clickAndWait(deve, deve.locator('#region-main form input[type="submit"]'));
             await expectText(deve, 'Aucun supplément ne correspond');
-            return onlogin ? 'Vérification impossible sans connexion ; numéro et code vérifiés une fois connecté.' : 'Vérifié sans connexion.';
+            return onlogin ? 'Vérification impossible sans connexion ; numéro et code vérifiés une fois connecté.' + guest : 'Vérifié sans connexion.';
         });
 }
 
@@ -1136,8 +1198,8 @@ async function procedure9() {
             check(/Prérequis manquants/.test(text), 'Prérequis manquant non signalé : ' + text);
             check(!(await row.locator('a[href*="action=register"]').count()), 'Bouton « S\'inscrire » proposé malgré le prérequis bloquant');
             check(/ne remplissez pas les prérequis/.test(text), 'Motif du refus non affiché : ' + text);
-            await row.scrollIntoViewIfNeeded();
             await shot(page, '09-etudiant-catalogue-prerequis-manquant');
+            await shotAround(page, row, '09-etudiant-catalogue-prerequis-manquant-extrait', 500);
             // Adresse forgée : l'identifiant de l'EP est lu dans le lien vers sa fiche, ou en base.
             let activityid = null;
             const href = await row.locator('a[href*="activityid="]').first().getAttribute('href').catch(() => null);
@@ -1148,11 +1210,24 @@ async function procedure9() {
             }
             check(activityid, 'Identifiant de l\'EP introuvable');
             await page.goto(epurl('catalog.php', { action: 'register', activityid }));
+            const confirm = page.locator('form[action*="action=register"] input[type="submit"]');
+            let outcome = 'page d\'inscription refusée d\'emblée';
+            if (await confirm.count()) {
+                anomaly('L\'adresse d\'inscription forgée affiche la page de confirmation (ECTS, choix de l\'année) malgré le '
+                    + 'prérequis bloquant : catalog.php:67 appelle ep_registration_problem() sans $ep, si bien que les '
+                    + 'prérequis (et l\'année) ne sont vérifiés qu\'à l\'enregistrement.');
+                await shot(page, '09-etudiant-inscription-forcee-confirmation');
+                await clickAndWait(page, confirm);
+                outcome = 'refus à la confirmation';
+            }
             const body = await mainText(page);
-            check(/prérequis/i.test(body), 'L\'inscription forcée n\'est pas refusée : ' + body.slice(0, 300));
-            check(!(await page.locator('form[action*="action=register"] input[type="submit"]').count()), 'Formulaire de confirmation proposé malgré le prérequis');
-            await shot(page, '09-etudiant-inscription-refusee-prerequis');
-            return `${CONF.PREREQ_CODE} (id ${activityid}) : ${text.slice(0, 160)}`;
+            check(/ne remplissez pas les prérequis/i.test(body), 'L\'inscription forcée n\'est pas refusée : ' + body.slice(0, 300));
+            await shotTop(page, '09-etudiant-inscription-refusee-prerequis');
+            if (CONF.PSQL) {
+                const n = db(`SELECT count(*) FROM {ep_credit} c JOIN {user} u ON u.id = c.userid WHERE u.username = '${CONF.STUDENT}' AND c.activityid = ${Number(activityid)} AND c.status IN (0, 1)`);
+                check(n === '0', `Inscription créée malgré le prérequis (${n})`);
+            }
+            return `${CONF.PREREQ_CODE} (id ${activityid}) : ${outcome}. Ligne : ${text.slice(-120)}`;
         });
 
     await step('9.2', 'DEVE (devea_1)', 'Contrôler dans le pilotage la situation d\'etua_301 (année validée, ECTS retenus)',
@@ -1187,7 +1262,6 @@ function cfg(name, value) {
     for (const dir of [CONF.CAPTURES, CONF.DOWNLOADS]) {
         fs.mkdirSync(dir, { recursive: true });
     }
-    const only = process.env.ETAPES ? process.env.ETAPES.split(',').map(Number) : null;
     let logoffset = 0;
     let olddebug = null;
     if (CONF.MOODLE_DIR) {
@@ -1202,7 +1276,8 @@ function cfg(name, value) {
         async () => { await ensureSynthesis(); await procedure6(); }, procedure7, procedure8, procedure9];
     try {
         for (let i = 0; i < procedures.length; i++) {
-            if (!only || only.includes(i + 1)) {
+            const n = String(i + 1);
+            if (!ONLY || ONLY.some((t) => t === n || t.startsWith(n + '.'))) {
                 await procedures[i]();
             }
         }
@@ -1221,7 +1296,7 @@ function cfg(name, value) {
             const lines = buffer.toString('utf8').split('\n')
                 .filter((l) => /PHP (Warning|Notice|Fatal|Deprecated|Parse)|Debugging:|Exception|Stack trace|error/i.test(l))
                 .filter((l) => !/Failed to poll event/.test(l));
-            results.push({ etape: 'journal', role: 'serveur', action: 'Erreurs journalisées par le serveur pendant le parcours',
+            results.push({ etape: ONLY ? 'journal-reprise' : 'journal', role: 'serveur', action: 'Erreurs journalisées par le serveur pendant le parcours',
                 attendu: 'Aucune', obtenu: lines.length ? `${lines.length} ligne(s)` : 'Aucune', resultat: lines.length ? 'anomalie' : 'réussi',
                 lignes: lines.slice(0, 200) });
         }

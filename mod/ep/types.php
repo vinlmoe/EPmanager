@@ -107,6 +107,7 @@ if ($action === 'delete' && $type) {
     $confirmurl = new moodle_url($baseurl, [
         'action' => 'delete', 'typeid' => $type->id, 'confirm' => 1, 'sesskey' => sesskey(),
     ]);
+    ep_set_secondary_page_header();
     echo $OUTPUT->header();
     echo $OUTPUT->heading(get_string('managetypes', 'mod_ep'));
     echo $OUTPUT->confirm(
@@ -118,6 +119,7 @@ if ($action === 'delete' && $type) {
     exit;
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('managetypes', 'mod_ep'));
 echo html_writer::link(new moodle_url('/mod/ep/administration.php', ['id' => $cm->id]), get_string('back'));

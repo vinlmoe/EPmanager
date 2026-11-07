@@ -84,6 +84,7 @@ if ($mform->is_cancelled()) {
     redirect($pageurl, get_string('pdfsettingssaved', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('pdfsettings', 'mod_ep'));
 echo html_writer::link($returnurl, get_string('back'));

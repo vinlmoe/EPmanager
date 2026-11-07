@@ -89,6 +89,7 @@ if ($action === 'bulk') {
     redirect($listurl, get_string('yearvalidationdone', 'mod_ep', $result), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading_with_help(get_string('yearvalidation', 'mod_ep'), 'yearvalidation', 'mod_ep');
 echo html_writer::link(new moodle_url('/mod/ep/administration.php', ['id' => $cm->id]), get_string('back'));

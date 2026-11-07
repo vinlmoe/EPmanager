@@ -111,6 +111,7 @@ if ($canrestore) {
     }
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading($title);
 echo html_writer::link($backurl, get_string('back'));

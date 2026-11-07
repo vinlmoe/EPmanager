@@ -113,6 +113,7 @@ $fileoptions = [
 ];
 
 $mform = new credit_form(new moodle_url($baseurl, ['creditid' => $creditid]), [
+    'editing' => (bool) $creditid,
     'ep' => $ep,
     'types' => $types,
     'fileoptions' => $fileoptions,
@@ -188,6 +189,7 @@ if ($mform->is_cancelled()) {
     redirect($returnurl, get_string('creditsubmitted', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('declarecredit', 'mod_ep'));
 echo html_writer::link($returnurl, get_string('back'));

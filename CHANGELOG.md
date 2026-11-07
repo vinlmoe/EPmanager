@@ -3,6 +3,50 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## 1.0.0 — mod_ep 2026111400, mod_epsynthesis 2026111400 (14 novembre 2026)
+
+Lots 8 et 9 : banc de charge et de concurrence, parcours de bout en bout, revue de sécurité,
+documentation. Les deux modules passent en maturité stable.
+
+### Performance (banc d'une promotion de 2 000 étudiants, 200 EP, 60 000 crédits)
+- Files d'attente paginées en base : demandes à valider (la DEVE en avait 7 000 sur une page),
+  éléments du supplément ; prérequis du catalogue et des participants calculés en un nombre fixe
+  de requêtes ; preuves chargées en une requête.
+- Export complet écrit en flux (classeur OpenSpout, données JSON en un passage) : 10 s et
+  100 Mo au lieu de 34 s et plus de 1 Go ; restauration en 15 s au lieu de 7 min.
+- Livret PDF du catalogue conservé tant qu'il est à jour (0,03 s au lieu de 5 s).
+- Toutes les pages sous 0,2 s côté serveur, avec un nombre de requêtes indépendant de la taille
+  de la promotion. Rapports : `docs/audit/test-de-charge.pdf`, `docs/audit/test-de-concurrence.pdf`.
+
+### Sécurité
+- Supplément au diplôme : sceau HMAC du site sur chaque émission et contrôle de l'intégrité du
+  PDF à la vérification ; une copie restaurée ou importée n'est plus reconnue ; la page de
+  vérification est publique (sans compte).
+- Une déclaration ou un élément du supplément validé à une première étape ne se modifie plus
+  (il se retire encore) ; le responsable d'un EP ne retire une inscription qu'à son étape ; les
+  ECTS retenus par un responsable ou un référent sont bornés aux ECTS demandés.
+- Synthèse : seules les promotions où l'enseignant a une inscription active sont prises en compte.
+- Imports et restauration : valeurs normalisées, contrôle de l'archive avant extraction, taille
+  maximale des fichiers déposés ; à la restauration, un lien vers l'activité d'un autre cours
+  n'est gardé que si la personne qui restaure y a les droits ; transfert d'un étudiant seulement
+  vers un cours où il est inscrit.
+- Risques déclarés pour les capacités sensibles.
+
+### Ergonomie (parcours de bout en bout)
+- Catalogue : recherche, pagination, tri naturel ; message d'inscription impossible dès
+  l'affichage quand un prérequis bloquant manque.
+- Éléments du supplément et ajout de participants : recherche par étudiant.
+- Syllabus : fiche PDF de la version en cours de rédaction, historique des versions.
+- Tableau de bord de l'étudiant : décision de la DEVE sur chaque année.
+- Titre et description de l'activité affichés une seule fois (en-tête d'activité de Moodle) ;
+  boutons « Envoyer la demande » ; plus de mention TCPDF dans les PDF.
+
+### Documentation
+- Guides LaTeX avec captures : `docs/guides/guide-parametrage.pdf` (DEVE),
+  `guide-enseignant.pdf`, `guide-etudiant.pdf` ; captures rejouables (`docs/guides/captures.js`).
+- `README.md` et `mod/ep/INSTALL.md` réécrits.
+- Tests : 121 tests mod_ep, 7 tests mod_epsynthesis, sous PostgreSQL et MariaDB.
+
 ## 0.8.0 — mod_ep 2026111200, mod_epsynthesis 2026111200 (12 novembre 2026)
 
 Lot 7 : synthèse enseignant, données personnelles, réinitialisation du cours.

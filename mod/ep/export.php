@@ -156,6 +156,7 @@ if ($mode === 'credits') {
     exit;
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('exportcsv', 'mod_ep'));
 echo html_writer::link(new moodle_url('/mod/ep/dashboard.php', ['id' => $cm->id]), get_string('back'));

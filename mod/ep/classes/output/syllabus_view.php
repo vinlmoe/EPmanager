@@ -199,7 +199,7 @@ class syllabus_view {
             $kinds = ep_session_kind_options();
             $items = [];
             foreach ($hours->bykind as $kind => $duration) {
-                $items[] = ($kinds[$kind] ?? s($kind)) . $labelsep . get_string('numhours', 'moodle', ep_format_ects($duration));
+                $items[] = ($kinds[$kind] ?? s($kind)) . $labelsep . get_string('hoursshort', 'mod_ep', ep_format_ects($duration));
             }
             $items[] = get_string('hourssessions', 'mod_ep', ep_format_ects($hours->sessions));
             $items[] = get_string('hourspersonal', 'mod_ep', ep_format_ects($hours->personal));

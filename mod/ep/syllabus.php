@@ -88,6 +88,7 @@ if ($decision !== '' && data_submitted()) {
 $types = ep_get_types($ep->id);
 $type = $types[$activity->typeid] ?? null;
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('syllabusof', 'mod_ep', format_string($activity->name)));
 // Retour vers la liste d'où l'on vient le plus souvent : les propositions pour ceux qui rédigent ou
@@ -111,6 +112,14 @@ $actions = [
         ? new moodle_url('/mod/ep/syllabus_pdf.php', ['id' => $cm->id, 'activityid' => $activity->id])
         : null,
 ];
+// Fiche PDF de la version de travail, pour le rédacteur et la DEVE : relire le document avant
+// publication.
+if ($working && ($canedit || $canmanage)) {
+    $actions[get_string('downloadworkingsyllabus', 'mod_ep')] = new moodle_url(
+        '/mod/ep/syllabus_pdf.php',
+        ['id' => $cm->id, 'activityid' => $activity->id, 'version' => 'working']
+    );
+}
 if ($editlabel !== null) {
     $actions[$editlabel] = new moodle_url('/mod/ep/syllabus_edit.php', ['id' => $cm->id, 'activityid' => $activity->id]);
 }
@@ -185,6 +194,48 @@ if ($working) {
             ]);
         }
         echo html_writer::end_tag('form');
+    }
+}
+
+// Historique des versions, pour ceux qui suivent la publication : toutes les versions restent en
+// base (publiée, remplacée, refusée, en cours).
+if ($canedit || $canmanage) {
+    $versions = $DB->get_records(
+        'ep_syllabus',
+        ['activityid' => $activity->id],
+        'version DESC',
+        'id, version, status, authorid, reviewerid, reviewcomment, timesubmitted, timereviewed, timemodified'
+    );
+    if (count($versions) > 1) {
+        $people = $DB->get_records_list(
+            'user',
+            'id',
+            array_unique(array_filter(array_merge(
+                array_column($versions, 'authorid'),
+                array_column($versions, 'reviewerid')
+            ))),
+            '',
+            'id, ' . implode(', ', \core_user\fields::get_name_fields())
+        );
+        $name = fn($id) => isset($people[$id]) ? fullname($people[$id]) : '-';
+        $date = fn($time) => $time ? userdate($time, get_string('strftimedatetimeshort', 'langconfig')) : '-';
+        $rows = [];
+        foreach ($versions as $version) {
+            $rows[] = [
+                (int) $version->version,
+                get_string('syllabusstatus_' . $version->status, 'mod_ep'),
+                s($name($version->authorid)),
+                $date($version->timesubmitted),
+                s($name($version->reviewerid)) . ($version->timereviewed ? ' — ' . $date($version->timereviewed) : ''),
+                trim((string) $version->reviewcomment) !== '' ? format_text($version->reviewcomment, FORMAT_PLAIN) : '-',
+            ];
+        }
+        echo $OUTPUT->heading(get_string('syllabushistory', 'mod_ep'), 3, 'mt-4');
+        echo ep_render_paged_table([
+            get_string('syllabusversionlabel', 'mod_ep'), get_string('syllabusstatus', 'mod_ep'),
+            get_string('syllabusauthor', 'mod_ep'), get_string('submittedon', 'mod_ep'),
+            get_string('syllabusreviewer', 'mod_ep'), get_string('reviewcomment', 'mod_ep'),
+        ], $rows);
     }
 }
 

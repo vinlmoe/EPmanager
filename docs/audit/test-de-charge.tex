@@ -120,7 +120,8 @@ DEVE & Tableau de bord & 0,12 & 46 & 184 \\
    164--204 \\
  & Export CSV par étudiant & 0,70 & -- & 186 \\
  & Export CSV détaillé (59\,550 lignes) & 3,58 & -- & 9\,738 \\
- & Livret PDF du catalogue (200 EP) & 5,47 & -- & 1\,261 \\
+ & Livret PDF du catalogue (200 EP) : production, puis livret conservé & 4,86 / 0,03 & -- & 1\,320 \\
+ & Export complet (ZIP, 60\,000 crédits) & 9,49 & -- & 4\,800 \\
  & Paramétrage JSON avec catalogue & 0,15 & -- & 1\,425 \\
 \bottomrule
 \end{longtable}
@@ -159,8 +160,9 @@ Export du paramétrage avec catalogue & 86,7 & 812 \\
     mémoire pour 60\,000 crédits). La page relève la limite de mémoire de PHP pour cette
     opération ; au-delà de 150\,000 crédits dans une même activité, mieux vaut restaurer en
     ligne de commande (\code{docs/audit/concurrence/worker.php}).
-  \item \textbf{Livret PDF} : 5,5~s pour 200 EP de huit pages de syllabus chacun ; il est produit à
-    la demande et non à chaque affichage.
+  \item \textbf{Livret PDF} : 4,9~s pour produire le livret de 200 EP de huit pages de syllabus
+    chacun ; il est ensuite conservé et resservi en 0,03~s tant que le catalogue, les syllabus, les
+    responsables et les réglages des PDF ne changent pas.
 \end{itemize}
 
 \section{Conclusion}
@@ -168,6 +170,6 @@ Export du paramétrage avec catalogue & 86,7 & 812 \\
 Avec 2\,000 étudiants, 200 EP et 60\,000 crédits dans une seule activité, toutes les pages
 s'ouvrent en moins de 0,2~s côté serveur, avec un nombre de requêtes qui ne dépend pas de la
 taille de la promotion. Les traitements de masse restent dans des durées acceptables pour une
-requête web (export complet 10~s, restauration 15~s, livret 5~s) et une mémoire bornée. La
+requête web (export complet 10~s, restauration 15~s, livret 5~s la première fois) et une mémoire bornée. La
 tenue sous accès simultanés fait l'objet du rapport \emph{Test de concurrence}.
 \end{document}

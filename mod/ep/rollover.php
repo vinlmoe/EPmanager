@@ -61,6 +61,7 @@ if ($action === 'rollover' && $nextyear !== (int) $ep->currentstudyyear) {
             \core\output\notification::NOTIFY_SUCCESS
         );
     }
+    ep_set_secondary_page_header();
     echo $OUTPUT->header();
     echo $OUTPUT->heading(get_string('rollover', 'mod_ep'));
     echo $OUTPUT->confirm(
@@ -113,6 +114,7 @@ if ($action === 'transfer') {
         redirect($baseurl, get_string('transferdone', 'mod_ep', $result), null, \core\output\notification::NOTIFY_SUCCESS);
     }
 
+    ep_set_secondary_page_header();
     echo $OUTPUT->header();
     echo $OUTPUT->heading(get_string('transferstudent', 'mod_ep'));
     echo $OUTPUT->confirm(
@@ -135,6 +137,7 @@ if ($action === 'transfer') {
     exit;
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading_with_help(get_string('rollover', 'mod_ep'), 'rollover', 'mod_ep');
 echo html_writer::link(new moodle_url('/mod/ep/administration.php', ['id' => $cm->id]), get_string('back'));

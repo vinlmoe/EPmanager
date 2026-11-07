@@ -77,7 +77,6 @@ if (data_submitted()) {
 $counts = epsynthesis_count_todo($activelinks, $USER->id);
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($epsynthesis->name));
 echo epsynthesis_render_navlinks($cm, 'todo', $counts);
 echo epsynthesis_render_managelinks_notice($epsynthesis, $cm, $context);
 
@@ -261,7 +260,8 @@ if (empty($items)) {
         }
 
         $commentid = 'epsynthesis-supplement-comment-' . $item->id;
-        $form = html_writer::start_tag('form', ['method' => 'post', 'action' => $formurl->out(false)]);
+        $form = html_writer::start_tag('form', ['method' => 'post', 'action' => $formurl->out(false),
+            'style' => 'min-width: 14rem']);
         $form .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
         $form .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'itemid', 'value' => $item->id]);
         $form .= html_writer::label(get_string('validatorcomment', 'mod_ep'), $commentid, true, ['class' => 'sr-only']);

@@ -166,6 +166,7 @@ if ($action === 'edit') {
         );
     }
 
+    ep_set_secondary_page_header();
     echo $OUTPUT->header();
     echo $OUTPUT->heading(get_string('managecatalog', 'mod_ep'));
     $mform->display();
@@ -173,6 +174,7 @@ if ($action === 'edit') {
     exit;
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('managecatalog', 'mod_ep'));
 echo html_writer::link(new moodle_url('/mod/ep/administration.php', ['id' => $cm->id]), get_string('back'));

@@ -2284,6 +2284,19 @@ function ep_progress_table_head() {
 }
 
 /**
+ * En-tête d'activité des pages secondaires : Moodle y affiche déjà le nom de l'activité, et sa
+ * description n'a sa place que sur la page d'accueil (view.php). À appeler avant l'en-tête.
+ *
+ * @return void
+ */
+function ep_set_secondary_page_header() {
+    global $PAGE;
+
+    // Propriété magique de moodle_page (Moodle 4.0 et plus) : isset() ne la voit pas.
+    $PAGE->activityheader->set_description('');
+}
+
+/**
  * Barre de navigation de l'activité : les destinations utiles à l'utilisateur, dans l'ordre du
  * travail courant (s'inscrire, déclarer, valider, piloter) puis les usages ponctuels (export,
  * administration) en fin de barre.
@@ -2636,6 +2649,9 @@ function ep_print_student_dashboard(stdClass $ep, $userid, stdClass $cm, stdClas
     // 2. Bilan par année d'étude, avec le détail des types qui y contribuent : l'année n'est
     // rappelée que sur la première ligne de son groupe.
     if (!empty($yearrows)) {
+        // Décision de la DEVE sur chaque année, à côté du minimum atteint ou non : c'est elle qui
+        // vaut, l'atteinte du minimum n'en est que l'indice.
+        $decisions = ep_get_year_validations($ep->id, [$userid])[$userid] ?? [];
         echo $OUTPUT->heading(get_string('yeartotals', 'mod_ep'), 4);
         $yeartable = new html_table();
         $yeartable->head = array_merge(
@@ -2645,6 +2661,13 @@ function ep_print_student_dashboard(stdClass $ep, $userid, stdClass $cm, stdClas
         foreach ($yearrows as $row) {
             $yearcell = html_writer::tag('strong', ep_studyyear_label($row->studyyear))
                 . ' ' . ep_render_status_badge($row->done);
+            $decision = $decisions[(int) $row->studyyear] ?? null;
+            if ($decision) {
+                $yearcell .= html_writer::div(html_writer::span(
+                    get_string($decision->decision ? 'yearvalidated' : 'yearnotvalidated', 'mod_ep'),
+                    'badge ' . ($decision->decision ? 'badge-success' : 'badge-danger')
+                ), 'mt-1');
+            }
             $yeartable->data[] = array_merge(
                 [$yearcell, html_writer::tag('strong', get_string('yearminimum', 'mod_ep'))],
                 ep_render_progress_cells($row->retained, $row->required, $row->done)
@@ -5230,7 +5253,8 @@ function ep_cancel_supplement_item(stdClass $item, $byuserid, $role) {
  * Clause de sélection des éléments du supplément d'une instance, filtrés.
  *
  * @param int $epid
- * @param array $filters userid, status, pendingrole, userids (périmètre d'un référent).
+ * @param array $filters userid, status, pendingrole, userids (périmètre d'un référent), search
+ *                       (nom de l'étudiant ; la requête doit joindre {user} sous l'alias u).
  * @return array|null [where, params], ou null si le filtre ne peut rien retenir.
  */
 function ep_supplement_items_where($epid, array $filters) {
@@ -5249,6 +5273,10 @@ function ep_supplement_items_where($epid, array $filters) {
     if (!empty($filters['pendingrole'])) {
         $where[] = 'i.pendingrole = :pendingrole';
         $params['pendingrole'] = $filters['pendingrole'];
+    }
+    if (isset($filters['search']) && trim($filters['search']) !== '') {
+        $where[] = $DB->sql_like($DB->sql_fullname('u.firstname', 'u.lastname'), ':search', false, false);
+        $params['search'] = '%' . $DB->sql_like_escape(trim($filters['search'])) . '%';
     }
     if (isset($filters['userids'])) {
         if (empty($filters['userids'])) {
@@ -5276,7 +5304,8 @@ function ep_count_supplement_items($epid, array $filters = []) {
         return 0;
     }
     [$where, $params] = $clause;
-    return (int) $DB->count_records_sql("SELECT COUNT(1) FROM {ep_supplement_item} i WHERE $where", $params);
+    return (int) $DB->count_records_sql("SELECT COUNT(1) FROM {ep_supplement_item} i JOIN {user} u ON u.id = i.userid
+        WHERE $where", $params);
 }
 
 /**

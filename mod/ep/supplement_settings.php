@@ -81,6 +81,7 @@ if ($action === 'delete' && $category) {
     $confirmurl = new moodle_url($pageurl, [
         'action' => 'delete', 'categoryid' => $category->id, 'confirm' => 1, 'sesskey' => sesskey(),
     ]);
+    ep_set_secondary_page_header();
     echo $OUTPUT->header();
     echo $OUTPUT->heading(get_string('supplementcategories', 'mod_ep'));
     echo $OUTPUT->confirm(
@@ -125,6 +126,7 @@ if ($action === 'editcategory') {
         redirect($pageurl, get_string('supplementcategorysaved', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
     }
 
+    ep_set_secondary_page_header();
     echo $OUTPUT->header();
     echo $OUTPUT->heading(get_string($category ? 'supplementcategoryedit' : 'supplementcategoryadd', 'mod_ep'));
     echo html_writer::link($pageurl, get_string('back'));
@@ -201,6 +203,7 @@ if ($mform->is_cancelled()) {
     redirect($pageurl, get_string('supplementsettingssaved', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading_with_help(get_string('supplementsettings', 'mod_ep'), 'supplement', 'mod_ep');
 echo html_writer::link($returnurl, get_string('back'));

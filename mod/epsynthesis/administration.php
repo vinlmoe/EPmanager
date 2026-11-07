@@ -60,7 +60,6 @@ if (optional_param('save', 0, PARAM_INT) && confirm_sesskey()) {
 $linked = epsynthesis_get_links($epsynthesis->id);
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($epsynthesis->name));
 echo $OUTPUT->heading(get_string('managelinks', 'mod_epsynthesis'), 3);
 echo html_writer::tag('p', get_string('managelinks_help', 'mod_epsynthesis'));
 

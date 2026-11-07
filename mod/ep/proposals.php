@@ -114,6 +114,7 @@ $mine = array_values(array_filter($rows, fn($row) => !in_array($row, $toreview, 
 $authorids = array_unique(array_filter(array_map(fn($row) => (int) $row->syllabus->authorid, $rows)));
 $authors = $authorids ? $DB->get_records_list('user', 'id', $authorids) : [];
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('proposals', 'mod_ep'));
 echo html_writer::link(new moodle_url('/mod/ep/view.php', ['id' => $cm->id]), get_string('back'));

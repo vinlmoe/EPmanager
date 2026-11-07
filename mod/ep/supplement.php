@@ -76,6 +76,7 @@ if ($action === 'preview') {
     exit;
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(
     $isself ? get_string('mysupplement', 'mod_ep') : get_string('supplement', 'mod_ep') . ' - ' . fullname($student)

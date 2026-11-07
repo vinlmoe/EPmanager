@@ -96,6 +96,7 @@ $fileoptions = [
 ];
 
 $mform = new supplement_item_form(new moodle_url($baseurl, ['itemid' => $itemid]), [
+    'editing' => (bool) $itemid,
     'categories' => $categories,
     'evidence' => $evidence,
     'fileoptions' => $fileoptions,
@@ -174,6 +175,7 @@ if ($mform->is_cancelled()) {
     redirect($returnurl, get_string('supplementitemsaved', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string($item ? 'supplementitemedit' : 'supplementitemrequest', 'mod_ep'));
 echo html_writer::link($returnurl, get_string('back'));

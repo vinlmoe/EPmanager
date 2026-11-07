@@ -1,21 +1,461 @@
 {
-  "execution": "5UVL",
-  "date": "2026-11-07T00:14:42.810Z",
+  "execution": "L0ZN",
+  "date": "2026-11-07T00:19:29.045Z",
   "site": "http://localhost:8100",
-  "ep": "Bien-être animal en élevage (5UVL)",
+  "ep": "Bien-être animal en élevage (L0ZN)",
+  "reprise": "2.4,7.4,9",
   "etapes": [
+    {
+      "etape": "1.1",
+      "role": "enseignant (ensa_5)",
+      "action": "Ouvrir « Propositions et syllabus » depuis l'activité",
+      "attendu": "La page liste les propositions de l'enseignant et propose « Proposer un nouvel EP ».",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 1.9,
+      "captures": [
+        "guides/captures/01-enseignant-propositions.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "1.2",
+      "role": "enseignant (ensa_5)",
+      "action": "Rédiger la proposition : caractéristiques, syllabus, quatre séances (dont une par un autre enseignant et une par un intervenant extérieur), enregistrer le brouillon",
+      "attendu": "Brouillon enregistré (« Syllabus enregistré. »), les quatre séances sont relues dans le formulaire.",
+      "obtenu": "EP n° 624 créé en brouillon, 4 séances relues.",
+      "resultat": "réussi",
+      "duree_s": 2.7,
+      "captures": [
+        "guides/captures/01-enseignant-proposer-ep-formulaire.png",
+        "guides/captures/01-enseignant-brouillon-enregistre.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "1.3",
+      "role": "enseignant (ensa_5)",
+      "action": "Soumettre la proposition à la DEVE",
+      "attendu": "Redirection vers la fiche de l'EP, message « Syllabus soumis à la DEVE. », version 1 « Soumise ».",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 1.2,
+      "captures": [
+        "guides/captures/01-enseignant-syllabus-soumis.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": [
+        "La fiche d'un EP non publié n'offre pas de bouton « Fiche PDF » : syllabus_pdf.php accepte pourtant version=working pour le rédacteur et la DEVE."
+      ]
+    },
+    {
+      "etape": "1.4",
+      "role": "enseignant (ensa_5)",
+      "action": "Télécharger la fiche PDF du syllabus (version de travail)",
+      "attendu": "Un PDF contenant l'intitulé, les rubriques et les séances (dont l'intervenant extérieur).",
+      "obtenu": "PDF de 150271 octets, contenu vérifié",
+      "resultat": "réussi",
+      "duree_s": 0.5,
+      "captures": [],
+      "telechargements": [
+        "audit/procedures/telechargements/syllabus-L0ZN-v1-travail.pdf"
+      ],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": [
+        "Téléchargement par l'adresse syllabus_pdf.php?version=working, faute de bouton dans l'interface."
+      ]
+    },
+    {
+      "etape": "2.1",
+      "role": "DEVE (devea_1)",
+      "action": "Examiner la proposition et la renvoyer à l'auteur avec un commentaire",
+      "attendu": "La proposition figure dans « À examiner » ; après renvoi : « Décision enregistrée : version renvoyée pour modification. »",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 3.3,
+      "captures": [
+        "guides/captures/02-deve-propositions-a-examiner.png",
+        "guides/captures/02-deve-renvoyer-proposition.png",
+        "guides/captures/02-deve-proposition-renvoyee.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "2.2",
+      "role": "enseignant (ensa_5)",
+      "action": "Lire le commentaire de la DEVE, corriger et soumettre de nouveau",
+      "attendu": "Le commentaire de la DEVE est affiché dans le formulaire ; nouvelle soumission acceptée.",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 2.1,
+      "captures": [
+        "guides/captures/02-enseignant-propositions-renvoyee.png",
+        "guides/captures/02-enseignant-corriger-proposition.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "2.3",
+      "role": "DEVE (devea_1)",
+      "action": "Publier la proposition corrigée",
+      "attendu": "« Décision enregistrée : version publiée. » ; l'EP passe au catalogue.",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 1.3,
+      "captures": [
+        "guides/captures/02-deve-ep-publie.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "2.4",
+      "role": "DEVE (devea_1)",
+      "action": "Vérifier que l'EP apparaît au catalogue",
+      "attendu": "L'EP figure au catalogue avec son lien « Syllabus », ses ECTS et ses responsables.",
+      "obtenu": "Ligne du catalogue : Bien-être animal en élevage (L0ZN) Approche pratique du bien-être des animaux d'élevage : évaluation en exploitation, réglementation, leviers d'amélioration. Syllabus Internal academic 6 A3 - A4 28 su",
+      "resultat": "réussi",
+      "duree_s": 4.4,
+      "captures": [
+        "guides/captures/02-deve-catalogue-ep-publie.png",
+        "guides/captures/02-deve-catalogue-ep-publie-extrait.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": [
+        "Le catalogue affiche les 204 EP sur une seule page, sans pagination ni recherche."
+      ]
+    },
+    {
+      "etape": "3.1",
+      "role": "enseignant (ensa_5)",
+      "action": "Télécharger la fiche PDF de l'EP publié (bouton « Fiche PDF »)",
+      "attendu": "Le PDF de la version 1 publiée.",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 0.7,
+      "captures": [
+        "guides/captures/03-enseignant-fiche-ep-publiee.png"
+      ],
+      "telechargements": [
+        "audit/procedures/telechargements/syllabus-L0ZN-v1-publiee.pdf"
+      ],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "3.2",
+      "role": "enseignant (ensa_5)",
+      "action": "Ouvrir une révision du syllabus publié, modifier le contenu, soumettre",
+      "attendu": "Le lien « Proposer une mise à jour » ouvre le formulaire prérempli ; soumission acceptée (version 2).",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 2.2,
+      "captures": [
+        "guides/captures/03-enseignant-proposer-mise-a-jour.png",
+        "guides/captures/03-enseignant-revision-syllabus.png",
+        "guides/captures/03-enseignant-revision-soumise.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "3.3",
+      "role": "DEVE (devea_1)",
+      "action": "Publier la révision",
+      "attendu": "La version 2 remplace la version 1 au catalogue.",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 1.8,
+      "captures": [
+        "guides/captures/03-deve-revision-a-examiner.png",
+        "guides/captures/03-deve-comparer-versions.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "3.4",
+      "role": "enseignant (ensa_5)",
+      "action": "Vérifier que l'ancienne version reste dans l'historique",
+      "attendu": "La version 1 est conservée (statut « Remplacé ») et consultable.",
+      "obtenu": "Version 1 conservée en base seulement.",
+      "resultat": "réussi avec anomalie",
+      "duree_s": 0.8,
+      "captures": [
+        "guides/captures/03-enseignant-fiche-version-2.png"
+      ],
+      "telechargements": [
+        "audit/procedures/telechargements/syllabus-L0ZN-v2.pdf"
+      ],
+      "erreurs_page": [],
+      "anomalies": [
+        "Aucun écran ne montre l'historique des versions : la version 1 est conservée en base (« superseded ») mais n'est consultable nulle part dans l'interface (syllabus.php n'affiche que la version publiée et la version de travail)."
+      ],
+      "remarques": [
+        "En base : 1:superseded, 2:published"
+      ]
+    },
+    {
+      "etape": "4.1",
+      "role": "étudiant (etua_301)",
+      "action": "S'inscrire à l'EP depuis le catalogue",
+      "attendu": "Page de confirmation (année d'étude) puis « Inscription enregistrée, en attente de validation par le responsable. »",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 3.1,
+      "captures": [
+        "guides/captures/04-etudiant-inscription-confirmer.png",
+        "guides/captures/04-etudiant-inscription-enregistree.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "4.2",
+      "role": "étudiant (etua_301)",
+      "action": "Déclarer une activité sportive avec un justificatif PDF",
+      "attendu": "« Demande enregistrée, en attente de validation. » ; le référent est annoncé sur le formulaire.",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 2.5,
+      "captures": [
+        "guides/captures/04-etudiant-declarer-activite.png",
+        "guides/captures/04-etudiant-declaration-enregistree.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "4.3",
+      "role": "étudiant (etua_301)",
+      "action": "Demander l'ajout d'un élément au supplément au diplôme, avec une preuve PDF",
+      "attendu": "« Demande enregistrée. » ; l'élément apparaît « En attente » dans « Mon supplément ».",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 2.6,
+      "captures": [
+        "guides/captures/04-etudiant-demander-element-supplement.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "4.4",
+      "role": "étudiant (etua_301)",
+      "action": "Consulter son tableau de bord et l'aperçu de son supplément",
+      "attendu": "Le tableau de bord montre l'inscription et la déclaration en attente ; l'aperçu PDF est marqué non certifié.",
+      "obtenu": "Aperçu PDF de 157447 octets.",
+      "resultat": "réussi",
+      "duree_s": 1.5,
+      "captures": [
+        "guides/captures/04-etudiant-tableau-de-bord.png",
+        "guides/captures/04-etudiant-mon-supplement.png"
+      ],
+      "telechargements": [
+        "audit/procedures/telechargements/apercu-supplement-L0ZN.pdf"
+      ],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "5.1",
+      "role": "enseignant responsable (ensa_5)",
+      "action": "Ouvrir la liste des participants de son EP",
+      "attendu": "Depuis « Validation » > « Mes EP », la liste montre etua_301 en attente.",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 1.7,
+      "captures": [
+        "guides/captures/05-enseignant-validation-mes-ep.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "5.2",
+      "role": "enseignant responsable (ensa_5)",
+      "action": "Valider l'inscription d'etua_301 dans la liste",
+      "attendu": "« Décisions enregistrées : 1 validé(s)… » ; etua_301 « Validé » avec 6 ECTS retenus.",
+      "obtenu": "Ligne : Etu 301 Banc a etua_301@example.com A3 Validé - Assiduité complète, compte rendu de qualité. 6 Détail",
+      "resultat": "réussi",
+      "duree_s": 1.4,
+      "captures": [
+        "guides/captures/05-enseignant-participants-valider.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "5.3",
+      "role": "enseignant responsable (ensa_5)",
+      "action": "Inscrire deux étudiants en cours de session (etua_302, etua_303)",
+      "attendu": "« 2 étudiant(s) inscrit(s). » ; les deux apparaissent avec la mention « Ajouté par ».",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 1.3,
+      "captures": [
+        "guides/captures/05-enseignant-inscrire-etudiants.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": [
+        "La liste d'ajout est une liste à sélection multiple de 1999 noms, sans recherche."
+      ]
+    },
+    {
+      "etape": "5.4",
+      "role": "enseignant responsable (ensa_5)",
+      "action": "Retirer un participant (etua_303) avec un motif",
+      "attendu": "Page de confirmation, puis « Participant retiré. » ; etua_303 apparaît « Retiré ».",
+      "obtenu": "etua_303 : Etu 303 Banc a etua_303@example.com Inscrit par Ens 5 Banc a A3 Retiré - Inscrit par erreur : l'étudiant suit un autre EP sur le même créneau. - Détail",
+      "resultat": "réussi",
+      "duree_s": 1.7,
+      "captures": [
+        "guides/captures/05-enseignant-retirer-participant.png",
+        "guides/captures/05-enseignant-participants-apres.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "6.0",
+      "role": "administrateur (admin)",
+      "action": "Préparer une activité « Suivi de l'enseignement personnalisé » liée à l'activité EP",
+      "attendu": "Une activité epsynthesis existe dans le cours et est liée au cmid de l'EP.",
+      "obtenu": "Synthèse cmid 10, liée à cmid 4.",
+      "resultat": "réussi avec anomalie",
+      "duree_s": 2.9,
+      "captures": [
+        "guides/captures/06-admin-lier-synthese.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [
+        {
+          "utilisateur": "admin",
+          "url": "http://localhost:8100/admin/index.php",
+          "message": "JavaScript : Reactive components needs a main DOM element to dispatch events"
+        },
+        {
+          "utilisateur": "admin",
+          "url": "http://localhost:8100/mod/epsynthesis/index.php?id=3",
+          "message": "JavaScript : Reactive components needs a main DOM element to dispatch events"
+        },
+        {
+          "utilisateur": "admin",
+          "url": "http://localhost:8100/mod/epsynthesis/administration.php?id=10",
+          "message": "JavaScript : Reactive components needs a main DOM element to dispatch events"
+        }
+      ],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "6.1",
+      "role": "enseignant référent (ensa_1)",
+      "action": "Valider la déclaration sportive d'etua_301 (validate.php)",
+      "attendu": "La déclaration est dans « En attente de ma décision » ; le justificatif s'ouvre ; « EP validé. »",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 3.6,
+      "captures": [
+        "guides/captures/06-referent-validation-file.png",
+        "guides/captures/06-referent-valider-declaration.png"
+      ],
+      "telechargements": [
+        "audit/procedures/telechargements/justificatif-L0ZN.pdf"
+      ],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "6.2",
+      "role": "enseignant référent (ensa_1)",
+      "action": "Vérifier la page « À traiter » de la synthèse avant décision",
+      "attendu": "L'élément de supplément d'etua_301 y figure, avec ses boutons de décision.",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 1.5,
+      "captures": [
+        "guides/captures/06-referent-synthese-accueil.png",
+        "guides/captures/06-referent-synthese-a-traiter.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "6.3",
+      "role": "enseignant référent (ensa_1)",
+      "action": "Valider à son étape l'élément du supplément (supplement_items.php)",
+      "attendu": "« Décision enregistrée. » ; l'élément quitte la file du référent et attend la DEVE.",
+      "obtenu": "Conforme à l'attendu.",
+      "resultat": "réussi",
+      "duree_s": 2,
+      "captures": [
+        "guides/captures/06-referent-element-supplement.png",
+        "guides/captures/06-referent-synthese-apres-decision.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
     {
       "etape": "7.1",
       "role": "DEVE (devea_1)",
       "action": "Trancher l'élément du supplément à son étape",
       "attendu": "L'élément d'etua_301 est dans la file de la DEVE ; après validation, « Décision enregistrée. »",
-      "obtenu": "Élément introuvable dans la file de la DEVE (49 pages parcourues)",
-      "resultat": "échec",
-      "duree_s": 25,
-      "captures": [],
+      "obtenu": "Trouvé après 31 page(s).",
+      "resultat": "réussi avec anomalie",
+      "duree_s": 15.2,
+      "captures": [
+        "guides/captures/07-deve-element-supplement.png"
+      ],
       "telechargements": [],
       "erreurs_page": [],
-      "anomalies": [],
+      "anomalies": [
+        "Pour trouver l'élément d'etua_301, la DEVE a dû parcourir 31 pages de la file (aucune recherche ni filtre par étudiant)."
+      ],
       "remarques": []
     },
     {
@@ -23,7 +463,7 @@
       "role": "DEVE (devea_1)",
       "action": "Valider l'année 3 d'etua_301 (year_validation.php)",
       "attendu": "Recherche de l'étudiant, minimum atteint (6 + 4 ECTS), décision « Validée » enregistrée.",
-      "obtenu": "Ligne : Etu 301 Banc a 10 10 Minimum atteint Année validée 7/11/26 Année validée en jury. Décision Année validée Année non validée Commentaire",
+      "obtenu": "Ligne : Etu 301 Banc a 20 10 Minimum atteint Année validée 7/11/26 Année validée en jury. Décision Année validée Année non validée Commentaire",
       "resultat": "réussi",
       "duree_s": 1.8,
       "captures": [
@@ -39,15 +479,15 @@
       "role": "DEVE (devea_1)",
       "action": "Émettre le supplément au diplôme certifié d'etua_301 et le télécharger",
       "attendu": "« Supplément émis : SD-… » ; le PDF porte le numéro et le code de vérification.",
-      "obtenu": "Supplément SD-2026-2-00022, code 32db68cceb03… (17 car.)",
+      "obtenu": "Supplément SD-2026-2-00024, code e38c5fd95f25… (64 car.)",
       "resultat": "réussi avec anomalie",
-      "duree_s": 2.7,
+      "duree_s": 2.6,
       "captures": [
         "guides/captures/07-deve-emettre-supplement.png",
         "guides/captures/07-deve-supplement-emis.png"
       ],
       "telechargements": [
-        "audit/procedures/telechargements/supplement-SD-2026-2-00022.pdf"
+        "audit/procedures/telechargements/supplement-SD-2026-2-00024.pdf"
       ],
       "erreurs_page": [],
       "anomalies": [
@@ -60,11 +500,13 @@
       "role": "public (sans connexion)",
       "action": "Vérifier le numéro et le code sur supplement_verify.php",
       "attendu": "Page accessible sans connexion ; « Ce supplément est authentique : émis le … pour Etu 301 Banc a. »",
-      "obtenu": "Texte attendu absent : « authentique » (page http://localhost:8100/mod/ep/supplement_verify.php?number=SD-2026-2-00022&code=32db68cceb03a29dE)",
-      "resultat": "échec",
-      "duree_s": 1.6,
+      "obtenu": "Vérification impossible sans connexion ; numéro et code vérifiés une fois connecté. Avec le bouton « accès invité » de la page de connexion, la vérification aboutit.",
+      "resultat": "réussi avec anomalie",
+      "duree_s": 3.3,
       "captures": [
-        "guides/captures/07-public-verification-redirigee-connexion.png"
+        "guides/captures/07-public-verification-redirigee-connexion.png",
+        "guides/captures/07-public-acces-invite-verification.png",
+        "guides/captures/07-deve-supplement-authentique.png"
       ],
       "telechargements": [],
       "erreurs_page": [],
@@ -80,12 +522,12 @@
       "attendu": "Le supplément figure dans « Suppléments émis » (en vigueur) et se télécharge.",
       "obtenu": "Conforme à l'attendu.",
       "resultat": "réussi",
-      "duree_s": 1.7,
+      "duree_s": 0.7,
       "captures": [
         "guides/captures/08-etudiant-supplement-emis.png"
       ],
       "telechargements": [
-        "audit/procedures/telechargements/supplement-etudiant-SD-2026-2-00022.pdf"
+        "audit/procedures/telechargements/supplement-etudiant-SD-2026-2-00024.pdf"
       ],
       "erreurs_page": [],
       "anomalies": [],
@@ -96,7 +538,7 @@
       "role": "étudiant (etua_301)",
       "action": "Voir ses décisions (inscription, déclaration, élément du supplément)",
       "attendu": "Statuts « Validé » et commentaires des validateurs visibles ; historique des décisions de la déclaration.",
-      "obtenu": "Élément : Award or distinction Prix du meilleur poster étudiant, congrès AFVAC (5UVL) Best student poster award, AFVAC congress Poster sur la prévalence des boiteries en élevage laitier, primé au congrès nation",
+      "obtenu": "Élément : Award or distinction Prix du meilleur poster étudiant, congrès AFVAC (L0ZN) Best student poster award, AFVAC congress Poster sur la prévalence des boiteries en élevage laitier, primé au congrès nation",
       "resultat": "réussi",
       "duree_s": 1.5,
       "captures": [
@@ -113,15 +555,20 @@
       "role": "étudiant (etua_301)",
       "action": "Prérequis bloquant : EP030 sans avoir validé son prérequis",
       "attendu": "Le catalogue signale le prérequis manquant et ne propose pas « S'inscrire » ; l'adresse d'inscription forgée est refusée.",
-      "obtenu": "L'inscription forcée n'est pas refusée : Skip to main content BANC Accueil",
-      "resultat": "échec",
-      "duree_s": 3.8,
+      "obtenu": "EP030 (id 50) : refus à la confirmation. Ligne : lidé Internal academic 1 A1 - A3 Illimitées Ens 31 Banc a, Ens 61 Banc a Vous ne remplissez pas les prérequis de cet EP.",
+      "resultat": "réussi avec anomalie",
+      "duree_s": 5.6,
       "captures": [
-        "guides/captures/09-etudiant-catalogue-prerequis-manquant.png"
+        "guides/captures/09-etudiant-catalogue-prerequis-manquant.png",
+        "guides/captures/09-etudiant-catalogue-prerequis-manquant-extrait.png",
+        "guides/captures/09-etudiant-inscription-forcee-confirmation.png",
+        "guides/captures/09-etudiant-inscription-refusee-prerequis.png"
       ],
       "telechargements": [],
       "erreurs_page": [],
-      "anomalies": [],
+      "anomalies": [
+        "L'adresse d'inscription forgée affiche la page de confirmation (ECTS, choix de l'année) malgré le prérequis bloquant : catalog.php:67 appelle ep_registration_problem() sans $ep, si bien que les prérequis (et l'année) ne sont vérifiés qu'à l'enregistrement."
+      ],
       "remarques": []
     },
     {
@@ -131,7 +578,7 @@
       "attendu": "La fiche de l'étudiant montre les 10 ECTS de l'année et la décision d'année.",
       "obtenu": "Fiche consultée.",
       "resultat": "réussi",
-      "duree_s": 1.3,
+      "duree_s": 1.5,
       "captures": [
         "guides/captures/09-deve-pilotage-etudiant.png"
       ],
@@ -141,13 +588,70 @@
       "remarques": []
     },
     {
+      "etape": "journal-reprise",
+      "role": "serveur",
+      "action": "Erreurs journalisées pendant la reprise des étapes 2.4, 7.4 et 9",
+      "attendu": "Aucune",
+      "obtenu": "Aucune",
+      "resultat": "réussi",
+      "lignes": []
+    },
+    {
       "etape": "journal",
       "role": "serveur",
-      "action": "Erreurs journalisées par le serveur pendant le parcours",
+      "action": "Erreurs journalisées par le serveur pendant l'exécution complète",
+      "attendu": "Aucune",
+      "obtenu": "37 ligne(s)",
+      "resultat": "anomalie",
+      "lignes": [
+        "[5734] [Sat Nov  7 00:16:33 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5734] [Sat Nov  7 00:16:33 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5734] [Sat Nov  7 00:16:33 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5734] [Sat Nov  7 00:16:33 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5734] [Sat Nov  7 00:16:33 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5734] [Sat Nov  7 00:16:33 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5734] [Sat Nov  7 00:16:33 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5734] [Sat Nov  7 00:16:33 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5731] [Sat Nov  7 00:16:37 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5731] [Sat Nov  7 00:16:37 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4712 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4430 of /mod/ep/locallib.php: call to ep_notify_proposal_reviewed()</li><li>line 76 of /mod/ep/syllabus.php: call to ep_review_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5730] [Sat Nov  7 00:16:39 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5730] [Sat Nov  7 00:16:39 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5730] [Sat Nov  7 00:16:39 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5730] [Sat Nov  7 00:16:39 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5730] [Sat Nov  7 00:16:39 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5730] [Sat Nov  7 00:16:39 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5730] [Sat Nov  7 00:16:39 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5730] [Sat Nov  7 00:16:39 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5731] [Sat Nov  7 00:16:40 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5731] [Sat Nov  7 00:16:40 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4712 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4430 of /mod/ep/locallib.php: call to ep_notify_proposal_reviewed()</li><li>line 76 of /mod/ep/syllabus.php: call to ep_review_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5734] [Sat Nov  7 00:16:46 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5734] [Sat Nov  7 00:16:46 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5734] [Sat Nov  7 00:16:46 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5734] [Sat Nov  7 00:16:46 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5734] [Sat Nov  7 00:16:46 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5734] [Sat Nov  7 00:16:46 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5734] [Sat Nov  7 00:16:46 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5734] [Sat Nov  7 00:16:46 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5733] [Sat Nov  7 00:16:48 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5733] [Sat Nov  7 00:16:48 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4712 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4430 of /mod/ep/locallib.php: call to ep_notify_proposal_reviewed()</li><li>line 76 of /mod/ep/syllabus.php: call to ep_review_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5726] [Sat Nov  7 00:17:02 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5726] [Sat Nov  7 00:17:02 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 431 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 406 of /lib/classes/message/manager.php: call to core\\message\\manager::process_buffer()</li><li>line 2753 of /lib/dml/moodle_database.php: call to core\\message\\manager::database_transaction_commited()</li><li>line 394 of /lib/dml/moodle_read_slave_trait.php: call to moodle_database->commit_delegated_transaction()</li><li>line 92 of /lib/dml/moodle_transaction.php: call to pgsql_native_moodle_database->commit_delegated_transaction()</li><li>line 3961 of /mod/ep/locallib.php: call to moodle_transaction->allow_commit()</li><li>line 353 of /mod/ep/participants.php: call to ep_apply_participant_decisions()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5728] [Sat Nov  7 00:17:09 2026] 127.0.0.1:50056 [200]: GET /lib/ajax/service-nologin.php?info=7-method-calls&cachekey=1794009515&args=%5B%7B%22index%22%3A0%2C%22methodname%22%3A%22core_get_string%22%2C%22args%22%3A%7B%22stringid%22%3A%22addfilehere%22%2C%22stringparams%22%3A%5B%5D%2C%22component%22%3A%22core%22%2C%22lang%22%3A%22fr%22%7D%7D%2C%7B%22index%22%3A1%2C%22methodname%22%3A%22core_get_string%22%2C%22args%22%3A%7B%22stringid%22%3A%22addresourceoractivity%22%2C%22stringparams%22%3A%5B%5D%2C%22component%22%3A%22moodle%22%2C%22lang%22%3A%22fr%22%7D%7D%2C%7B%22index%22%3A2%2C%22methodname%22%3A%22core_get_string%22%2C%22args%22%3A%7B%22stringid%22%3A%22upload%22%2C%22stringparams%22%3A%5B%5D%2C%22component%22%3A%22moodle%22%2C%22lang%22%3A%22fr%22%7D%7D%2C%7B%22index%22%3A3%2C%22methodname%22%3A%22core_get_string%22%2C%22args%22%3A%7B%22stringid%22%3A%22dndmaxbytes%22%2C%22stringparams%22%3A%5B%5D%2C%22component%22%3A%22core_error%22%2C%22lang%22%3A%22fr%22%7D%7D%2C%7B%22index%22%3A4%2C%22methodname%22%3A%22core_get_string%22%2C%22args%22%3A%7B%22stringid%22%3A%22dndread%22%2C%22stringparams%22%3A%5B%5D%2C%22component%22%3A%22core_error%22%2C%22lang%22%3A%22fr%22%7D%7D%2C%7B%22index%22%3A5%2C%22methodname%22%3A%22core_get_string%22%2C%22args%22%3A%7B%22stringid%22%3A%22dndupload%22%2C%22stringparams%22%3A%5B%5D%2C%22component%22%3A%22core_error%22%2C%22lang%22%3A%22fr%22%7D%7D%2C%7B%22index%22%3A6%2C%22methodname%22%3A%22core_get_string%22%2C%22args%22%3A%7B%22stringid%22%3A%22dndunkownfile%22%2C%22stringparams%22%3A%5B%5D%2C%22component%22%3A%22core_error%22%2C%22lang%22%3A%22fr%22%7D%7D%5D",
+        "[5729] [Sat Nov  7 00:17:11 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5729] [Sat Nov  7 00:17:11 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4651 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 937 of /mod/ep/locallib.php: call to ep_notify_credit_decided()</li><li>line 119 of /mod/ep/validate.php: call to ep_validate_credit()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
+        "[5734] [Sat Nov  7 00:17:30 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
+        "[5734] [Sat Nov  7 00:17:30 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 5301 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 5172 of /mod/ep/locallib.php: call to ep_notify_supplement_item_decided()</li><li>line 85 of /mod/ep/supplement_items.php: call to ep_decide_supplement_item()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515"
+      ]
+    },
+    {
+      "etape": "journal-reprise",
+      "role": "serveur",
+      "action": "Erreurs journalisées pendant la reprise des étapes 2.4, 7.4 et 9",
       "attendu": "Aucune",
       "obtenu": "Aucune",
       "resultat": "réussi",
       "lignes": []
     }
-  ]
+  ],
+  "remarque_journal": "Lignes du journal : avertissements du cœur (noreplyaddress non défini, courriel désactivé par noemailever) déclenchés par les notifications du module ; aucune erreur propre à mod_ep."
 }

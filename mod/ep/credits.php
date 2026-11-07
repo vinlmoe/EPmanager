@@ -59,6 +59,7 @@ $PAGE->set_context($context);
 
 $types = ep_get_types($ep->id);
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('validation', 'mod_ep'));
 echo ep_render_navlinks($ep, $cm, $context, $rights);

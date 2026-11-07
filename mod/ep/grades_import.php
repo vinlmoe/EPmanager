@@ -112,6 +112,7 @@ if ($mform->is_cancelled()) {
     redirect($participantsurl);
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('importgrades', 'mod_ep') . $labelsep . format_string($activity->name));
 echo html_writer::link($participantsurl, get_string('back'));

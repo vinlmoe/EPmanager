@@ -59,12 +59,8 @@ $PAGE->set_context($context);
 // que la DEVE a validé le stage correspondant, sans attendre la tâche planifiée de la nuit.
 ep_sync_stage_credits_if_due($ep);
 
+// Le nom et la description de l'activité sont affichés par l'en-tête d'activité de Moodle.
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($ep->name));
-
-if ($ep->intro) {
-    echo $OUTPUT->box(format_module_intro('ep', $ep, $cm->id), 'generalbox mod_introbox', 'epintro');
-}
 
 echo ep_render_navlinks($ep, $cm, $context, $rights);
 

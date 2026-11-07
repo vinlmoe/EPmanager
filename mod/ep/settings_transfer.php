@@ -142,6 +142,7 @@ if ($action === 'copy' && $copyform && ($data = $copyform->get_data())) {
     $apply(ep_export_settings($source, true), array_keys(array_filter($data->parts)));
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading($title);
 echo html_writer::link($backurl, get_string('back'));

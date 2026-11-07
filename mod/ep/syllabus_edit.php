@@ -81,6 +81,7 @@ $syllabusurl = $activity ? new moodle_url('/mod/ep/syllabus.php', ['id' => $cm->
 // Une version soumise attend la DEVE : elle ne se modifie plus, la page le dit et renvoie à la
 // fiche, où la DEVE statue.
 if ($working && $working->status === 'submitted') {
+    ep_set_secondary_page_header();
     echo $OUTPUT->header();
     echo $OUTPUT->heading(get_string('syllabusof', 'mod_ep', format_string($activity->name)));
     echo $OUTPUT->notification(get_string('pendingrevision', 'mod_ep', (object) [
@@ -233,6 +234,7 @@ if ($mform->is_cancelled()) {
     );
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 if ($activity) {
     echo $OUTPUT->heading(get_string('syllabusof', 'mod_ep', format_string($activity->name)));

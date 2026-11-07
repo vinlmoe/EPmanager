@@ -31,6 +31,8 @@ require_once($CFG->dirroot . '/mod/ep/locallib.php');
 $id = required_param('id', PARAM_INT);
 $activityid = optional_param('activityid', 0, PARAM_INT);
 $action = optional_param('action', '', PARAM_ALPHA);
+$search = trim(optional_param('search', '', PARAM_TEXT));
+$page = optional_param('page', 0, PARAM_INT);
 
 $cm = get_coursemodule_from_id('ep', $id, 0, false, MUST_EXIST);
 $course = get_course($cm->course);
@@ -64,7 +66,7 @@ if ($action === 'register' && $activityid) {
     // Chaque condition est revérifiée ici : la page de liste a pu être affichée avant qu'une
     // place ne soit prise, ou l'URL forgée à la main. L'inscription elle-même les revérifie une
     // dernière fois sous le verrou de l'activité.
-    $problem = ep_registration_problem($activity, $type, $USER->id);
+    $problem = ep_registration_problem($activity, $type, $USER->id, null, $ep);
     if ($problem !== null) {
         $problem = get_string($problem, 'mod_ep');
     }
@@ -87,6 +89,7 @@ if ($action === 'register' && $activityid) {
         );
     }
 
+    ep_set_secondary_page_header();
     echo $OUTPUT->header();
     echo $OUTPUT->heading(get_string('registertoactivity', 'mod_ep', format_string($activity->name)));
     echo html_writer::link($baseurl, get_string('back'));
@@ -122,6 +125,7 @@ if ($action === 'register' && $activityid) {
     exit;
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('catalog', 'mod_ep'));
 echo html_writer::link(new moodle_url('/mod/ep/view.php', ['id' => $cm->id]), get_string('back'));
@@ -131,6 +135,21 @@ echo html_writer::link(new moodle_url('/mod/ep/view.php', ['id' => $cm->id]), ge
 $canmanage = has_capability('mod/ep:manage', $context);
 $activities = ep_get_activities($ep->id, !$canmanage);
 $rights = ep_get_user_rights($ep, $context);
+
+// Recherche sur l'intitulé, le code et la description, puis tri naturel des intitulés (« n° 3 »
+// avant « n° 29 ») et pagination : un grand catalogue reste lisible.
+$listurl = new moodle_url($baseurl, ['search' => $search]);
+echo $OUTPUT->render(new \mod_ep\output\list_filters($listurl, ['search', 'page'], $search, [], get_string('search')));
+if ($search !== '') {
+    $needle = core_text::strtolower($search);
+    $activities = array_filter($activities, fn($a) => core_text::strpos(core_text::strtolower(
+        $a->name . ' ' . $a->code . ' ' . $a->description
+    ), $needle) !== false);
+}
+uasort($activities, fn($a, $b) => [(int) $a->sortorder, 0] <=> [(int) $b->sortorder, 0]
+    ?: strnatcasecmp($a->name, $b->name));
+$totalactivities = count($activities);
+$activities = array_slice($activities, $page * EP_LIST_PERPAGE, EP_LIST_PERPAGE, true);
 
 // Places prises, responsables et inscriptions de l'étudiant : une requête chacun pour tout le
 // catalogue, et non une par EP.
@@ -255,4 +274,5 @@ foreach ($activities as $activity) {
 }
 
 echo html_writer::table($table);
+echo ep_render_paging_bar($totalactivities, $page, $listurl);
 echo $OUTPUT->footer();

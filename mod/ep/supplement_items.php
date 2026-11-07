@@ -35,6 +35,7 @@ $id = required_param('id', PARAM_INT);
 $status = optional_param('status', '', PARAM_ALPHANUMEXT);
 $page = optional_param('page', 0, PARAM_INT);
 $qpage = optional_param('qpage', 0, PARAM_INT);
+$search = trim(optional_param('search', '', PARAM_TEXT));
 
 $cm = get_coursemodule_from_id('ep', $id, 0, false, MUST_EXIST);
 $course = get_course($cm->course);
@@ -56,7 +57,7 @@ if ($status !== '' && !array_key_exists((int) $status, $statusoptions)) {
 }
 
 $baseurl = new moodle_url('/mod/ep/supplement_items.php', ['id' => $cm->id]);
-$filterurl = $status === '' ? new moodle_url($baseurl) : new moodle_url($baseurl, ['status' => $status]);
+$filterurl = new moodle_url($baseurl, array_filter(['status' => $status, 'search' => $search], fn($v) => $v !== ''));
 $pageurl = $page ? new moodle_url($filterurl, ['page' => $page]) : $filterurl;
 $PAGE->set_url($pageurl);
 $PAGE->set_title(format_string($ep->name) . ' - ' . get_string('supplementitemstodecide', 'mod_ep'));
@@ -94,7 +95,7 @@ $categories = ep_get_supplement_categories($ep->id);
 // Demandes qui attendent la décision de l'utilisateur. Pour un référent, le périmètre (ses
 // étudiants) est posé dans la requête, l'étape attendue est vérifiée ligne à ligne.
 // La file est paginée en SQL : pour un référent, l'étape attendue fait partie du filtre.
-$filters = ['status' => EP_STATUS_PENDING];
+$filters = ['status' => EP_STATUS_PENDING, 'search' => $search];
 if (!$rights->validatedeve) {
     $filters['userids'] = $rights->referentids;
     $filters['pendingrole'] = EP_ROLE_REFERENT;
@@ -107,9 +108,12 @@ $pending = array_filter(
     }
 );
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('supplementitemstodecide', 'mod_ep'));
 echo html_writer::link(new moodle_url('/mod/ep/view.php', ['id' => $cm->id]), get_string('back'));
+// Recherche par nom d'étudiant, sur la file comme sur la liste complète.
+echo $OUTPUT->render(new \mod_ep\output\list_filters($filterurl, ['search', 'page', 'qpage'], $search));
 
 if (empty($pending)) {
     echo $OUTPUT->notification(get_string('nopendingsupplementitems', 'mod_ep'), 'info');
@@ -173,7 +177,7 @@ if ($rights->validatedeve) {
         'ep-supplement-status'
     );
 
-    $allfilters = $status === '' ? [] : ['status' => (int) $status];
+    $allfilters = ($status === '' ? [] : ['status' => (int) $status]) + ['search' => $search];
     $total = ep_count_supplement_items($ep->id, $allfilters);
     $all = ep_get_supplement_items($ep->id, $allfilters, $page * EP_LIST_PERPAGE, EP_LIST_PERPAGE);
     if (empty($all)) {

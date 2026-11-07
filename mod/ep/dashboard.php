@@ -68,6 +68,7 @@ if ($studentid) {
     $student = $DB->get_record('user', ['id' => $studentid], '*', MUST_EXIST);
     $PAGE->set_url(new moodle_url($baseurl, ['studentid' => $studentid]));
 
+    ep_set_secondary_page_header();
     echo $OUTPUT->header();
     echo $OUTPUT->heading(get_string('pilotage', 'mod_ep') . ' - ' . fullname($student));
     echo html_writer::link($baseurl, get_string('back'));
@@ -84,8 +85,8 @@ if ($studentid) {
     exit;
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($ep->name));
 echo ep_render_navlinks($ep, $cm, $context, $rights);
 
 $listurl = new moodle_url($baseurl, ['search' => $search, 'tsort' => $tsort, 'tdir' => $tdir]);
