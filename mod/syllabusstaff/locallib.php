@@ -61,7 +61,8 @@ function syllabusstaff_page_init($cm, string $path, array $params = []): array {
  * @return string HTML
  */
 function syllabusstaff_navlinks($cm, string $current, bool $canmanageall): string {
-    $pages = ['view' => 'mymodules', 'competencies' => 'competencymatrix'];
+    $pages = ['view' => 'mymodules', 'competencies' => 'competencymatrix', 'progression' => 'progression',
+        'booklet' => 'booklet'];
     if ($canmanageall) {
         $pages += ['all' => 'allmodules', 'review' => 'toreview', 'results' => 'resultsoverview',
             'referential' => 'referential', 'frameworks' => 'competencyframeworks'];
@@ -265,4 +266,54 @@ function syllabusstaff_scope_courses(stdClass $instance): array {
  */
 function syllabusstaff_course_in_scope(stdClass $instance, stdClass $course): bool {
     return isset(syllabusstaff_scope_courses($instance)[(int) $course->id]);
+}
+
+/**
+ * Livret PDF d'un choix d'édition, conservé dans l'activité et resservi tant que rien de ce qu'il
+ * contient n'a changé : modules, fiches publiées, responsables, compétences et types, langue, jour
+ * (imprimé en page de titre). Un seul livret est gardé par choix d'édition.
+ *
+ * @param context_module $context
+ * @param stdClass $instance
+ * @param string $selection
+ * @param array $modules Modules du livret, avec published et teachers.
+ * @param callable $build Compose le PDF : fn() => contenu.
+ * @return stored_file
+ */
+function syllabusstaff_booklet_file(
+    context_module $context,
+    stdClass $instance,
+    string $selection,
+    array $modules,
+    callable $build
+): stored_file {
+    global $DB;
+
+    $ids = array_map(fn($m) => (int) $m->id, $modules);
+    [$insql, $params] = $DB->get_in_or_equal($ids ?: [0], SQL_PARAMS_NAMED);
+    $links = $DB->get_records_sql("SELECT id, syllabusid, compid, level FROM {syllabus_complink} WHERE syllabusid $insql
+                                   ORDER BY id", $params);
+    $key = sha1(json_encode([
+        $selection, $instance->categoryid, current_language(), userdate(time(), '%Y%m%d', 99, false, false),
+        array_map(fn($m) => [$m->id, $m->timemodified, $m->coursename, $m->published->id ?? 0,
+            $m->published->timemodified ?? 0, array_keys($m->teachers)], array_values($modules)),
+        array_values(array_map(fn($l) => [$l->syllabusid, $l->compid, $l->level], $links)),
+        $DB->get_field_sql('SELECT MAX(timemodified) FROM {syllabus_comp}'),
+        $DB->get_field_sql('SELECT MAX(timemodified) FROM {syllabus_framework}'),
+        $DB->get_records_menu('syllabus_type', null, 'id', 'id, timemodified'),
+    ]));
+    $prefix = substr(sha1($selection), 0, 12) . '-';
+    $fs = get_file_storage();
+    $file = $fs->get_file($context->id, 'mod_syllabusstaff', 'booklet', 0, '/', $prefix . $key . '.pdf');
+    if ($file) {
+        return $file;
+    }
+    $content = $build();
+    foreach ($fs->get_area_files($context->id, 'mod_syllabusstaff', 'booklet', 0, 'id', false) as $old) {
+        if (str_starts_with($old->get_filename(), $prefix)) {
+            $old->delete();
+        }
+    }
+    return $fs->create_file_from_string(['contextid' => $context->id, 'component' => 'mod_syllabusstaff',
+        'filearea' => 'booklet', 'itemid' => 0, 'filepath' => '/', 'filename' => $prefix . $key . '.pdf'], $content);
 }

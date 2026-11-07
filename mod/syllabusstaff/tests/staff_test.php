@@ -29,6 +29,7 @@ require_once($CFG->dirroot . '/mod/syllabusstaff/locallib.php');
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers    ::syllabusstaff_set_windows
  * @covers    ::syllabus_common_means
+ * @covers    ::syllabusstaff_booklet_file
  */
 final class staff_test extends \advanced_testcase {
     /**
@@ -90,5 +91,41 @@ final class staff_test extends \advanced_testcase {
         $this->resetAfterTest();
         $this->assertSame(0, syllabusstaff_parse_datetime(''));
         $this->assertSame(make_timestamp(2026, 12, 1, 8, 30), syllabusstaff_parse_datetime('2026-12-01T08:30'));
+    }
+
+    /**
+     * Livret conservé : resservi tant que rien ne change, refait (et l'ancien retiré) sinon ;
+     * un livret par choix d'édition.
+     */
+    public function test_booklet_file_is_kept(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $staff = $gen->create_module('syllabusstaff', ['course' => $course->id]);
+        $instance = $DB->get_record('syllabusstaff', ['id' => $staff->id]);
+        $context = \context_module::instance($staff->cmid);
+        $record = $gen->create_module('syllabus', ['course' => $course->id]);
+        $module = $DB->get_record('syllabus', ['id' => $record->id]);
+        $module->coursename = $course->fullname;
+        $module->published = null;
+        $module->teachers = [];
+        $builds = 0;
+        $build = function () use (&$builds) {
+            $builds++;
+            return 'PDF ' . $builds;
+        };
+        $first = syllabusstaff_booklet_file($context, $instance, 'all', [$module], $build);
+        $again = syllabusstaff_booklet_file($context, $instance, 'all', [$module], $build);
+        $this->assertSame(1, $builds);
+        $this->assertEquals($first->get_id(), $again->get_id());
+        syllabusstaff_booklet_file($context, $instance, 'y3', [$module], $build);
+        $module->timemodified++;
+        $changed = syllabusstaff_booklet_file($context, $instance, 'all', [$module], $build);
+        $this->assertSame(3, $builds);
+        $this->assertSame('PDF 3', $changed->get_content());
+        $files = get_file_storage()->get_area_files($context->id, 'mod_syllabusstaff', 'booklet', 0, 'id', false);
+        $this->assertCount(2, $files);
     }
 }

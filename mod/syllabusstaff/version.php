@@ -25,8 +25,8 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_syllabusstaff';
-$plugin->version   = 2026112200;
+$plugin->version   = 2026112300;
 $plugin->requires  = 2023100900;
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.2.0';
-$plugin->dependencies = ['mod_syllabus' => 2026112200];
+$plugin->release   = '1.3.0';
+$plugin->dependencies = ['mod_syllabus' => 2026112300];

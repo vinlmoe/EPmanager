@@ -20,6 +20,7 @@ Usage : python3 syllabus_interactions.py site-x.json syllabus.json > syllabus-re
    lot ; résultats du module, synthèse comparée, exports CSV.
 7. Contrôles en base.
 """
+import hashlib
 import html
 import json
 import random
@@ -427,6 +428,88 @@ r = deve.get(f'/mod/syllabusstaff/all.php?id={STAFF}&evalstate=closed')
 expect('liste_dev_filtree', '(12)' in r.text)
 pdf = Web(SETUP['students'][0]).get(f'/mod/syllabus/pdf.php?id={MODULES[0]["cmid"]}')
 expect('fiche_pdf', pdf.content[:4] == b'%PDF')
+
+# 6 bis. Livret des syllabus (cursus, année, semestre) et progression d'une compétence.
+def pdf_text(content):
+    out = subprocess.run(['pdftotext', '-', '-'], input=content, capture_output=True).stdout.decode()
+    pages = int(re.search(r'Pages:\s+(\d+)', subprocess.run(['pdfinfo', '-'], input=content,
+                                                             capture_output=True).stdout.decode()).group(1))
+    return out, pages
+
+
+book = f'/mod/syllabusstaff/booklet.php?id={STAFF}'
+r = deve.get(book)
+expect('livret_apercu', '12 fiche(s) publiée(s) sur 12 module(s)' in r.text and 'optgroup' in r.text)
+t = time.time()
+pdf = deve.get(book + '&selection=all&download=1')
+first = time.time() - t
+text, pages = pdf_text(pdf.content)
+names = [m['name'] for m in MODULES]
+expect('livret_du_cursus', pdf.content[:4] == b'%PDF' and all(n in text for n in names) and 'Sommaire' in text
+       and 'Modules et crédits' in text and 'Total des crédits' in text, f'{pages} pages, {first:.1f} s')
+report['livret_cursus'] = {'pages': pages, 'duree_s': round(first, 2)}
+t = time.time()
+again = deve.get(book + '&selection=all&download=1')
+second = time.time() - t
+prefix = hashlib.sha1(b'all').hexdigest()[:12]
+stored = sql("select count(*) from mdl_files where component='mod_syllabusstaff' and filearea='booklet' "
+             f"and filename like '{prefix}-%'")
+expect('livret_conserve', again.content == pdf.content and stored == '1', f'{second:.2f} s, {stored} fichier')
+for selection, wanted in (('y2', [m for m in MODULES if m['studyyear'] == 2]),
+                          ('sS3', [m for m in MODULES if m['semester'] == 'S3'])):
+    text, pages = pdf_text(Web(MODULES[0]['leaders'][0]).get(book + f'&selection={selection}&download=1').content)
+    # Titre de fiche : le nom seul sur sa ligne (un domaine de compétences peut porter le même nom).
+    titled = {m['name'] for m in MODULES if re.search(rf'^{re.escape(m["name"])}$', text, re.M)}
+    expect(f'livret_{selection}', titled == {m['name'] for m in wanted}, f'{len(wanted)} fiches, {pages} pages')
+
+prog = f'/mod/syllabusstaff/progression.php?id={STAFF}'
+best = int(sql("select compid from mdl_syllabus_complink where syllabusid > 0 group by compid "
+               "order by count(*) desc, compid limit 1"))
+rows = [line.split('|') for line in sql(f"""select s.studyyear, s.semester, l.level from mdl_syllabus_complink l
+    join mdl_syllabus s on s.id = l.syllabusid where l.compid = {best} order by s.studyyear, s.semester""").splitlines()]
+
+
+def summary(rows):
+    """Constats attendus (même règle que syllabus_progression_summary)."""
+    periods = {}
+    for year, semester, level in rows:
+        periods.setdefault((int(year), semester), []).append(int(level))
+    steps = [periods[k] for k in sorted(periods)]
+    warnings = set()
+    if not steps:
+        return {'notcovered'}
+    if min(steps[0]) > 1:
+        warnings.add('noprogression')
+    if not any(3 in s for s in steps):
+        warnings.add('nevermastered')
+    mastered = False
+    for s in steps:
+        if mastered and 1 in s:
+            warnings.add('introducedlate')
+        mastered = mastered or 3 in s
+    return warnings
+
+
+messages = {'notcovered': 'Aucun module du périmètre', 'noprogression': 'aucun module ne l\'introduit',
+            'nevermastered': 'au niveau « Maîtrisée »', 'introducedlate': 'après avoir été maîtrisée'}
+r = Web(MODULES[0]['leaders'][0]).get(prog + f'&compid={best}')
+shown = r.text.count('syllabusstaff-progression-module')
+periods = len(re.findall(r'<th[ >]', r.text.split('syllabusstaff-frieze')[1].split('</table>')[0]))
+warned = {k for k, v in messages.items() if v in html.unescape(r.text)}
+expect('progression_d_une_competence', shown == len(rows) and periods == 6 and warned == summary(rows),
+       f'{shown} modules, {periods} périodes, constats {sorted(warned)}')
+csv = deve.get(prog + f'&compid={best}&download=csv')
+expect('progression_csv', csv.text.strip().count('\n') == len(rows), f'{len(rows)} lignes')
+domain = int(sql(f"select parentid from mdl_syllabus_comp where id = {best}"))
+modules_in_domain = int(sql(f"""select count(distinct l.syllabusid) from mdl_syllabus_complink l
+    join mdl_syllabus_comp c on c.id = l.compid where l.syllabusid > 0 and (c.parentid = {domain} or c.id = {domain})"""))
+r = deve.get(prog + f'&compid={domain}')
+expect('progression_d_un_domaine', r.text.count('syllabusstaff-progression-module') == modules_in_domain,
+       f'{modules_in_domain} modules')
+r = deve.get(prog + f'&compid={LEAVES[-1]}')
+expect('progression_cours_sans_module', 'Stage clinique' in r.text and 'Aucun module du périmètre' in r.text)
+r = deve.get(f'/mod/syllabusstaff/competencies.php?id={STAFF}&frameworkid={FRAMEWORK}')
+expect('matrice_vers_progression', f'progression.php?id={STAFF}&amp;compid=' in r.text)
 
 # 7. Contrôles.
 expect('reponses_sans_identifiant', sql("select string_agg(column_name, ',' order by ordinal_position) from "

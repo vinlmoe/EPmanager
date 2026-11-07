@@ -50,8 +50,9 @@ if (!isset($frameworks[$frameworkid])) {
 $columns = [];
 $withoutmodule = [];
 if ($frameworkid) {
+    // Colonnes dans l'ordre du cursus (année, période), puis les cours sans module.
     [$modules] = syllabus_list_instances(['categoryid' => $instance->categoryid]);
-    foreach ($modules as $module) {
+    foreach (syllabus_sort_by_period($modules) as $module) {
         if (!$studyyear || (int) $module->studyyear === $studyyear) {
             $columns[(int) $module->course] = (object) ['courseid' => (int) $module->course, 'code' => $module->code !== ''
                 ? $module->code : $module->courseshortname, 'name' => $module->coursename, 'cmid' => (int) $module->cmid];
@@ -68,7 +69,6 @@ if ($frameworkid) {
                 'name' => $other->fullname, 'cmid' => 0];
         }
     }
-    core_collator::asort_objects_by_property($columns, 'code', core_collator::SORT_NATURAL);
 }
 $tree = $frameworkid ? syllabus_get_framework_tree($frameworkid) : [];
 $matrix = $frameworkid ? syllabus_competency_matrix($frameworkid, array_keys($columns)) : [];
@@ -150,9 +150,10 @@ foreach ($columns as $column) {
 }
 $table->head[] = get_string('coverage', 'mod_syllabusstaff');
 foreach ($tree as $compid => $comp) {
-    $label = html_writer::span(s($comp->idnumber), 'small text-muted') . ' ' . html_writer::span(
+    $label = html_writer::span(s($comp->idnumber), 'small text-muted') . ' ' . html_writer::link(
+        new moodle_url('/mod/syllabusstaff/progression.php', ['id' => $cm->id, 'compid' => $compid]),
         format_string($comp->name),
-        $comp->isleaf ? '' : 'font-weight-bold'
+        ['class' => $comp->isleaf ? '' : 'font-weight-bold', 'title' => get_string('progression', 'mod_syllabusstaff')]
     );
     $row = new html_table_row([html_writer::div($label, '', ['style' => 'padding-left:' . (1.2 * $comp->depth) . 'rem'])]);
     foreach ($columns as $column) {

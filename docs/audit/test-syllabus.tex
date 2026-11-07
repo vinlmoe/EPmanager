@@ -10,7 +10,7 @@
 \newcommand{\code}[1]{\texttt{\detokenize{#1}}}
 \title{Test des modules syllabus et de leur évaluation}
 \author{Sébastien Lefebvre}
-\date{Novembre 2026 -- version 1.2.0 des modules}
+\date{Novembre 2026 -- version 1.3.0 des modules}
 
 \begin{document}
 \maketitle
@@ -25,7 +25,8 @@ habituel (4 c\oe urs, nginx, PHP-FPM~8.3, PostgreSQL~16, Moodle~4.5). Chaque pag
 (erreur PHP, exception, code 500), puis la base.
 
 \paragraph{Données} (\code{syllabus_setup.php}) : une catégorie de 12 cours de module, chacun
-avec son activité « Syllabus du module » et deux responsables (24 enseignants) ; 200 étudiants
+avec son activité « Syllabus du module » et deux responsables (24 enseignants), répartis sur
+trois années et six semestres (deux modules par semestre) ; 200 étudiants
 inscrits aux 12 cours ; la DEVE gestionnaire de chaque cours ; un cours d'équipe avec le suivi
 des modules ; « Mes modules » dans le cours de la promotion ; un cours « Stage clinique » sans
 module. Aucun référentiel de compétences n'est préparé : la DEVE le crée par les pages du suivi
@@ -40,23 +41,23 @@ des modules, sans l'administration du site.
 \midrule
 DEVE : référentiel (relecture obligatoire, seuil de 5 réponses, 2 types, 4 questions
 communes dont une pour le type « Clinique »), type de chaque module dans ses réglages & conforme \\
-12 responsables en parallèle : fiche rédigée (rubriques, 3 séances) et soumise, 2 questions & 2,5 s \\
+12 responsables en parallèle : fiche rédigée (rubriques, 3 séances) et soumise, 2 questions & 2,7 s \\
 Fiches à relire listées ; 11 publiées, 1 renvoyée puis corrigée et publiée & conforme \\
 DEVE, page « Référentiels de compétences » du suivi : référentiel créé, CSV de 25 lignes
 importé (domaines placés après leurs compétences), une compétence ajoutée à la main & 26
 compétences, 21 rattachées \\
 12 responsables : module lié à 3 à 6 compétences avec un niveau, par la page « Compétences » du
-module & 53 liens, 1,1 s \\
+module & 53 liens, 1,2 s \\
 Niveaux en base ; DEVE : « Stage clinique » (sans module) lié depuis la matrice & conforme \\
 Matrice compétences $\times$ cours (une case par lien, cours sans module compris), compétence
 non couverte signalée, export CSV, compétences sur la fiche, matrice ouverte aux enseignants &
 54 cases \\
 Fenêtre d'évaluation des 12 modules fixée en lot & conforme \\
-Tâche d'ouverture : questions figées, étudiants prévenus & 2\,400 messages, 26 s \\
+Tâche d'ouverture : questions figées, étudiants prévenus & 2\,400 messages, 21 s \\
 200 étudiants (40 en parallèle) : « Mes modules » (12 modules chacun), puis 9 évaluations sur 10
-& 2\,172 réponses en 111 s \\
+& 2\,156 réponses en 103 s \\
 Seconde réponse d'un étudiant & refusée \\
-Une réponse anonyme par participation, réponses obligatoires toutes présentes & 2\,172 / 2\,172 \\
+Une réponse anonyme par participation, réponses obligatoires toutes présentes & 2\,156 / 2\,156 \\
 Table des réponses : ni étudiant ni heure (\code{id}, \code{syllabusid}, \code{daysubmitted}) &
 conforme \\
 Questions par module : 3 communes, + 1 pour les modules « Clinique », + 2 de l'enseignant &
@@ -65,17 +66,26 @@ Résultats du module cachés au responsable avant la fermeture, visibles après 
 conforme \\
 Synthèse comparée de la DEVE (moyennes par question commune), liste filtrée, fiche PDF &
 conforme \\
+Livret du cursus (PDF) : titre, sommaire, modules et crédits, 12 fiches & 16 pages, 0,5 s \\
+Livret redemandé : même fichier, un seul conservé & 0,06 s \\
+Livret de la 2\textsuperscript{e} année (un enseignant), du semestre S3 : exactement leurs
+fiches & 4 et 2 fiches \\
+Progression de la compétence la plus visée : un bloc par module lié, frise des 6 semestres,
+constats identiques à ceux recalculés depuis la base, export CSV & conforme \\
+Progression d'un domaine (sous-compétences comprises) ; d'une compétence visée par le seul
+cours sans module (signalée non couverte, cours affiché) ; lien depuis la matrice & conforme \\
 Anomalies dans les pages & 0 \\
 \bottomrule
 \end{tabularx}
 \end{center}
 
-Résultat : \textbf{32 contrôles sur 32}. S'y ajoutent 27 tests unitaires (droits, circuit de
+Résultat : \textbf{42 contrôles sur 42}. S'y ajoutent 32 tests unitaires (droits, circuit de
 relecture, figeage des questions, anonymat, seuil, visibilité des résultats, tâche,
 réinitialisation, sauvegarde et restauration, RGPD, synthèses, compétences : import CSV en
 arbre, contrôle des parents, déplacement, liaison et retrait, suppression refusée d'une
-compétence visée, matrice, restauration des niveaux) et le test de conformité RGPD de Moodle,
-réussi pour les trois modules.
+compétence visée, matrice, restauration des niveaux ; cursus : ordre des périodes, choix
+d'édition, livret et ses signets, conservation du livret, constats de progression, liens d'un
+sous-arbre) et le test de conformité RGPD de Moodle, réussi pour les trois modules.
 
 La mise à jour depuis la version 1.1.0, qui s'appuyait sur les compétences de Moodle, a été
 jouée sur le banc : 53 liens recopiés avec leurs niveaux, référentiel de 25 compétences recopié,
@@ -102,6 +112,15 @@ passage en cours.
 Les captures de la version 1.2.0 ont montré les libellés « Move up », « Move down » et
 « Rename » en anglais : ces chaînes de Moodle ne sont pas traduites par le paquet de langue
 installé. Le module porte désormais les siennes (« Monter », « Descendre », « Renommer »).
+
+En version 1.3.0, le premier passage a relevé deux défauts :
+\begin{itemize}
+  \item la progression d'un domaine ne trouvait aucun module : le sous-arbre d'une compétence
+    était lu par ses clés au lieu de ses valeurs ; corrigé, couvert par un test unitaire ;
+  \item dans le livret, le pied de page d'une page portait la version de la fiche suivante (le
+    pied est dessiné à la fermeture de la page) ; les textes d'en-tête et de pied sont désormais
+    fixés de part et d'autre de l'ouverture de page.
+\end{itemize}
 
 \section{Limite connue}
 

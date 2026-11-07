@@ -3,6 +3,23 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## Modules syllabus 1.3.0 — mod_syllabus, mod_syllabusstaff 2026112300 (23 novembre 2026)
+
+Livret des syllabus et progression des compétences le long du cursus.
+
+- **mod_syllabusstaff** : page « Livret des syllabus » (enseignants et DEVE) : édition de tout le
+  cursus, d'une année d'étude ou d'une période ; aperçu des modules et des crédits par période ;
+  PDF avec page de titre, sommaire, tableau des modules et des crédits, puis la fiche publiée de
+  chaque module dans l'ordre du cursus ; livret conservé dans l'activité tant que son contenu ne
+  change pas.
+- **mod_syllabusstaff** : page « Progression d'une compétence » : frise des périodes avec les
+  niveaux visés, constats (première introduction, approfondissement, maîtrise ; alertes), modules
+  avec leurs acquis visés, méthodes et modalités d'évaluation, cours sans module, export CSV ;
+  ouverte depuis la matrice, dont les colonnes suivent désormais l'ordre du cursus.
+- **mod_syllabus** : fonctions du cursus (ordre des périodes, choix d'édition, constats), livret
+  PDF (`booklet_pdf`), fiche PDF réutilisable pour plusieurs fiches.
+- 5 tests unitaires ; banc réparti sur trois années et six semestres, scénario étendu (42/42).
+
 ## Modules syllabus 1.2.0 — mod_syllabus, mod_syllabusstaff 2026112200 (22 novembre 2026)
 
 Référentiels de compétences tenus dans le suivi des modules, sans l'administration du site.

@@ -53,12 +53,16 @@ foreach ($names as $k => $name) {
     foreach ($students as $sid) {
         $gen->enrol_user($sid, $course->id, 'student');
     }
+    // Trois années de quatre modules, deux par semestre (S1 à S6).
+    $year = intdiv($k, 4) + 1;
+    $semester = 'S' . (2 * $year - 1 + $k % 2);
     $module = $gen->create_module('syllabus', ['course' => $course->id, 'name' => $name, 'code' => 'UE' . ($k + 1),
-        'ects' => 2 + $k % 4, 'semester' => $k < 6 ? 'S5' : 'S6', 'studyyear' => 3]);
+        'ects' => 2 + $k % 4, 'semester' => $semester, 'studyyear' => $year]);
     $syllabus = $DB->get_record('syllabus', ['id' => $module->id]);
     syllabus_set_teachers($syllabus, context_module::instance($module->cmid), array_map(fn($u) => $u->id, $leaders));
     $out['modules'][] = ['cmid' => (int) $module->cmid, 'id' => (int) $module->id, 'course' => (int) $course->id,
-        'name' => $name, 'leaders' => array_map(fn($u) => $u->username, $leaders)];
+        'name' => $name, 'semester' => $semester, 'studyyear' => $year,
+        'leaders' => array_map(fn($u) => $u->username, $leaders)];
 }
 // Un cours de la catégorie sans module « Syllabus du module » : ses compétences sont liées par la
 // DEVE depuis le suivi des modules.

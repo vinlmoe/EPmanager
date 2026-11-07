@@ -41,30 +41,53 @@ class fiche_pdf extends \pdf {
     protected $footertext = '';
 
     /**
-     * Compose le document.
+     * Prépare le document et, si un module est donné, y compose sa fiche.
      *
-     * @param \stdClass $syllabus
+     * @param \stdClass|null $syllabus
      * @param \stdClass|null $version
      * @param string $coursename
      */
-    public function __construct(\stdClass $syllabus, ?\stdClass $version, string $coursename) {
+    public function __construct(?\stdClass $syllabus = null, ?\stdClass $version = null, string $coursename = '') {
         parent::__construct('P', 'mm', 'A4');
-        $this->headertext = $coursename;
-        $this->footertext = $version
-            ? get_string('pdfversion', 'mod_syllabus', (object) ['version' => $version->version,
-                'date' => userdate($version->timereviewed ?: $version->timemodified, get_string('strftimedate', 'langconfig'))])
-            : '';
         $this->SetCreator('Moodle mod_syllabus');
-        $this->SetTitle(format_string($syllabus->name));
         $this->tcpdflink = false;
         $this->SetMargins(15, 22, 15);
         $this->setHeaderMargin(8);
         $this->setFooterMargin(12);
         $this->SetAutoPageBreak(true, 20);
         $this->SetFont(self::FONT, '', 10);
+        if ($syllabus) {
+            $this->SetTitle(format_string($syllabus->name));
+            $this->add_fiche($syllabus, $version, $coursename);
+        }
+    }
+
+    /**
+     * Ajoute la fiche d'un module, sur une nouvelle page : le nom du cours en en-tête et sa
+     * version en pied de page, pour toutes les pages de la fiche.
+     *
+     * @param \stdClass $syllabus
+     * @param \stdClass|null $version
+     * @param string $coursename
+     * @param int $bookmarklevel Niveau du signet de la fiche (sommaire du livret), -1 pour aucun.
+     * @return void
+     */
+    public function add_fiche(\stdClass $syllabus, ?\stdClass $version, string $coursename, int $bookmarklevel = -1): void {
+        // L'en-tête est dessiné à l'ouverture de la page, le pied de page à sa fermeture : le pied
+        // de la page précédente doit garder son texte jusqu'à AddPage().
+        $this->headertext = $coursename;
         $this->AddPage();
+        $this->footertext = $version
+            ? get_string('pdfversion', 'mod_syllabus', (object) ['version' => $version->version,
+                'date' => userdate($version->timereviewed ?: $version->timemodified, get_string('strftimedate', 'langconfig'))])
+            : '';
+        $name = format_string($syllabus->name, true, ['escape' => false]);
+        if ($bookmarklevel >= 0) {
+            $code = trim((string) $syllabus->code);
+            $this->Bookmark($code !== '' ? $code . ' - ' . $name : $name, $bookmarklevel, 0);
+        }
         $this->SetFont(self::FONT, 'B', 15);
-        $this->Write(0, format_string($syllabus->name, true, ['escape' => false]), '', false, 'L', true);
+        $this->Write(0, $name, '', false, 'L', true);
         $this->Ln(3);
         $this->SetFont(self::FONT, '', 10);
         $this->writeHTML(fiche::render($syllabus, $version), true, false, true, false, '');

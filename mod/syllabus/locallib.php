@@ -2033,3 +2033,177 @@ function syllabus_render_link_form(moodle_url $action, int $frameworkid, array $
     return $html . html_writer::table($table) . html_writer::empty_tag('input', ['type' => 'submit',
         'value' => get_string('savechanges'), 'class' => 'btn btn-primary']) . html_writer::end_tag('form');
 }
+
+// Cursus : périodes, livret, progression d'une compétence.
+
+/**
+ * Trie des modules dans l'ordre du cursus : année d'étude (non précisée en dernier), période
+ * (ordre naturel : S2 avant S10, vide en dernier), code, nom.
+ *
+ * @param array $modules Lignes portant studyyear, semester, code, name.
+ * @return array Les mêmes, triées (clés conservées).
+ */
+function syllabus_sort_by_period(array $modules): array {
+    uasort($modules, function ($a, $b) {
+        $ya = (int) $a->studyyear ?: PHP_INT_MAX;
+        $yb = (int) $b->studyyear ?: PHP_INT_MAX;
+        if ($ya !== $yb) {
+            return $ya <=> $yb;
+        }
+        $sa = trim((string) $a->semester);
+        $sb = trim((string) $b->semester);
+        if ($sa === '' xor $sb === '') {
+            return $sa === '' ? 1 : -1;
+        }
+        return strnatcasecmp($sa, $sb) ?: strnatcasecmp((string) $a->code, (string) $b->code)
+            ?: strnatcasecmp((string) $a->name, (string) $b->name);
+    });
+    return $modules;
+}
+
+/**
+ * Clé et libellé de la période d'un module : année d'étude et période (semestre...).
+ *
+ * @param stdClass $module
+ * @return array [clé, libellé]
+ */
+function syllabus_period_of(stdClass $module): array {
+    $year = (int) $module->studyyear;
+    $semester = trim((string) $module->semester);
+    $parts = [];
+    if ($year) {
+        $parts[] = syllabus_studyyear_label($year);
+    }
+    if ($semester !== '') {
+        $parts[] = $semester;
+    }
+    return [$year . '|' . core_text::strtolower($semester),
+        $parts ? implode(' · ', $parts) : get_string('periodnone', 'mod_syllabus')];
+}
+
+/**
+ * Choix d'édition proposés pour des modules : tout le cursus, chaque année d'étude, chaque
+ * période (semestre) présente.
+ *
+ * @param array $modules Lignes de syllabus_list_instances().
+ * @return array Options groupées pour html_writer::select() : [[groupe => [valeur => libellé]]]
+ */
+function syllabus_period_selections(array $modules): array {
+    $years = [];
+    $semesters = [];
+    foreach (syllabus_sort_by_period($modules) as $module) {
+        if ((int) $module->studyyear) {
+            $years['y' . (int) $module->studyyear] = syllabus_studyyear_label($module->studyyear);
+        }
+        $semester = trim((string) $module->semester);
+        if ($semester !== '') {
+            $semesters['s' . $semester] = $semester;
+        }
+    }
+    $options = [[get_string('wholecursus', 'mod_syllabus') => ['all' => get_string('wholecursus', 'mod_syllabus')]]];
+    if ($years) {
+        $options[] = [get_string('studyyear', 'mod_syllabus') => $years];
+    }
+    if ($semesters) {
+        $options[] = [get_string('semester', 'mod_syllabus') => $semesters];
+    }
+    return $options;
+}
+
+/**
+ * Modules d'un choix d'édition : « all », « y<année> » ou « s<période> », dans l'ordre du cursus.
+ *
+ * @param array $modules
+ * @param string $selection
+ * @return array
+ */
+function syllabus_filter_by_selection(array $modules, string $selection): array {
+    if (str_starts_with($selection, 'y')) {
+        $year = (int) substr($selection, 1);
+        $modules = array_filter($modules, fn($m) => (int) $m->studyyear === $year);
+    } else if (str_starts_with($selection, 's')) {
+        $semester = core_text::strtolower(substr($selection, 1));
+        $modules = array_filter($modules, fn($m) => core_text::strtolower(trim((string) $m->semester)) === $semester);
+    }
+    return syllabus_sort_by_period($modules);
+}
+
+/**
+ * Libellé d'un choix d'édition.
+ *
+ * @param string $selection
+ * @return string
+ */
+function syllabus_selection_label(string $selection): string {
+    if (str_starts_with($selection, 'y')) {
+        return get_string('studyyear', 'mod_syllabus') . ' ' . syllabus_studyyear_label((int) substr($selection, 1));
+    }
+    if (str_starts_with($selection, 's')) {
+        return get_string('semester', 'mod_syllabus') . ' ' . substr($selection, 1);
+    }
+    return get_string('wholecursus', 'mod_syllabus');
+}
+
+/**
+ * Liens d'une compétence (et, au besoin, de ses sous-compétences) avec les cours donnés.
+ *
+ * @param int $compid
+ * @param bool $withsub Avec les sous-compétences.
+ * @param int[] $courseids
+ * @return array Lignes {id, courseid, syllabusid, compid, level}
+ */
+function syllabus_competency_links(int $compid, bool $withsub, array $courseids): array {
+    global $DB;
+    if (!$courseids) {
+        return [];
+    }
+    $compids = $withsub ? syllabus_comp_subtree($compid) : [$compid];
+    [$compsql, $params] = $DB->get_in_or_equal($compids, SQL_PARAMS_NAMED, 'cmp');
+    [$coursesql, $courseparams] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'crs');
+    return $DB->get_records_sql(
+        "SELECT id, courseid, syllabusid, compid, level
+           FROM {syllabus_complink}
+          WHERE compid $compsql AND courseid $coursesql",
+        $params + $courseparams
+    );
+}
+
+/**
+ * Constats sur la progression d'une compétence le long du cursus : période où chaque niveau est
+ * atteint pour la première fois, et anomalies (non visée, jamais maîtrisée, abordée d'emblée
+ * au-delà de l'introduction, introduite de nouveau après avoir été maîtrisée).
+ *
+ * @param array $steps Périodes dans l'ordre du cursus : stdClass {label, levels (niveaux visés dans la période)}
+ * @return stdClass {first => [niveau => libellé de période], warnings => [codes]}
+ */
+function syllabus_progression_summary(array $steps): stdClass {
+    $result = (object) ['first' => [], 'warnings' => []];
+    $steps = array_values(array_filter($steps, fn($step) => !empty($step->levels)));
+    if (!$steps) {
+        $result->warnings[] = 'notcovered';
+        return $result;
+    }
+    $mastered = false;
+    $regressed = false;
+    foreach ($steps as $index => $step) {
+        $levels = array_map('intval', $step->levels);
+        foreach ($levels as $level) {
+            $result->first[$level] = $result->first[$level] ?? $step->label;
+        }
+        if ($index === 0 && min($levels) > SYLLABUS_LEVEL_INTRODUCED) {
+            $result->warnings[] = 'noprogression';
+        }
+        if ($mastered && in_array(SYLLABUS_LEVEL_INTRODUCED, $levels, true)) {
+            $regressed = true;
+        }
+        $mastered = $mastered || in_array(SYLLABUS_LEVEL_MASTERED, $levels, true);
+    }
+    if (!$mastered) {
+        $result->warnings[] = 'nevermastered';
+    }
+    if ($regressed) {
+        $result->warnings[] = 'introducedlate';
+    }
+    ksort($result->first);
+    return $result;
+}

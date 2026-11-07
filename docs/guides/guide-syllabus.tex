@@ -4,9 +4,9 @@
 \documentclass[11pt,a4paper]{article}
 
 \newcommand{\titreguide}{Syllabus et évaluation des modules}
-\newcommand{\versionguide}{1.2}
+\newcommand{\versionguide}{1.3}
 \newcommand{\dateguide}{novembre 2026}
-\newcommand{\versionep}{1.2.0}
+\newcommand{\versionep}{1.3.0}
 \newcommand{\versionsynthese}{1.0.0}
 
 \usepackage{guide-commun}
@@ -54,6 +54,8 @@ un niveau ; matrice compétences $\times$ cours. \\
 1.2 & novembre 2026 & Les référentiels de compétences sont tenus par la DEVE dans le suivi des
 modules (création, arbre, import CSV), sans passer par l'administration du site ; la DEVE lie
 aussi les cours sans module. \\
+1.3 & novembre 2026 & Livret des syllabus d'un semestre, d'une année ou de tout le cursus ;
+progression d'une compétence le long du cursus ; matrice dans l'ordre du cursus. \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -70,8 +72,9 @@ aussi les cours sans module. \\
     d'enseignement. Elle porte la \textbf{fiche} du module (au modèle ECTS) et son
     \textbf{évaluation} par les étudiants du cours.
   \item[Suivi des modules] (\texttt{mod\_syllabusstaff}) une activité dans un cours d'équipe.
-    Chaque enseignant y retrouve les modules dont il est responsable, dans tous les cours. La
-    DEVE y voit tous les modules, relit les fiches, fixe les évaluations, compare les résultats
+    Chaque enseignant y retrouve les modules dont il est responsable, dans tous les cours, et
+    tous y éditent le \textbf{livret des syllabus} et suivent la \textbf{progression d'une
+    compétence} le long du cursus. La DEVE y voit tous les modules, relit les fiches, fixe les évaluations, compare les résultats
     et tient le \textbf{référentiel commun} (types de module, questions communes, réglages).
   \item[Mes modules] (\texttt{mod\_syllabusstudent}) une activité dans le cours de la
     promotion. Chaque étudiant y voit les modules des cours où il est inscrit, leur fiche, et
@@ -259,6 +262,48 @@ Les responsables du module et la DEVE peuvent lier ; les autres enseignants du c
 les compétences sans pouvoir les modifier. Si aucun référentiel n'est proposé, la DEVE n'en a
 pas encore créé.
 
+\section{Suivre une compétence le long du cursus}\label{sec:progression}
+
+\chemin{Progression d'une compétence} (suivi des modules), ou l'intitulé d'une compétence dans
+la matrice : choisissez une compétence, avec ou sans ses sous-compétences (cochée par défaut,
+utile pour un domaine). La page montre :
+\begin{itemize}
+  \item une \textbf{frise} du cursus, une colonne par période (année et semestre) : les niveaux
+    visés dans la période et le nombre de modules, la couleur suivant le niveau le plus élevé ;
+  \item des \textbf{constats} : la première période où la compétence est introduite,
+    approfondie, maîtrisée ; et des alertes quand aucun module ne la vise, quand aucun ne la
+    porte jusqu'à \statut{Maîtrisée}, quand elle est visée d'emblée au-delà de
+    \statut{Introduite}, ou introduite de nouveau après avoir été maîtrisée ;
+  \item période par période, les \textbf{modules} qui la visent, avec leur niveau (et la
+    sous-compétence visée) et ce que leur fiche publiée en dit : acquis d'apprentissage visés,
+    méthodes d'enseignement, modalités d'évaluation ;
+  \item les \textbf{cours sans module} (stages\dots) qui la visent, hors des périodes.
+\end{itemize}
+Le tout s'exporte en CSV.
+
+\capture[0.62\linewidth]{sy-ens-progression}{Progression d'une compétence : frise, constats, modules.}
+
+Les alertes sont des signaux à examiner avec les responsables : un module qui revient sur une
+compétence maîtrisée pour l'introduire auprès d'un autre public peut être voulu.
+
+\section{Éditer le livret des syllabus}\label{sec:livret}
+
+\chemin{Livret des syllabus} (suivi des modules) : choisissez l'\textbf{édition} -- tout le
+cursus, une année d'étude ou une période (semestre) --, puis \bouton{Afficher}. La page liste les
+modules retenus, période par période, avec leurs crédits, leurs responsables et l'état de leur
+fiche. \bouton{Télécharger le livret (PDF)} produit :
+\begin{itemize}
+  \item une page de titre (édition, périmètre, date) et un sommaire ;
+  \item un tableau des modules et des crédits, avec le total de chaque période et du livret ;
+  \item la fiche publiée de chaque module (caractéristiques, rubriques, séances, volume horaire,
+    compétences visées), dans l'ordre du cursus, une période après l'autre.
+\end{itemize}
+Seules les fiches publiées sont éditées ; un module sans fiche publiée figure dans le tableau
+(\og Non publiée\fg{}). Les modules dont l'activité est cachée sont écartés. Le livret est gardé
+et resservi tant que rien n'a changé (fiches, responsables, compétences, date du jour).
+
+\capture{sy-deve-livret}{Livret d'une année d'étude : modules et crédits par période.}
+
 \section{Préparer l'évaluation}
 
 \chemin{Évaluation du module} réunit :
@@ -363,7 +408,8 @@ supprime pas, ni le référentiel qui la contient : retirez d'abord les liens. L
 \section{Matrice des compétences}
 
 \chemin{Compétences} (suivi des modules) croise un référentiel avec les cours du périmètre :
-une ligne par compétence, une colonne par cours (cours de module, et cours sans module liés).
+une ligne par compétence, une colonne par cours, dans l'ordre du cursus (année, période), les
+cours sans module liés en dernier.
 Une case porte le niveau (I, A, M), suivi de \og *\fg{} quand la compétence est visée par le
 cours lui-même (cours sans module). La dernière colonne compte les cours qui visent la
 compétence ; une compétence qu'aucun cours ne vise est surlignée. Filtre par année d'étude,
@@ -371,8 +417,8 @@ export CSV. Les enseignants y ont accès aussi.
 
 \capture{sy-deve-competences}{Matrice compétences $\times$ cours, avec la couverture du référentiel.}
 
-L'en-tête d'une colonne ouvre la page \og Compétences\fg{} du module, ou celle du cours sans
-module. Pour lier un cours qui n'a pas de module (un stage, par exemple), choisissez-le dans
+L'intitulé d'une compétence ouvre sa progression (section~\ref{sec:progression}) ; l'en-tête
+d'une colonne ouvre la page \og Compétences\fg{} du module, ou celle du cours sans module. Pour lier un cours qui n'a pas de module (un stage, par exemple), choisissez-le dans
 \og Lier un cours sans module\dots\fg{} sous la matrice, puis donnez un niveau à chaque
 compétence qu'il vise, comme pour un module. Un cours qui a un module renvoie à la page du
 module.
@@ -433,7 +479,9 @@ participations), et les liens aux compétences avec leur niveau (retrouvés par 
 du référentiel et de la compétence sur un autre site). La réinitialisation du cours peut
 effacer les réponses : l'évaluation est alors de nouveau modifiable. Le référentiel commun et
 les référentiels de compétences n'appartiennent à aucun cours : ils ne sont pas sauvegardés
-avec eux (sur un autre site, importez d'abord le référentiel par CSV). Les liens d'un cours
+avec eux (sur un autre site, importez d'abord le référentiel par CSV). Les livrets PDF sont
+gardés dans les fichiers de l'activité de suivi, un par édition, et refaits quand leur contenu
+change. Les liens d'un cours
 supprimé sont effacés avec lui.
 
 \newpage
@@ -464,6 +512,12 @@ supprimé sont effacés avec lui.
     ignorée ; une compétence dont le code parent ne se trouve ni dans le fichier ni dans le
     référentiel reste à la racine. Les autres lignes sont importées : corrigez le fichier et
     réimportez-le, les compétences déjà créées sont mises à jour.
+  \item[Un module manque dans le livret.] Sa fiche n'est pas publiée (il figure alors dans le
+    tableau, sans fiche), son activité est cachée, ou son année d'étude ou sa période n'est pas
+    renseignée dans ses paramètres : il n'apparaît alors que dans l'édition \og Tout le
+    cursus\fg{}, sous \og Période non précisée\fg{}.
+  \item[La frise d'une compétence a des trous.] Aucun module de ces périodes ne la vise ; une
+    période sans aucun module dans le périmètre n'a pas de colonne.
   \item[Peut-on savoir qui a répondu quoi ?] Non, par aucune page ni aucun export ; seul le fait
     d'avoir répondu est noté (voir l'encadré de la section~\ref{sec:principe-evaluation}).
 \end{description}

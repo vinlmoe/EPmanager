@@ -50,6 +50,14 @@ La mise à jour depuis la 1.1.0 (compétences de Moodle) recopie les référenti
 liens avec leur niveau, puis supprime la table `syllabus_competency` ; les référentiels de Moodle
 ne sont pas touchés.
 
+## Livret et progression
+
+Le suivi des modules édite le livret PDF des fiches publiées d'une période, d'une année d'étude
+ou de tout le cursus (année et période renseignées dans les paramètres de chaque module), et
+montre la progression d'une compétence le long du cursus. Les livrets sont conservés dans la
+zone de fichiers `booklet` de l'activité de suivi, un par édition, et refaits quand leur contenu
+change.
+
 ## Tâche
 
 | Tâche | Quand | Rôle |
