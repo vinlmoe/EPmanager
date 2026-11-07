@@ -212,7 +212,11 @@ jobs:
         run: |
           php -S localhost:8000 -t moodle > php-server.log 2>&1 &
           sleep 2
-          moodle-plugin-ci behat --profile default --dump mod/ep
+          check_status=0
+          for p in ep syllabus syllabusstaff syllabusstudent; do
+            moodle-plugin-ci behat --profile default --dump mod/$p || check_status=1
+          done
+          exit "$check_status"
 
       - name: Coverage report (Clover)
         if: ${{ !cancelled() && matrix.coverage == 'pcov' && steps.moodle_install.outcome == 'success' }}

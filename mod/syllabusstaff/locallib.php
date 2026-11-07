@@ -258,7 +258,7 @@ function syllabusstaff_set_windows(array $syllabusids, int $open, int $close): s
  * @return int Horodatage, 0 si vide ou illisible.
  */
 function syllabusstaff_parse_datetime(string $value): int {
-    if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/', trim($value), $m)) {
+    if (!preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})T(\d{1,2}):(\d{2})/', trim($value), $m)) {
         return 0;
     }
     return make_timestamp((int) $m[1], (int) $m[2], (int) $m[3], (int) $m[4], (int) $m[5]);
