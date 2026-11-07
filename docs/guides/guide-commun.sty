@@ -1,0 +1,96 @@
+% Mise en page commune aux guides EP Manager.
+% Chaque guide définit, avant \usepackage{guide-commun} :
+%   \titreguide, \versionguide, \dateguide, \versionep, \versionsynthese.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{guide-commun}[2026/10/16 Guides EP Manager]
+
+\RequirePackage[T1]{fontenc}
+\RequirePackage[utf8]{inputenc}
+\RequirePackage{lmodern}
+\RequirePackage[french]{babel}
+\RequirePackage[margin=2.2cm,headheight=14pt]{geometry}
+\RequirePackage{microtype}
+\RequirePackage{amssymb}
+\RequirePackage{graphicx}
+\RequirePackage{float}
+\RequirePackage[font=small,labelfont=bf]{caption}
+\RequirePackage{xcolor}
+\RequirePackage{booktabs}
+\RequirePackage{tabularx}
+\RequirePackage{enumitem}
+\RequirePackage{fancyhdr}
+\RequirePackage[most]{tcolorbox}
+\RequirePackage[hidelinks]{hyperref}
+
+\definecolor{moodle}{HTML}{0F6CBF}
+\definecolor{cadre}{HTML}{B0B7BF}
+
+\hypersetup{
+  pdftitle={EP Manager -- \titreguide},
+  pdfauthor={Sébastien Lefebvre},
+  colorlinks=true, linkcolor=moodle, urlcolor=moodle
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small EP Manager -- \titreguide}
+\rhead{\small\nouppercase{\leftmark}}
+\lfoot{\small Version \versionguide{} -- \dateguide}
+\cfoot{\small\thepage}
+
+\setlist{itemsep=2pt, topsep=4pt}
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+\setlength{\emergencystretch}{2em}
+
+% Capture d'écran encadrée, numérotée et référencée par fig:<fichier>.
+% \capture[largeur]{fichier}{légende}
+\newcommand{\capture}[3][\linewidth]{%
+  \begin{figure}[H]
+    \centering
+    \setlength{\fboxsep}{0pt}%
+    \fcolorbox{cadre}{white}{\includegraphics[width=\dimexpr#1-2\fboxrule\relax,height=0.70\textheight,keepaspectratio]{captures/#2}}
+    \caption{#3}
+    \label{fig:#2}
+  \end{figure}}
+
+% Chemin de navigation dans l'interface : \chemin{Administration > Gérer les thématiques}
+\newcommand{\chemin}[1]{\textsf{\textbf{\color{moodle}#1}}}
+% Bouton ou libellé d'interface
+\newcommand{\bouton}[1]{\textsf{«~#1~»}}
+% Statut affiché par le module
+\newcommand{\statut}[1]{\textsf{\textbf{#1}}}
+
+\newtcolorbox{astuce}{colback=moodle!5, colframe=moodle, fonttitle=\bfseries,
+  title=À noter, boxrule=0.6pt, arc=2pt}
+\newtcolorbox{attention}{colback=orange!6, colframe=orange!80!black, fonttitle=\bfseries,
+  title=Attention, boxrule=0.6pt, arc=2pt}
+% Texte de courriel : \begin{courriel}{Sujet}...\end{courriel}
+\newtcolorbox{courriel}[1]{colback=black!3, colframe=black!40, boxrule=0.4pt, arc=1pt,
+  fonttitle=\small\sffamily, coltitle=black, colbacktitle=black!10, title={Sujet : #1},
+  fontupper=\small\sffamily, left=6pt, right=6pt}
+% Variable de courriel : \var{student} donne {{student}}
+\newcommand{\var}[1]{\texttt{\{\{#1\}\}}}
+
+% Page de titre : \pagedegarde{public visé}{image de couverture}
+\newcommand{\pagedegarde}[2]{%
+  \begin{titlepage}
+    \centering
+    \vspace*{3cm}
+    {\Huge\bfseries EP Manager\par}
+    \vspace{0.6cm}
+    {\LARGE \titreguide\par}
+    \vspace{0.4cm}
+    {\large #1\par}
+    \vspace{1.5cm}
+    \setlength{\fboxsep}{0pt}
+    \fcolorbox{cadre}{white}{\includegraphics[width=0.85\linewidth]{captures/#2}}
+    \vfill
+    {\large Sébastien Lefebvre\par}
+    \vspace{0.3cm}
+    {\large Version \versionguide{} -- \dateguide\par}
+    {\small Modules couverts : \texttt{mod\_ep} \versionep,
+     \texttt{mod\_epsynthesis} \versionsynthese\par}
+  \end{titlepage}}
+
+\endinput

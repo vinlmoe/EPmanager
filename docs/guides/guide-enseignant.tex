@@ -1,0 +1,156 @@
+% Guide enseignant d'EP Manager (mod_ep et mod_epsynthesis).
+% Compilation : latexmk -pdf guide-enseignant.tex
+\documentclass[11pt,a4paper]{article}
+
+% Version du guide : à mettre à jour à chaque modification, avec une ligne dans l'historique.
+\newcommand{\titreguide}{Guide enseignant}
+\newcommand{\versionguide}{1.0}
+\newcommand{\dateguide}{novembre 2026}
+\newcommand{\versionep}{1.0.0}
+\newcommand{\versionsynthese}{1.0.0}
+
+\usepackage{guide-commun}
+
+\begin{document}
+
+\pagedegarde{Responsable d'EP, enseignant référent : valider, noter, proposer un EP}{ens-synthese-a-traiter}
+
+\tableofcontents
+
+\section*{Historique des versions}
+\addcontentsline{toc}{section}{Historique des versions}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l l X@{}}
+\toprule
+\textbf{Version} & \textbf{Date} & \textbf{Modifications} \\
+\midrule
+1.0 & novembre 2026 & Première version, pour EP Manager 1.0. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\newpage
+
+% ===========================================================================
+\section{Vos rôles}
+
+Un enseignant intervient dans l'enseignement personnalisé à trois titres, qui peuvent se
+cumuler :
+\begin{itemize}
+  \item \textbf{responsable d'un EP du catalogue} : il inscrit et retire des étudiants, valide
+    ou note les inscrits ;
+  \item \textbf{enseignant référent} d'étudiants (le même que pour les stages) : il examine
+    leurs déclarations d'EP hors catalogue et les éléments qu'ils demandent pour leur supplément
+    au diplôme, à son étape du circuit fixé par la DEVE ;
+  \item \textbf{auteur d'un EP} : il propose un nouvel EP ou met à jour le syllabus du sien.
+\end{itemize}
+Vous ne voyez que ce qui relève de vous : vos EP, vos étudiants référents.
+
+\subsection{Une seule page pour toutes vos promotions}
+
+L'activité \og Suivi de l'enseignement personnalisé\fg{} de votre cours d'équipe rassemble ce
+que vous avez à faire dans toutes les promotions :
+\begin{itemize}
+  \item \chemin{Validation} : les demandes qui attendent votre décision, de la plus ancienne à
+    la plus récente ;
+  \item \chemin{Tableau de pilotage} : l'avancement de vos étudiants ;
+  \item \chemin{À traiter} : les EP dont vous êtes responsable avec des inscrits à trancher,
+    vos propositions et syllabus à reprendre, les éléments du supplément à examiner, que vous
+    pouvez trancher directement sur la page.
+\end{itemize}
+
+\capture{ens-synthese-a-traiter}{Page \og À traiter\fg{} de la synthèse, toutes promotions
+confondues.}
+
+Chaque ligne renvoie vers la page de l'activité de la promotion concernée, décrite ci-dessous.
+
+% ===========================================================================
+\section{Responsable d'un EP du catalogue}
+
+\subsection{Liste des participants}
+
+Dans l'activité de la promotion, \chemin{Validation} commence par vos EP. Le bouton
+\bouton{Participants} ouvre la liste des inscrits de l'un d'eux.
+
+\capture{ens-participants}{Participants d'un EP : inscription en attente, note, décision.}
+
+Depuis cette liste :
+\begin{itemize}
+  \item \textbf{valider ou noter} chaque inscrit : pour un EP noté, saisir la note (la
+    validation suit le seuil fixé) ; sinon, choisir \og validé\fg{} ou \og non validé\fg{} ;
+    ajouter un commentaire ; enregistrer toute la liste d'un coup ;
+  \item \textbf{inscrire des étudiants} (\bouton{Inscrire des étudiants}) en cours de session, même après la fermeture des
+    inscriptions ;
+  \item \textbf{retirer} un étudiant, avec un motif ;
+  \item \textbf{importer les notes} depuis un fichier CSV (la liste exportée de l'EP sert de
+    modèle) : la page présente d'abord ce qui sera fait, ligne par ligne, puis applique sur
+    confirmation.
+\end{itemize}
+
+\begin{astuce}
+Si la DEVE a prévu une seconde étape (\og responsable puis DEVE\fg{}), votre validation fait
+passer la demande à la DEVE ; sinon, elle est définitive et l'étudiant en est prévenu.
+\end{astuce}
+
+\subsection{Une demande à la fois}
+
+Le bouton \bouton{Valider} d'une demande ouvre son détail : ce que l'étudiant a demandé, ses
+justificatifs, l'historique des décisions. Vous y validez (en ajustant au besoin les ECTS
+retenus), notez ou refusez avec un commentaire.
+
+\capture{ens-validation}{Détail d'une demande, avec les boutons de décision.}
+
+Si quelqu'un a tranché la même demande entre-temps, rien n'est enregistré et un message vous
+prévient que la demande a changé.
+
+% ===========================================================================
+\section{Enseignant référent}
+
+Les \textbf{déclarations} de vos étudiants référents (engagement, expérience
+professionnelle, sport, académique externe\dots) arrivent dans \chemin{Validation}, rubrique
+\og En attente de votre décision\fg{}. Vérifiez les justificatifs, puis validez (avec les ECTS
+retenus) ou refusez en expliquant pourquoi.
+
+Les \textbf{éléments du supplément au diplôme} demandés par vos étudiants arrivent dans
+\chemin{Éléments de supplément à examiner} : catégorie, période, intitulé, preuves. Votre
+validation transmet l'élément à la DEVE, qui décide en dernier ; votre commentaire lui est
+transmis.
+
+\capture{ens-supplement-items}{Éléments du supplément à examiner, avec les preuves.}
+
+% ===========================================================================
+\section{Proposer un EP, mettre à jour le sien}
+
+\subsection{Proposer un nouvel EP}
+
+\chemin{Propositions et syllabus} \textgreater{} \bouton{Proposer un nouvel EP} crée l'EP à l'état de
+brouillon, dont vous devenez responsable. Renseignez :
+\begin{itemize}
+  \item ses caractéristiques : intitulé, type, ECTS, places, années concernées ;
+  \item son \textbf{syllabus}, au modèle de la fiche ECTS : objectifs, acquis d'apprentissage,
+    prérequis, contenu, méthodes d'enseignement, conditions d'examen, seconde session,
+    bibliographie, langue, travail personnel ;
+  \item son \textbf{programme} : les séances, avec leur nature (cours, TD, TP, clinique\dots),
+    leur durée, leur intervenant (un enseignant du site, ou un intervenant extérieur par son nom)
+    et leur date. Le volume horaire total et par nature est calculé.
+\end{itemize}
+
+\capture{ens-syllabus-edit}{Rédaction du syllabus et du programme des séances.}
+
+Le bouton \bouton{Soumettre à la DEVE} transmet la proposition. La DEVE la publie (l'EP entre
+au catalogue), vous la renvoie avec un commentaire (corrigez puis resoumettez) ou la refuse. Vous
+êtes prévenu de sa décision.
+
+\subsection{Mettre à jour un EP publié}
+
+Depuis la même page, \bouton{Proposer une mise à jour} ouvre une \textbf{nouvelle version} du syllabus :
+la version publiée reste au catalogue tant que la nouvelle n'est pas publiée. Selon le choix de
+la DEVE, votre mise à jour est publiée directement ou passe par sa revue. Les versions
+précédentes restent dans l'historique.
+
+\capture{ens-propositions}{Propositions et syllabus : état de chaque version.}
+
+La fiche de l'EP se télécharge en PDF depuis sa page \bouton{Syllabus}.
+
+\end{document}

@@ -1,0 +1,190 @@
+% Guide étudiant d'EP Manager (mod_ep).
+% Compilation : latexmk -pdf guide-etudiant.tex
+\documentclass[11pt,a4paper]{article}
+
+% Version du guide : à mettre à jour à chaque modification, avec une ligne dans l'historique.
+\newcommand{\titreguide}{Guide étudiant}
+\newcommand{\versionguide}{1.0}
+\newcommand{\dateguide}{novembre 2026}
+\newcommand{\versionep}{1.0.0}
+\newcommand{\versionsynthese}{1.0.0}
+
+\usepackage{guide-commun}
+
+\begin{document}
+
+\pagedegarde{Suivre ses enseignements personnalisés, s'inscrire, déclarer, obtenir son
+supplément au diplôme}{etu-tableau-de-bord}
+
+\tableofcontents
+
+\section*{Historique des versions}
+\addcontentsline{toc}{section}{Historique des versions}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l l X@{}}
+\toprule
+\textbf{Version} & \textbf{Date} & \textbf{Modifications} \\
+\midrule
+1.0 & novembre 2026 & Première version, pour EP Manager 1.0. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\newpage
+
+% ===========================================================================
+\section{Votre espace d'enseignement personnalisé}
+
+Vos enseignements personnalisés (EP) sont suivis dans le cours Moodle de votre promotion, du
+début à la fin de votre cursus. Ouvrez l'activité \og Enseignement personnalisé\fg{} de ce
+cours : vous arrivez sur votre tableau de bord.
+
+\capture{etu-tableau-de-bord}{Tableau de bord de l'étudiant : ECTS retenus par année et par
+type, face aux minimums exigés.}
+
+Le tableau de bord montre :
+\begin{itemize}
+  \item pour chaque \textbf{année d'étude}, les ECTS retenus face au minimum exigé, et l'état
+    \statut{Atteint} ou \statut{À compléter} ;
+  \item le total sur le cursus, face au minimum de cursus s'il y en a un ;
+  \item le détail \textbf{par type} d'EP (académique interne, stage, engagement étudiant,
+    expérience professionnelle, sport, académique externe\dots), avec les plafonds ;
+  \item la liste de \textbf{tous vos EP}, avec leur état et les décisions prises.
+\end{itemize}
+
+La barre de liens en haut de page mène au \chemin{Catalogue des EP}, à \chemin{Déclarer un
+EP} et à \chemin{Mon supplément au diplôme}.
+
+\begin{astuce}
+Seuls les ECTS \textbf{validés} comptent. Au-delà du plafond d'un type, les ECTS validés restent
+acquis mais ne sont plus comptés : ils apparaissent comme \og non retenus\fg{} et reviendraient
+au décompte si le plafond était relevé.
+\end{astuce}
+
+% ===========================================================================
+\section{S'inscrire à un EP du catalogue}
+
+\subsection{Choisir un EP}
+
+Le \chemin{Catalogue des EP} liste les EP proposés à votre promotion : intitulé, type, ECTS,
+années concernées, places restantes, responsables, période d'inscription. Le lien
+\bouton{Syllabus} ouvre la fiche de l'EP : objectifs, acquis d'apprentissage, contenu, méthodes,
+conditions d'examen, programme des séances avec leurs intervenants, volume horaire. La fiche
+se télécharge aussi en PDF.
+
+\capture{etu-catalogue}{Catalogue des EP, vu par un étudiant.}
+
+\capture{etu-syllabus}{Fiche du syllabus d'un EP.}
+
+Le bouton \bouton{S'inscrire} n'apparaît que si l'inscription vous est possible. Sinon, la
+colonne indique pourquoi :
+\begin{itemize}
+  \item \statut{Inscriptions fermées} : hors de la période d'inscription, ou EP clos ;
+  \item \statut{Complet} : plus de place ;
+  \item l'EP n'est pas ouvert à votre année d'étude ;
+  \item \statut{Prérequis manquants} : l'EP exige d'avoir validé un autre EP, ou un nombre
+    minimum d'ECTS. Si ses prérequis sont \textbf{bloquants}, l'inscription est refusée ; sinon,
+    elle reste possible et le responsable en est averti.
+\end{itemize}
+
+\subsection{Confirmer l'inscription}
+
+Choisissez l'année d'étude au titre de laquelle l'EP comptera (votre année courante par
+défaut), puis \bouton{Confirmer mon inscription}. Votre inscription part \textbf{en attente} :
+le responsable de l'EP la validera, avec une note si l'EP est noté, une fois l'EP suivi.
+
+\capture{etu-inscription}{Confirmation de l'inscription à un EP.}
+
+Tant qu'elle est en attente, vous pouvez retirer votre inscription depuis votre tableau de bord
+(\bouton{Retirer cet EP}) : la place est rendue.
+
+% ===========================================================================
+\section{Déclarer un EP hors catalogue}
+
+Les activités suivies hors du catalogue -- engagement étudiant, expérience professionnelle,
+sport, enseignement suivi dans un autre établissement\dots{} -- se déclarent depuis
+\chemin{Déclarer un EP} :
+\begin{enumerate}
+  \item choisissez le \textbf{type} : sa consigne s'affiche, avec son plafond d'ECTS ;
+  \item donnez un \textbf{intitulé}, l'\textbf{année d'étude}, le nombre d'\textbf{ECTS demandés}
+    et une description de ce que vous avez fait ;
+  \item joignez vos \textbf{justificatifs} (attestation, convention, diplôme\dots) : ils peuvent
+    être obligatoires pour certains types ;
+  \item enregistrez.
+\end{enumerate}
+
+\capture{etu-declarer}{Déclaration d'un EP hors catalogue.}
+
+La page indique à qui la demande est transmise : selon le type, votre enseignant référent, la
+DEVE, ou l'un puis l'autre. Votre enseignant référent est celui qui vous est attribué dans
+l'activité \og Gestion des stages\fg{} du même cours.
+
+Tant que personne ne l'a tranchée, vous pouvez modifier ou retirer votre demande. Une fois
+tranchée, elle ne se modifie plus : en cas d'erreur, adressez-vous à la DEVE.
+
+% ===========================================================================
+\section{Suivre vos demandes}
+
+Chaque EP de votre tableau de bord porte son état :
+\begin{itemize}
+  \item \statut{En attente}, avec la personne qui doit maintenant décider (responsable de l'EP,
+    enseignant référent ou DEVE) : une demande peut passer par plusieurs étapes ;
+  \item \statut{Validé}, avec les ECTS retenus et, pour un EP noté, la note ;
+  \item \statut{Non validé}, avec le commentaire de la personne qui a décidé ;
+  \item \statut{Retiré}.
+\end{itemize}
+Le détail d'un EP montre l'historique de toutes les décisions : qui, quand, à quel titre, avec
+quel commentaire.
+
+Vous recevez un message (courriel ou notification, selon vos préférences Moodle) à chaque
+décision finale.
+
+Les EP de type \textbf{stage} sont attribués automatiquement d'après vos stages complémentaires
+validés par la DEVE dans \og Gestion des stages\fg{} : vous n'avez rien à déclarer.
+
+% ===========================================================================
+\section{Votre supplément au diplôme}
+
+\subsection{Ce qu'il contient}
+
+Le supplément au diplôme, au modèle européen Europass, décrit votre diplôme et votre parcours.
+La page \chemin{Mon supplément au diplôme} montre :
+\begin{itemize}
+  \item les EP validés qui y figureront (rubrique~4.3), avec leurs ECTS et leur note ;
+  \item vos \textbf{éléments complémentaires} (rubrique~6.1) : responsabilités associatives,
+    prix, mobilités, certifications\dots{} que vous avez demandés et qui ont été validés ;
+  \item le bouton \bouton{Aperçu (non certifié)}, qui produit le document en français ou en
+    anglais, marqué \og APERÇU -- NON CERTIFIÉ\fg{} ;
+  \item les suppléments \textbf{émis} par la DEVE, à télécharger.
+\end{itemize}
+
+\capture{etu-supplement}{Page \og Mon supplément au diplôme\fg{}.}
+
+\subsection{Demander l'ajout d'un élément}
+
+Le bouton \bouton{Demander l'ajout d'un élément} ouvre un formulaire :
+\begin{enumerate}
+  \item la \textbf{catégorie} (définie par la DEVE) ;
+  \item la \textbf{période} (début, fin) ;
+  \item l'\textbf{intitulé}, en français et, si possible, en anglais (pour le supplément édité
+    en anglais) ;
+  \item une description ;
+  \item les \textbf{preuves} en PDF (attestation, certificat\dots), facultatives ou obligatoires
+    selon le choix de la DEVE.
+\end{enumerate}
+
+\capture{etu-supplement-element}{Demande d'un élément complémentaire du supplément.}
+
+La demande est examinée selon le circuit choisi par la DEVE (par exemple : votre enseignant
+référent, puis la DEVE). Tant qu'elle est en attente, vous pouvez la modifier ou la retirer.
+Vos preuves sont conservées par l'école avec la décision.
+
+\subsection{Le supplément certifié}
+
+La DEVE émet votre supplément en fin de cursus. Le document porte un \textbf{numéro} et un
+\textbf{code de vérification} : toute personne à qui vous le présentez peut vérifier, sur la
+page de vérification de l'école, qu'il a bien été émis et n'a pas été modifié. Si la DEVE émet
+une nouvelle version, l'ancienne est signalée comme remplacée.
+
+\end{document}
