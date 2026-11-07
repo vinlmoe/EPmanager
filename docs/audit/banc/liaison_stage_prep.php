@@ -5,8 +5,8 @@
 // Usage : sudo -u www-data php liaison_stage_prep.php site-x.json > liaison.json
 //   prepare   : 200 stages complémentaires (A), 50 obligatoires (B), 50 complémentaires (C), non
 //               validés ; affiche leurs identifiants en JSON.
-//   details <entryid> <jours> : correction de la durée retenue par stage_update_entry_details()
-//               (formulaire de la saisie, sans événement) ;
+//   details <entryid> <jours> : correction de la durée retenue écrite en base, sans événement
+//               (mod_stage n'enregistre plus la durée retenue avec les détails de la saisie) ;
 //   type <entryid> <obligatoire|complementaire> : stage_set_entry_stagetype() ;
 //   reset     : supprime les saisies préparées (thématique « Faune sauvage (EP) »), remet le barème
 //               du type stage à 0 et etux_1 à son référent d'origine (ensa_1), pour rejouer le test ;
@@ -25,9 +25,8 @@ $command = $argv[2] ?? 'prepare';
 
 if ($command === 'details') {
     $entry = $DB->get_record('stage_entry', ['id' => (int) $argv[3]], '*', MUST_EXIST);
-    $entry->retainedduration = (int) $argv[4];
-    stage_update_entry_details($entry, $entry->themeid, $entry->structure, $entry->datestart, $entry->dateend,
-        $entry->declaredduration, $entry->studyyear, $entry->abroad, $entry->country);
+    $DB->update_record('stage_entry', (object) ['id' => $entry->id, 'retainedduration' => (int) $argv[4],
+        'timemodified' => time()]);
     echo "ok\n";
     exit;
 }
