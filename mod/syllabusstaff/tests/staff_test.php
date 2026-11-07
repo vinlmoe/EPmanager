@@ -1,0 +1,94 @@
+<?php
+// This file is part of Moodle - http://moodle.org/
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+namespace mod_syllabusstaff;
+
+defined('MOODLE_INTERNAL') || die();
+
+global $CFG;
+require_once($CFG->dirroot . '/mod/syllabusstaff/locallib.php');
+
+/**
+ * Suivi des modules : fenêtres en lot, moyennes comparées, saisie de date.
+ *
+ * @package   mod_syllabusstaff
+ * @copyright 2026 Sébastien Lefebvre
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @covers    ::syllabusstaff_set_windows
+ * @covers    ::syllabus_common_means
+ */
+final class staff_test extends \advanced_testcase {
+    /**
+     * La DEVE ne fixe la fenêtre que des modules où elle a le rôle de la DEVE.
+     */
+    public function test_set_windows_respects_rights(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $deve = $gen->create_user();
+        $mine = $gen->create_course();
+        $other = $gen->create_course();
+        $gen->enrol_user($deve->id, $mine->id, 'manager');
+        $this->setAdminUser();
+        $a = $gen->create_module('syllabus', ['course' => $mine->id]);
+        $b = $gen->create_module('syllabus', ['course' => $other->id]);
+        $this->setUser($deve);
+        $open = time() + DAYSECS;
+        $result = syllabusstaff_set_windows([$a->id, $b->id], $open, $open + WEEKSECS);
+        $this->assertSame(1, $result->done);
+        $this->assertSame(1, $result->skipped);
+        $this->assertEquals($open, $DB->get_field('syllabus', 'evalopen', ['id' => $a->id]));
+        $this->assertEquals(0, $DB->get_field('syllabus', 'evalopen', ['id' => $b->id]));
+    }
+
+    /**
+     * Moyennes par question commune d'origine, seulement au-delà du seuil.
+     */
+    public function test_common_means(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $sgen = $gen->get_plugin_generator('mod_syllabus');
+        $common = $sgen->create_question(['text' => 'Organisation']);
+        $course = $gen->create_course();
+        $students = [];
+        for ($i = 0; $i < 3; $i++) {
+            $students[] = $gen->create_and_enrol($course, 'student');
+        }
+        $this->setAdminUser();
+        $record = $gen->create_module('syllabus', ['course' => $course->id, 'evalopen' => time() - 10]);
+        $syllabus = $DB->get_record('syllabus', ['id' => $record->id]);
+        $context = \context_module::instance($record->cmid);
+        syllabus_freeze_questions($syllabus);
+        $copy = $DB->get_record('syllabus_question', ['syllabusid' => $syllabus->id, 'sourceid' => $common]);
+        set_config('resultsthreshold', 3, 'mod_syllabus');
+        foreach ([2, 4, 5] as $i => $value) {
+            $this->setUser($students[$i]);
+            syllabus_submit_response($syllabus, $context, (int) $students[$i]->id, [$copy->id => $value]);
+            $means = syllabus_common_means([(int) $syllabus->id]);
+            $this->assertSame($i < 2 ? [] : [(int) $syllabus->id => [$common => 3.67]], $means);
+        }
+    }
+
+    /**
+     * Saisie d'un champ datetime-local.
+     */
+    public function test_parse_datetime(): void {
+        $this->resetAfterTest();
+        $this->assertSame(0, syllabusstaff_parse_datetime(''));
+        $this->assertSame(make_timestamp(2026, 12, 1, 8, 30), syllabusstaff_parse_datetime('2026-12-01T08:30'));
+    }
+}

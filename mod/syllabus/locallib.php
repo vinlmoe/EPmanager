@@ -1242,7 +1242,8 @@ function syllabus_send_message(
  * Modules (instances avec leur module de cours et leur cours), filtrés. Les modules supprimés ou
  * en cours de suppression sont écartés.
  *
- * @param array $filters categoryid (avec sous-catégories), teacherid, courseids, typeid, search, status (de version), syllabusids
+ * @param array $filters categoryid (avec sous-catégories), teacherid, courseids, typeid, search, status (de version,
+ *     ou nopublished), evalstate (SYLLABUS_EVAL_*), syllabusids
  * @param int $limitfrom
  * @param int $limitnum
  * @return array [lignes, total]
@@ -1288,6 +1289,15 @@ function syllabus_list_instances(array $filters = [], int $limitfrom = 0, int $l
             $params['search' . $i] = '%' . $DB->sql_like_escape($filters['search']) . '%';
         }
         $where[] = '(' . implode(' OR ', $like) . ')';
+    }
+    if (!empty($filters['evalstate'])) {
+        $params['now1'] = $params['now2'] = $params['now3'] = $params['now4'] = time();
+        $where[] = match ($filters['evalstate']) {
+            SYLLABUS_EVAL_NONE => 's.evalopen = 0',
+            SYLLABUS_EVAL_UPCOMING => 's.evalopen > :now1',
+            SYLLABUS_EVAL_OPEN => 's.evalopen > 0 AND s.evalopen <= :now2 AND (s.evalclose = 0 OR s.evalclose > :now3)',
+            default => 's.evalopen > 0 AND s.evalclose > 0 AND s.evalclose <= :now4',
+        };
     }
     if (!empty($filters['status'])) {
         if ($filters['status'] === 'nopublished') {
@@ -1466,4 +1476,52 @@ function syllabus_render_questions(array $questions, ?callable $actions = null, 
         $table->data[] = $row;
     }
     return html_writer::table($table);
+}
+
+/**
+ * Catégories de cours, pour borner une activité de synthèse : 0 = tout le site.
+ *
+ * @return array id => nom complet
+ */
+function syllabus_category_options(): array {
+    return [0 => get_string('allcategories', 'mod_syllabus')] + core_course_category::make_categories_list();
+}
+
+/**
+ * Moyennes des questions communes à échelle, par module : une colonne par question commune,
+ * comparable d'un module à l'autre puisque chaque copie figée garde sa question d'origine
+ * (sourceid). Seuls les modules qui atteignent le seuil d'anonymat ont des moyennes.
+ *
+ * @param int[] $syllabusids
+ * @return array syllabusid => sourceid => moyenne
+ */
+function syllabus_common_means(array $syllabusids): array {
+    global $DB;
+
+    if (!$syllabusids) {
+        return [];
+    }
+    $threshold = (int) syllabus_setting('resultsthreshold');
+    [$insql, $params] = $DB->get_in_or_equal($syllabusids, SQL_PARAMS_NAMED);
+    $counts = $DB->get_records_sql_menu("SELECT syllabusid, COUNT(1) FROM {syllabus_participant} WHERE syllabusid $insql "
+        . 'GROUP BY syllabusid', $params);
+    $shown = array_keys(array_filter($counts, fn($count) => (int) $count >= $threshold));
+    if (!$shown) {
+        return [];
+    }
+    [$insql, $params] = $DB->get_in_or_equal($shown, SQL_PARAMS_NAMED);
+    $rs = $DB->get_recordset_sql(
+        "SELECT q.syllabusid, q.sourceid, AVG(a.value) AS mean
+           FROM {syllabus_question} q
+           JOIN {syllabus_answer} a ON a.questionid = q.id
+          WHERE q.syllabusid $insql AND q.sourceid > 0 AND q.kind = 'scale'
+       GROUP BY q.syllabusid, q.sourceid",
+        $params
+    );
+    $means = [];
+    foreach ($rs as $row) {
+        $means[(int) $row->syllabusid][(int) $row->sourceid] = round((float) $row->mean, 2);
+    }
+    $rs->close();
+    return $means;
 }

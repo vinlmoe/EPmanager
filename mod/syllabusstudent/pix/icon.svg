@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <!-- Toque universitaire : l'enseignement personnalisé reste un enseignement crédité en ECTS -->
+  <path fill="#000000" d="M24 7.5 L45 16.5 L24 25.5 L3 16.5 z"/>
+  <path fill="#000000" d="
+    M13 20.5 l11 4.7 l11 -4.7 v7.8 c0 3.1 -4.9 5.6 -11 5.6 s-11 -2.5 -11 -5.6 z
+    M15 23.5 v4.8 c0 1.5 3.9 3.6 9 3.6 s9 -2.1 9 -3.6 v-4.8 l-9 3.9 z"/>
+  <path fill="#000000" d="M43.6 17.2 h2 v10.3 h-2 z"/>
+  <circle cx="44.6" cy="29.4" r="2.2" fill="#000000"/>
+  <!-- Pastille : la part personnalisée du parcours, distinguée du tronc commun -->
+  <circle cx="34" cy="35" r="10.5" fill="#FFFFFF" stroke="#000000" stroke-width="1.6"/>
+  <polygon fill="#000000" points="34,28.8 35.59,32.82 39.9,33.08 36.57,35.83 37.64,40.02 34,37.7 30.36,40.02 31.43,35.83 28.1,33.08 32.41,32.82"/>
+</svg>
