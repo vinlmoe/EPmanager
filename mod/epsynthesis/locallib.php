@@ -336,6 +336,7 @@ function epsynthesis_decorate_credit(
  *
  * @param stdClass $link Voir epsynthesis_get_active_links().
  * @param array $students userid => stdClass user
+ * @param bool $withnames Faux : seuls les libellés de type sont calculés.
  * @return array [typeid => libellé, userid => nom complet]
  */
 function epsynthesis_decoration_maps(stdClass $link, array $students, bool $withnames = true): array {

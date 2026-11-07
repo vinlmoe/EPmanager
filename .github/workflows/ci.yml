@@ -209,7 +209,11 @@ jobs:
           # Les scénarios n'utilisent pas JavaScript : seul le serveur PHP est nécessaire, pas
           # Selenium, que moodle-plugin-ci démarrerait sinon dans Docker.
           MOODLE_START_BEHAT_SERVERS: "NO"
+        # moodle-plugin-ci n'initialise le site Behat que si le plugin principal (mod_ep) a des
+        # scénarios ; ceux des modules syllabus, installés en plugins supplémentaires, demandent
+        # donc une initialisation explicite.
         run: |
+          (cd moodle && php admin/tool/behat/cli/init.php)
           php -S localhost:8000 -t moodle > php-server.log 2>&1 &
           sleep 2
           check_status=0
