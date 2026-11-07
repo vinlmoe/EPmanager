@@ -29,7 +29,8 @@ use core_privacy\local\request\writer;
  *
  * Les réponses aux évaluations (syllabus_response, syllabus_answer) ne portent aucun identifiant :
  * ce ne sont pas des données personnelles et elles ne peuvent être ni exportées ni effacées pour
- * un étudiant. Est personnel le fait d'avoir répondu (syllabus_participant), d'être responsable
+ * un étudiant. Les résultats archivés des années passées (syllabus_evalarchive) sont agrégés et
+ * anonymes, comme ces réponses. Est personnel le fait d'avoir répondu (syllabus_participant), d'être responsable
  * d'un module, d'avoir rédigé ou relu une version de sa fiche, d'intervenir dans une séance.
  *
  * @package   mod_syllabus

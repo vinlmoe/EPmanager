@@ -25,16 +25,16 @@
 defined('MOODLE_INTERNAL') || die();
 
 $string['before'] = 'avant le {$a}';
-$string['evaluate'] = 'Évaluer « {$a} »';
-$string['evaluated'] = 'Évalué';
-$string['evaluatenow'] = 'Évaluer';
+$string['evaluate'] = 'Donner mon avis sur « {$a} »';
+$string['evaluated'] = 'Avis donné';
+$string['evaluatenow'] = 'Donner mon avis';
 $string['modulename'] = 'Mes modules (étudiants)';
-$string['modulename_help'] = 'À placer dans le cours de promotion : chaque étudiant y voit les modules des cours où il est inscrit, leur fiche (syllabus), et les évaluations de modules qu\'il a à faire.';
+$string['modulename_help'] = 'À placer dans le cours de promotion : chaque étudiant y voit les modules des cours où il est inscrit, leur fiche (syllabus), et les avis qu\'il a à donner.';
 $string['modulenameplural'] = 'Mes modules (étudiants)';
 $string['mymodules'] = 'Mes modules ({$a})';
 $string['nodeadline'] = 'sans date limite';
 $string['nomodules'] = 'Aucun module : vous n\'êtes inscrit à aucun cours qui ait une fiche de module.';
-$string['nothingtodo'] = 'Aucune évaluation à faire pour le moment.';
+$string['nothingtodo'] = 'Aucun avis à donner pour le moment.';
 $string['opens'] = 'Ouvre le {$a}';
 $string['pluginadministration'] = 'Administration de Mes modules';
 $string['pluginname'] = 'Mes modules (étudiants)';
@@ -43,5 +43,5 @@ $string['scope'] = 'Périmètre';
 $string['scope_help'] = 'Catégorie de cours dont les modules sont montrés (sous-catégories comprises), ou tout le site.';
 $string['syllabusstudent:addinstance'] = 'Ajouter une activité « Mes modules »';
 $string['syllabusstudent:view'] = 'Voir ses modules';
-$string['todo'] = 'Évaluations à faire ({$a})';
+$string['todo'] = 'Avis à donner ({$a})';
 $string['allmymodules'] = 'Tous mes modules ({$a})';

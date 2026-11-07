@@ -92,9 +92,11 @@ function syllabus_clean_instance(stdClass $data): stdClass {
  * @return int
  */
 function syllabus_add_instance($data, $mform = null) {
-    global $DB, $USER;
+    global $CFG, $DB, $USER;
+    require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
 
     $data = syllabus_clean_instance($data);
+    $data->evalyear = $data->evalopen ? syllabus_academic_year((int) $data->evalopen) : '';
     $data->timecreated = time();
     $data->timemodified = $data->timecreated;
     $data->id = $DB->insert_record('syllabus', $data);
@@ -117,11 +119,15 @@ function syllabus_add_instance($data, $mform = null) {
  * @return bool
  */
 function syllabus_update_instance($data, $mform = null) {
-    global $DB;
+    global $CFG, $DB;
+    require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
 
     $data = syllabus_clean_instance($data);
     $data->id = $data->instance;
     $data->timemodified = time();
+    // Une ouverture dans une nouvelle année universitaire archive le recueil précédent.
+    $current = $DB->get_record('syllabus', ['id' => $data->id], '*', MUST_EXIST);
+    $data->evalyear = syllabus_prepare_window($current, (int) $data->evalopen);
     $DB->update_record('syllabus', $data);
     return true;
 }
@@ -150,7 +156,7 @@ function syllabus_delete_instance($id) {
     }
     foreach (
         ['syllabus_version', 'syllabus_teacher', 'syllabus_question', 'syllabus_response', 'syllabus_participant',
-            'syllabus_complink'] as $table
+            'syllabus_complink', 'syllabus_evalarchive'] as $table
     ) {
         $DB->delete_records($table, ['syllabusid' => $id]);
     }
@@ -237,22 +243,16 @@ function syllabus_reset_course_form_defaults($course) {
  * @return array
  */
 function syllabus_reset_userdata($data) {
-    global $DB;
+    global $CFG, $DB;
+    require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
 
     $status = [];
     if (!empty($data->reset_syllabus_responses)) {
-        foreach ($DB->get_records('syllabus', ['course' => $data->courseid], '', 'id') as $syllabus) {
-            $responseids = $DB->get_fieldset_select('syllabus_response', 'id', 'syllabusid = ?', [$syllabus->id]);
-            if ($responseids) {
-                [$insql, $params] = $DB->get_in_or_equal($responseids);
-                $DB->delete_records_select('syllabus_answer', "responseid $insql", $params);
-            }
-            $DB->delete_records('syllabus_response', ['syllabusid' => $syllabus->id]);
-            $DB->delete_records('syllabus_participant', ['syllabusid' => $syllabus->id]);
-            // Les copies figées des questions communes sont retirées : la prochaine évaluation
-            // reprendra les questions communes du moment.
-            $DB->delete_records_select('syllabus_question', "syllabusid = ? AND origin <> 'teacher'", [$syllabus->id]);
-            $DB->update_record('syllabus', (object) ['id' => $syllabus->id, 'evalfrozen' => 0, 'evalnotified' => 0]);
+        // Les résultats de l'année sont archivés avant que les réponses soient effacées : le
+        // prochain recueil repart de zéro, avec les questions communes du moment.
+        foreach ($DB->get_records('syllabus', ['course' => $data->courseid]) as $syllabus) {
+            $cm = get_coursemodule_from_instance('syllabus', $syllabus->id, $data->courseid, false, MUST_EXIST);
+            syllabus_archive_evaluation($syllabus, context_module::instance($cm->id));
         }
         $status[] = ['component' => get_string('modulenameplural', 'mod_syllabus'),
             'item' => get_string('resetresponses', 'mod_syllabus'), 'error' => false];

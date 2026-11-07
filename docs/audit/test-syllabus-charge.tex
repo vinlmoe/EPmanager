@@ -12,14 +12,14 @@
 \newcolumntype{R}{>{\raggedleft\arraybackslash}X}
 \title{Modules syllabus à l'échelle d'une école :\\ charge, parcours et ergonomie}
 \author{Sébastien Lefebvre}
-\date{Novembre 2026 -- version 1.4.0 des modules}
+\date{Novembre 2026 -- versions 1.4.0 et 1.5.0 des modules}
 
 \begin{document}
 \maketitle
 
 \section{Objet et méthode}
 
-Les modules \code{mod_syllabus} (fiche et évaluation de chaque module d'enseignement),
+Les modules \code{mod_syllabus} (fiche de chaque module d'enseignement et avis des étudiants),
 \code{mod_syllabusstaff} (suivi des enseignants et de la DEVE) et \code{mod_syllabusstudent}
 (« Mes modules » des étudiants) ont été soumis aux mêmes épreuves qu'EP Manager : temps de
 chaque page, montée en charge jusqu'à saturation, endurance, ruée, traitements lourds
@@ -42,7 +42,7 @@ machine.
   \item des fiches publiées (8 rubriques, 8 séances), deux questions d'enseignant par module ;
   \item un référentiel de 6 domaines et 48 compétences, 6 compétences par module avec un niveau
     croissant au fil des années, un stage sans module par année ;
-  \item les évaluations du premier semestre de chaque année closes avec leurs réponses (4\,529
+  \item les avis du premier semestre de chaque année recueillis et clos (4\,529
     réponses, 75~\% de participation).
 \end{itemize}
 
@@ -90,14 +90,14 @@ requêtes par ligne, 0,2~s pour 50 lignes, gardées telles quelles car exactes.
 
 Des utilisateurs virtuels (\code{syllabus_stress.py}) -- 75~\% d'étudiants, 20~\%
 d'enseignants, 5~\% de la DEVE -- ouvrent leurs pages en boucle sans temps de réflexion ;
-les étudiants évaluent aussi leurs modules du second semestre (écritures sous le verrou du
+les étudiants donnent aussi leur avis sur leurs modules du second semestre (écritures sous le verrou du
 module). Paliers de 60~s.
 
 \begin{center}
 \begin{tabularx}{\linewidth}{@{}r R R R R R r@{}}
 \toprule
 \textbf{Utilisateurs} & \textbf{pages/s} & \textbf{médiane} & \textbf{95\,\%} & \textbf{max.} &
-  \textbf{évaluation} & \textbf{erreurs} \\
+  \textbf{avis} & \textbf{erreurs} \\
 \midrule
 25  & 48,9 & 0,49 s & 0,70 s & 1,1 s  & 0,72 s & 0 \\
 50  & 50,5 & 0,93 s & 1,37 s & 1,9 s  & 1,57 s & 0 \\
@@ -112,15 +112,15 @@ module). Paliers de 60~s.
 Le processeur est saturé dès 25 utilisateurs virtuels : le débit plafonne à une cinquantaine de
 pages par seconde, comme pour EP Manager, et le temps d'attente croît ensuite avec le nombre
 d'utilisateurs, régulièrement, sans erreur ni délai dépassé jusqu'à 400. Toutes les pages
-attendent à peu près autant : aucune ne se distingue sous charge. L'envoi d'une évaluation compte
-deux requêtes (l'envoi et la page de retour). 1\,136 évaluations ont été enregistrées pendant le
+attendent à peu près autant : aucune ne se distingue sous charge. L'envoi d'un avis compte
+deux requêtes (l'envoi et la page de retour). 1\,136 avis ont été enregistrés pendant le
 test, sans réponse orpheline ni participation sans réponse.
 
 ENDURANCE
 
-\section{Ruée à l'ouverture des évaluations}
+\section{Ruée à l'ouverture des avis}
 
-Les 1\,000 étudiants évaluent \textbf{au même instant} le même module de leur année : 200
+Les 1\,000 étudiants donnent leur avis \textbf{au même instant} sur le même module de leur année : 200
 étudiants par module, en concurrence sur le verrou du module et sur le figeage des questions,
 qui a lieu à la première ouverture du formulaire (\code{syllabus_ruee.py}). Chacun ouvre « Mes
 modules », le formulaire, puis l'envoie.
@@ -151,7 +151,7 @@ Pendant que 50 utilisateurs virtuels ouvrent leurs pages, sont lancés ensemble
 \toprule
 \textbf{Traitement} & \textbf{Durée} & \textbf{Résultat} \\
 \midrule
-Tâche d'ouverture des évaluations du second semestre (30 modules) & 65 s & 4\,825 messages \\
+Tâche d'ouverture des avis du second semestre (30 modules) & 65 s & 4\,825 messages \\
 Livret de tout le cursus, par la DEVE (60 fiches) & 13,0 s & PDF de 778 Ko \\
 Livret de chaque année, par cinq enseignants & 3,6 à 4,7 s & PDF de 300 Ko \\
 Exports CSV : matrice, résultats comparés, progression d'un domaine & 1,0 à 1,3 s & conformes \\
@@ -189,8 +189,8 @@ les pages web (section~\ref{sec:validation}).
 \toprule
 \textbf{Parcours} & \textbf{Avant} & \textbf{Après} \\
 \midrule
-Étudiant : évaluer ses 12 modules depuis « Mes modules » & 46 clics, 46 pages & 24 clics, 24 pages \\
-Étudiant : formulaire d'évaluation (5 questions) & HAUTAVANT & HAUTAPRES \\
+Étudiant : donner son avis sur ses 12 modules depuis « Mes modules » & 46 clics, 46 pages & 24 clics, 24 pages \\
+Étudiant : formulaire de l'avis (5 questions) & HAUTAVANT & HAUTAPRES \\
 Enseignant : rédiger la fiche avec 3 enregistrements intermédiaires & 8 clics, 8 pages & 5 clics, 5 pages \\
 Enseignant : savoir ce qu'il reste à faire sur son module & 4 pages & 1 encadré, liens directs \\
 DEVE : relire 12 fiches depuis « Fiches à relire » & 57 clics & 24 clics \\
@@ -204,22 +204,22 @@ DEVE : matrice de toutes les années & filtre trompeur (« Non précisée ») & 
 
 \paragraph{Étudiants.}
 \begin{itemize}
-  \item Formulaire d'évaluation : échelles et oui/non sur une ligne (au lieu de cinq lignes par
+  \item Formulaire de l'avis : échelles et oui/non sur une ligne (au lieu de cinq lignes par
     question) ; rappel « vous ne pourrez répondre qu'une fois » près du bouton d'envoi ; message
     d'erreur précis (« questions marquées d'un astérisque »).
   \item Après l'envoi (ou l'annulation), retour à « Mes modules » au lieu de la fiche : le module
     suivant est à un clic.
   \item « Mes modules » range les modules par année et période, avec un intertitre par période ;
     le nom du cours n'est plus répété quand il est celui du module.
-  \item L'état d'une évaluation passée s'appelle « Terminée » (et non « Close », qui se lisait
-    comme l'anglais).
+  \item L'état d'un recueil passé s'appelle « Terminé » (et non « Close », qui se lisait comme
+    l'anglais).
 \end{itemize}
 
 \paragraph{Enseignants responsables.}
 \begin{itemize}
   \item La page du module s'ouvre sur « Où en est ce module » : fiche (publiée, en cours,
     renvoyée avec le commentaire de la DEVE), compétences visées, questions de l'enseignant et
-    état de l'évaluation, chacune avec son bouton ; les caractéristiques manquantes (crédits,
+    état des avis, chacune avec son bouton ; les caractéristiques manquantes (crédits,
     période, année) sont signalées avec un lien vers les paramètres.
   \item « Enregistrer le brouillon » reste sur la rédaction ; la soumission exige les rubriques
     essentielles (objectifs, acquis, contenu, modalités d'évaluation) et au moins une séance ou
@@ -232,10 +232,10 @@ DEVE : matrice de toutes les années & filtre trompeur (« Non précisée ») & 
   \item Compétences : le formulaire n'est plus précédé du même tableau ; un domaine se vise par
     ses sous-compétences ; bouton « Enregistrer » aussi en tête de l'arbre.
   \item Évaluation : le message des questions figées suit l'état réel (il annonçait une
-    évaluation « ouverte » quand elle était terminée) ; lien vers les résultats ; « Modifier »
+    recueil « ouvert » quand il était terminé) ; lien vers les résultats ; « Modifier »
     amène au formulaire ; suppression d'une question confirmée.
   \item Résultats : taux de réponse en pourcentage et tableau des moyennes avant le détail.
-  \item Navigation du module dans l'ordre du travail : rédiger, compétences, évaluation,
+  \item Navigation du module dans l'ordre du travail : rédiger, compétences, avis des étudiants,
     résultats, responsables. Titres d'onglet du navigateur distincts pour chaque page.
   \item Suivi : le nom du module ouvre sa fiche ; les modules qui attendent le responsable sont
     en tête et surlignés ; le lien « Résultats » n'apparaît que s'ils sont visibles.
@@ -249,7 +249,7 @@ DEVE : matrice de toutes les années & filtre trompeur (« Non précisée ») & 
     liste indique responsables et « Première version » ou « Mise à jour », et signale les cours
     où la DEVE n'a pas le droit de décider.
   \item Fenêtre en lot : « Appliquer » exige une ouverture ; un bouton distinct, confirmé,
-    retire l'évaluation ; les cases des cours sans le rôle de la DEVE sont grisées ; une
+    retire le recueil des avis ; les cases des cours sans le rôle de la DEVE sont grisées ; une
     sélection vide est refusée.
   \item Référentiel commun : « Enregistrer les réglages » ; « Monter » et « Descendre » seulement
     s'il y a une voisine ; suppressions confirmées.
@@ -265,10 +265,10 @@ DEVE : matrice de toutes les années & filtre trompeur (« Non précisée ») & 
 \subsection{Constats non retenus ou reportés}
 
 \begin{itemize}
-  \item \emph{« Évaluation » désigne l'enquête auprès des étudiants et les « modalités
-    d'évaluation » de la fiche.} Le vocabulaire est celui demandé ; la question est posée au
-    responsable du projet (voir la conclusion).
-  \item \emph{Fenêtre d'évaluation réglable dans les paramètres et dans « Évaluation du
+  \item \emph{« Évaluation » désignait l'enquête auprès des étudiants et les « modalités
+    d'évaluation » de la fiche.} Tranché en version 1.5.0 : l'enquête s'appelle désormais
+    « Avis des étudiants » (section~\ref{sec:annuel}).
+  \item \emph{Fenêtre du recueil réglable dans les paramètres et dans « Avis des étudiants
     module ».} Gardée aux deux endroits, une note le dit dans les paramètres.
   \item \emph{Enregistrer qui a fixé la fenêtre (enseignant ou DEVE)}, \emph{confirmer qu'un
     responsable se retire lui-même}, \emph{colonnes des résultats comparés groupées par type},
@@ -277,22 +277,46 @@ DEVE : matrice de toutes les années & filtre trompeur (« Non précisée ») & 
     porter ; ils sont signalés dans « Où en est ce module » au lieu d'être exigés.
 \end{itemize}
 
+\section{Avis des étudiants annuels (version 1.5.0)}\label{sec:annuel}
+
+À la demande du responsable du projet, l'enquête auprès des étudiants s'appelle désormais
+\textbf{« Avis des étudiants »} dans les trois modules (« Donner mon avis », « Avis à donner »,
+états « Non prévu », « À venir », « Ouvert », « Terminé ») ; les \emph{modalités d'évaluation}
+de la fiche restent les examens. Les avis sont en outre \textbf{annuels} et \textbf{gardés en
+mémoire} :
+\begin{itemize}
+  \item chaque module porte l'année universitaire de son recueil en cours (premier mois de
+    l'année réglé par la DEVE, septembre par défaut) ;
+  \item fixer une fenêtre dans une nouvelle année -- par le responsable, par la DEVE en lot, ou
+    dans les paramètres -- \textbf{archive} le recueil précédent : ses résultats agrégés sont
+    gardés (rien sous le seuil d'anonymat, seulement le nombre de réponses), puis réponses,
+    participations et questions figées sont effacées ; les questions de l'enseignant restent.
+    Chaque étudiant peut alors donner de nouveau son avis. La réinitialisation du cours archive
+    aussi avant d'effacer ;
+  \item la page des résultats d'un module propose l'\textbf{année} et montre l'\textbf{évolution
+    des moyennes} d'une année à l'autre ; les résultats comparés de la DEVE montrent une année
+    passée ; les archives suivent la sauvegarde et la restauration du cours.
+\end{itemize}
+Contrôlé par 4 tests unitaires (année universitaire, archivage à la nouvelle année et pas dans
+la même année, seuil d'anonymat, réinitialisation, sauvegarde, suppression, évolution, synthèse
+de la DEVE) et par le scénario de bout en bout : recueil de l'an dernier archivé, 20 étudiants
+qui donnent de nouveau leur avis, résultats des deux années et évolution des moyennes.
+
 \section{Tests et validation}\label{sec:validation}
 
 \begin{itemize}
   \item \textbf{Tests unitaires} : 44 (37 pour \code{mod_syllabus}, 6 pour le suivi, 1 pour
     « Mes modules »), dont 12 nouveaux : réglages communs et leurs bornes, types (suppression
     refusée s'ils servent), questions communes et de l'enseignant (contrôles, portée par type,
-    ordre, module figé intouchable), état de l'évaluation, messages (DEVE à la soumission,
+    ordre, module figé intouchable), état du recueil, messages (DEVE à la soumission,
     responsables à la décision, étudiants n'ayant pas répondu à l'ouverture), événement
-    d'évaluation sans réponse, responsables possibles (sans la DEVE), suppression de l'activité
+    d'avis sans réponse, responsables possibles (sans la DEVE), suppression de l'activité
     et d'un cours (rien ne reste en base), périmètre du suivi et onglets selon le rôle, fiche
     incomplète refusée à la soumission, fiches publiées lues en groupe. Test de conformité RGPD
     de Moodle réussi pour les trois modules ; contrôle de style Moodle sans remarque.
   \item \textbf{Scénario de bout en bout} (\code{syllabus_interactions.py}, rapport
     \emph{Test des modules syllabus}) rejoué sur la version 1.4.0 : \textbf{44 contrôles sur 44},
-    dont les nouveaux parcours -- retour à « Mes modules » après chaque évaluation (2\,145
-    évaluations), décision de la DEVE sous la fiche et retour à la liste des fiches à relire.
+    dont les nouveaux parcours -- retour à « Mes modules » après chaque avis (2\,145 avis), décision de la DEVE sous la fiche et retour à la liste des fiches à relire.
 \end{itemize}
 
 \paragraph{Défauts du banc trouvés.} La remise à zéro du scénario effaçait tous les référentiels
@@ -304,14 +328,13 @@ qui portent désormais le retour à « Mes modules » : il les lit maintenant en
 
 À l'échelle d'une école (60 modules, 1\,000 étudiants, 120 responsables), toutes les pages
 répondent en moins de 0,21~s ; le serveur de test plafonne à une cinquantaine de pages par
-seconde sans erreur jusqu'à 400 utilisateurs sans temps de réflexion ; 1\,000 évaluations
+seconde sans erreur jusqu'à 400 utilisateurs sans temps de réflexion ; 1\,000 avis
 simultanées s'enregistrent toutes, une seule fois chacune ; les traitements lourds ne gênent pas
 les autres utilisateurs. Les parcours ont été raccourcis là où ils faisaient revenir l'utilisateur
-en arrière (évaluer, rédiger, relire), et chaque page dit maintenant ce qu'il reste à faire.
+en arrière (donner son avis, rédiger, relire), et chaque page dit maintenant ce qu'il reste à faire.
 
-Une question reste ouverte : faut-il nommer autrement l'enquête auprès des étudiants
-(« Évaluation du module ») pour la distinguer des « Modalités d'évaluation » de la fiche, par
-exemple « Avis des étudiants » ?
+La question du vocabulaire a été tranchée : l'enquête s'appelle « Avis des étudiants », et elle
+est désormais annuelle, les années passées restant en mémoire (section~\ref{sec:annuel}).
 
 \section{Reproduire}
 

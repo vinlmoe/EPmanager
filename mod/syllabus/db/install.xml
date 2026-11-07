@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/syllabus/db" VERSION="20261122" COMMENT="Syllabus et évaluation d'un module d'enseignement"
+<XMLDB PATH="mod/syllabus/db" VERSION="20261125" COMMENT="Syllabus et évaluation d'un module d'enseignement"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
@@ -20,6 +20,7 @@
         <FIELD NAME="evalclose" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Fermeture de l'évaluation, 0 = sans fin"/>
         <FIELD NAME="evalfrozen" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Questions figées (questions communes copiées, plus de modification)"/>
         <FIELD NAME="evalnotified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Ouverture annoncée aux étudiants (date de l'ouverture annoncée)"/>
+        <FIELD NAME="evalyear" TYPE="char" LENGTH="9" NOTNULL="true" DEFAULT="" SEQUENCE="false" COMMENT="Année universitaire du recueil des avis en cours (2026-2027), vide sans recueil"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
       </FIELDS>
@@ -178,6 +179,26 @@
       <INDEXES>
         <INDEX NAME="syllabusid-userid" UNIQUE="true" FIELDS="syllabusid, userid"/>
         <INDEX NAME="userid" UNIQUE="false" FIELDS="userid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="syllabus_evalarchive" COMMENT="Résultats des avis des étudiants des années passées, archivés à l'ouverture d'une nouvelle année ou à la réinitialisation du cours">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="syllabusid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="evalyear" TYPE="char" LENGTH="9" NOTNULL="true" SEQUENCE="false" COMMENT="Année universitaire du recueil"/>
+        <FIELD NAME="evalopen" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="evalclose" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="responses" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="eligible" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Étudiants appelés à répondre au moment de l'archivage"/>
+        <FIELD NAME="results" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Résultats agrégés (JSON) : questions, moyennes, répartitions, réponses libres ; vide sous le seuil d'anonymat"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="syllabusid" TYPE="foreign" FIELDS="syllabusid" REFTABLE="syllabus" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="evalyear" UNIQUE="false" FIELDS="evalyear"/>
       </INDEXES>
     </TABLE>
     <TABLE NAME="syllabus_framework" COMMENT="Référentiels de compétences, communs au site, tenus par la DEVE dans le suivi des modules">

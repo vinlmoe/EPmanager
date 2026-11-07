@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_syllabus';
-$plugin->version   = 2026112400;
+$plugin->version   = 2026112500;
 $plugin->requires  = 2023100900; // Moodle 4.3+.
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.4.0';
+$plugin->release   = '1.5.0';

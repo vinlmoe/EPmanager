@@ -25,16 +25,16 @@
 defined('MOODLE_INTERNAL') || die();
 
 $string['before'] = 'before {$a}';
-$string['evaluate'] = 'Evaluate "{$a}"';
-$string['evaluated'] = 'Evaluated';
-$string['evaluatenow'] = 'Evaluate';
+$string['evaluate'] = 'Give my feedback on "{$a}"';
+$string['evaluated'] = 'Feedback given';
+$string['evaluatenow'] = 'Give my feedback';
 $string['modulename'] = 'My modules (students)';
-$string['modulename_help'] = 'To be placed in the cohort course: each student sees the modules of the courses they are enrolled in, their syllabus, and the module evaluations they have to do.';
+$string['modulename_help'] = 'To place in the class course: each student sees the modules of the courses they are enrolled in, their syllabus, and the feedback they have to give.';
 $string['modulenameplural'] = 'My modules (students)';
 $string['mymodules'] = 'My modules ({$a})';
 $string['nodeadline'] = 'no deadline';
 $string['nomodules'] = 'No modules: you are not enrolled in any course with a module syllabus.';
-$string['nothingtodo'] = 'No evaluation to do for now.';
+$string['nothingtodo'] = 'No feedback to give for now.';
 $string['opens'] = 'Opens on {$a}';
 $string['pluginadministration'] = 'My modules administration';
 $string['pluginname'] = 'My modules (students)';
@@ -43,5 +43,5 @@ $string['scope'] = 'Scope';
 $string['scope_help'] = 'Course category whose modules are shown (subcategories included), or the whole site.';
 $string['syllabusstudent:addinstance'] = 'Add a "My modules" activity';
 $string['syllabusstudent:view'] = 'See one\'s modules';
-$string['todo'] = 'Evaluations to do ({$a})';
+$string['todo'] = 'Feedback to give ({$a})';
 $string['allmymodules'] = 'All my modules ({$a})';

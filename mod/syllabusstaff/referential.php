@@ -41,6 +41,7 @@ if ($action === 'savesettings' && confirm_sesskey()) {
         'reviewrequired' => optional_param('reviewrequired', 0, PARAM_BOOL),
         'resultsthreshold' => optional_param('resultsthreshold', 3, PARAM_INT),
         'teacherresults' => optional_param('teacherresults', 'afterclose', PARAM_ALPHA),
+        'yearstartmonth' => optional_param('yearstartmonth', 9, PARAM_INT),
     ]);
     redirect($baseurl, get_string('settingssaved', 'mod_syllabusstaff'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
@@ -128,6 +129,18 @@ $form = html_writer::start_tag('form', ['method' => 'post', 'action' => $baseurl
         false,
         ['id' => 'teacherresults', 'class' => 'custom-select']
     ), 'mb-2')
+    . html_writer::div(html_writer::label(
+        get_string('yearstartmonth', 'mod_syllabusstaff'),
+        'yearstartmonth',
+        true,
+        ['class' => 'mr-2']
+    ) . html_writer::select(
+        array_combine(range(1, 12), array_map(fn($m) => userdate(mktime(12, 0, 0, $m, 1, 2026), '%B'), range(1, 12))),
+        'yearstartmonth',
+        (int) syllabus_setting('yearstartmonth'),
+        false,
+        ['id' => 'yearstartmonth', 'class' => 'custom-select']
+    ) . html_writer::span(get_string('yearstartmonth_help', 'mod_syllabusstaff'), 'small text-muted ml-2'), 'mb-2')
     . html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('savesettings', 'mod_syllabusstaff'),
         'class' => 'btn btn-primary'])
     . html_writer::end_tag('form');

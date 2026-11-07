@@ -151,8 +151,15 @@ if ($rights->canedit || $rights->canmanage) {
         ), ['class' => 'btn btn-sm btn-secondary ml-2']);
     // 3. L'évaluation : questions de l'enseignant, fenêtre, réponses.
     $questions = count(syllabus_get_module_questions((int) $syllabus->id, 'teacher'));
-    $evaltext = syllabus_eval_badge($syllabus) . ' ' . s(syllabus_eval_window_label($syllabus)) . ' · '
-        . get_string('teacherquestionsn', 'mod_syllabus', $questions);
+    $evaltext = ($syllabus->evalyear !== '' ? s($syllabus->evalyear) . ' : ' : '') . syllabus_eval_badge($syllabus) . ' '
+        . s(syllabus_eval_window_label($syllabus)) . ' · ' . get_string('teacherquestionsn', 'mod_syllabus', $questions);
+    $pastyears = count(syllabus_get_archives((int) $syllabus->id));
+    if ($pastyears) {
+        $evaltext .= ' · ' . html_writer::link(
+            new moodle_url('/mod/syllabus/results.php', ['id' => $cm->id]),
+            get_string('pastyearsn', 'mod_syllabus', $pastyears)
+        );
+    }
     if ($state !== SYLLABUS_EVAL_NONE) {
         $evaltext .= ' · ' . get_string('responsesrate', 'mod_syllabus', (object) [
             'responses' => syllabus_count_responses((int) $syllabus->id), 'eligible' => syllabus_count_eligible($context)]);

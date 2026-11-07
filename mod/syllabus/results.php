@@ -30,10 +30,26 @@ require_once($CFG->libdir . '/csvlib.class.php');
 
 $id = required_param('id', PARAM_INT);
 $download = optional_param('download', '', PARAM_ALPHA);
+// Année affichée : le recueil en cours (0) ou une archive d'une année passée.
+$archiveid = optional_param('archive', 0, PARAM_INT);
 $cm = get_coursemodule_from_id('syllabus', $id, 0, false, MUST_EXIST);
 require_login($cm->course, true, $cm);
-[$cm, $course, $syllabus, $context, $rights] = syllabus_page_init($cm, '/mod/syllabus/results.php');
-if (!$rights->canseeresults) {
+[$cm, $course, $syllabus, $context, $rights] = syllabus_page_init(
+    $cm,
+    '/mod/syllabus/results.php',
+    $archiveid ? ['archive' => $archiveid] : []
+);
+$archives = syllabus_get_archives((int) $syllabus->id);
+// Les années passées sont closes : leurs résultats sont lisibles des responsables comme de la DEVE.
+$canseepast = $rights->canseeresults || $rights->isteacher;
+if ($archiveid && (!isset($archives[$archiveid]) || !$canseepast)) {
+    throw new moodle_exception('invalidrecord', 'error');
+}
+if (!$rights->canseeresults && !($archiveid && $canseepast)) {
+    if ($archives && $rights->isteacher) {
+        // Le recueil en cours n'est pas encore lisible : la dernière année passée l'est.
+        redirect(new moodle_url($PAGE->url, ['archive' => array_key_last($archives)]));
+    }
     if ($rights->isteacher) {
         redirect(
             new moodle_url('/mod/syllabus/view.php', ['id' => $cm->id]),
@@ -44,12 +60,15 @@ if (!$rights->canseeresults) {
     }
     throw new required_capability_exception($context, 'mod/syllabus:manage', 'nopermissions', '');
 }
-$results = syllabus_get_results($syllabus);
-$eligible = syllabus_count_eligible($context);
+$archive = $archiveid ? $archives[$archiveid] : null;
+$results = $archive ? syllabus_archive_results($archive) : syllabus_get_results($syllabus);
+$eligible = $archive ? (int) $archive->eligible : syllabus_count_eligible($context);
+$yearlabel = $archive ? $archive->evalyear : ($syllabus->evalyear !== '' ? $syllabus->evalyear
+    : syllabus_academic_year(time()));
 
 if ($download === 'csv' && $results->shown) {
     $csv = new csv_export_writer('semicolon');
-    $csv->set_filename(clean_filename(($syllabus->code !== '' ? $syllabus->code : $course->shortname) . '-evaluation'));
+    $csv->set_filename(clean_filename(($syllabus->code !== '' ? $syllabus->code : $course->shortname) . '-avis-' . $yearlabel));
     $csv->add_data([get_string('question', 'mod_syllabus'), get_string('questionkind', 'mod_syllabus'),
         get_string('answers', 'mod_syllabus'), get_string('mean', 'mod_syllabus'), get_string('distribution', 'mod_syllabus')]);
     $kinds = syllabus_question_kinds();
@@ -69,12 +88,61 @@ if ($download === 'csv' && $results->shown) {
 }
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading(get_string('results', 'mod_syllabus'));
-echo html_writer::tag('p', syllabus_eval_badge($syllabus) . ' ' . s(syllabus_eval_window_label($syllabus)));
+echo $OUTPUT->heading(get_string('results', 'mod_syllabus') . ' ' . s($yearlabel));
+
+// Choix de l'année : le recueil en cours et les années archivées.
+if ($archives) {
+    $options = [];
+    if ($rights->canseeresults) {
+        $options[0] = get_string('yearcurrent', 'mod_syllabus', s($syllabus->evalyear !== '' ? $syllabus->evalyear : $yearlabel));
+    }
+    foreach (array_reverse($archives, true) as $id => $past) {
+        $options[$id] = get_string('yearpast', 'mod_syllabus', s($past->evalyear));
+    }
+    echo $OUTPUT->single_select(
+        new moodle_url('/mod/syllabus/results.php', ['id' => $cm->id]),
+        'archive',
+        $options,
+        $archiveid,
+        null,
+        null,
+        ['label' => get_string('academicyear', 'mod_syllabus')]
+    );
+}
+echo html_writer::tag('p', $archive ? s(syllabus_eval_window_label($archive)) : syllabus_eval_badge($syllabus) . ' '
+    . s(syllabus_eval_window_label($syllabus)));
 echo html_writer::tag('p', get_string('responsesrate', 'mod_syllabus', (object) ['responses' => $results->responses,
     'eligible' => $eligible]) . ($eligible ? ' (' . round(100 * $results->responses / $eligible) . ' %)' : ''));
+
+// Évolution des moyennes d'une année à l'autre, dès qu'il y a une année passée.
+if ($archives) {
+    $years = [];
+    foreach ($archives as $past) {
+        $years[$past->evalyear] = syllabus_archive_results($past);
+    }
+    if ($rights->canseeresults && syllabus_count_responses((int) $syllabus->id)) {
+        $years[$syllabus->evalyear !== '' ? $syllabus->evalyear : $yearlabel] = $archive ? syllabus_get_results($syllabus)
+            : $results;
+    }
+    $evolution = syllabus_results_evolution($years);
+    if ($evolution) {
+        $table = new html_table();
+        $table->attributes = ['class' => 'generaltable syllabus-evolution'];
+        $table->head = array_merge([get_string('question', 'mod_syllabus')], array_map('s', array_keys($years)));
+        foreach ($evolution as $row) {
+            $table->data[] = array_merge([format_string($row->text)], array_map(
+                fn($mean) => $mean === null ? '-' : syllabus_format_number($mean),
+                array_values($row->means)
+            ));
+        }
+        echo $OUTPUT->heading(get_string('evolution', 'mod_syllabus'), 4);
+        echo html_writer::table($table);
+    }
+}
 if (!$results->shown) {
-    echo $OUTPUT->notification(get_string('belowthreshold', 'mod_syllabus', $results->threshold), 'info');
+    echo $OUTPUT->notification(get_string('belowthreshold', 'mod_syllabus', $results->threshold ?: syllabus_setting(
+        'resultsthreshold'
+    )), 'info');
     echo $OUTPUT->footer();
     exit;
 }

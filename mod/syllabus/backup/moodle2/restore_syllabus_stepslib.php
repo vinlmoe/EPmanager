@@ -50,6 +50,7 @@ class restore_syllabus_activity_structure_step extends restore_activity_structur
             $paths[] = new restore_path_element('syllabus_response', '/activity/syllabus/responses/response');
             $paths[] = new restore_path_element('syllabus_answer', '/activity/syllabus/responses/response/answers/answer');
             $paths[] = new restore_path_element('syllabus_participant', '/activity/syllabus/participants/participant');
+            $paths[] = new restore_path_element('syllabus_archive', '/activity/syllabus/archives/archive');
         }
         return $this->prepare_activity_structure($paths);
     }
@@ -69,6 +70,12 @@ class restore_syllabus_activity_structure_step extends restore_activity_structur
         // Sans les réponses, l'évaluation restaurée repart de zéro.
         if (!$this->get_setting_value('userinfo')) {
             $data->evalnotified = 0;
+        }
+        // Sauvegarde antérieure aux avis annuels : l'année se déduit de l'ouverture.
+        if (!isset($data->evalyear)) {
+            global $CFG;
+            require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
+            $data->evalyear = !empty($data->evalopen) ? syllabus_academic_year((int) $data->evalopen) : '';
         }
         $this->apply_activity_instance($DB->insert_record('syllabus', $data));
     }
@@ -205,6 +212,18 @@ class restore_syllabus_activity_structure_step extends restore_activity_structur
         ) {
             $DB->insert_record('syllabus_participant', $data);
         }
+    }
+
+    /**
+     * Résultats d'une année passée.
+     *
+     * @param array $data
+     */
+    protected function process_syllabus_archive($data) {
+        global $DB;
+        $data = (object) $data;
+        $data->syllabusid = $this->get_new_parentid('syllabus');
+        $DB->insert_record('syllabus_evalarchive', $data);
     }
 
     /**

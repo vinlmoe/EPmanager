@@ -43,6 +43,8 @@ function syllabus_setting_defaults(): array {
         'resultsthreshold' => 3,
         // Les responsables voient les résultats : après la fermeture (afterclose) ou dès l'ouverture.
         'teacherresults' => 'afterclose',
+        // Premier mois de l'année universitaire : les avis des étudiants sont recueillis par année.
+        'yearstartmonth' => 9,
     ];
 }
 
@@ -67,6 +69,23 @@ function syllabus_save_settings(stdClass $data): void {
     set_config('reviewrequired', empty($data->reviewrequired) ? 0 : 1, 'mod_syllabus');
     set_config('resultsthreshold', max(1, min(50, (int) ($data->resultsthreshold ?? 3))), 'mod_syllabus');
     set_config('teacherresults', ($data->teacherresults ?? '') === 'always' ? 'always' : 'afterclose', 'mod_syllabus');
+    if (isset($data->yearstartmonth)) {
+        set_config('yearstartmonth', max(1, min(12, (int) $data->yearstartmonth)), 'mod_syllabus');
+    }
+}
+
+/**
+ * Année universitaire d'une date (« 2026-2027 »), selon le premier mois de l'année réglé par la
+ * DEVE (septembre par défaut).
+ *
+ * @param int $time
+ * @return string
+ */
+function syllabus_academic_year(int $time): string {
+    $start = (int) syllabus_setting('yearstartmonth');
+    $date = usergetdate($time, core_date::get_server_timezone());
+    $first = (int) $date['mon'] >= $start ? (int) $date['year'] : (int) $date['year'] - 1;
+    return $start === 1 ? (string) $first : $first . '-' . ($first + 1);
 }
 
 // Mise en forme.
@@ -1463,10 +1482,192 @@ function syllabus_set_window(stdClass $syllabus, int $open, int $close): void {
     if ($close && (!$open || $close <= $open)) {
         throw new moodle_exception('errorcloseafteropen', 'mod_syllabus');
     }
+    $year = syllabus_prepare_window($syllabus, $open);
     $DB->update_record('syllabus', (object) ['id' => $syllabus->id, 'evalopen' => $open, 'evalclose' => $close,
-        'timemodified' => time()]);
+        'evalyear' => $year, 'timemodified' => time()]);
     $syllabus->evalopen = $open;
     $syllabus->evalclose = $close;
+    $syllabus->evalyear = $year;
+}
+
+/**
+ * Les avis sont recueillis une fois par année universitaire. Une ouverture dans une autre année
+ * que celle du recueil en cours archive d'abord celui-ci (s'il a des réponses ou des questions
+ * figées) : le module repart de zéro, les résultats passés restent consultables.
+ *
+ * @param stdClass $syllabus Instance (mise à jour si le recueil est archivé).
+ * @param int $open Nouvelle ouverture (0 : pas de recueil).
+ * @return string Année universitaire du recueil à enregistrer.
+ */
+function syllabus_prepare_window(stdClass $syllabus, int $open): string {
+    $current = (string) ($syllabus->evalyear ?? '');
+    if (!$open) {
+        return $current;
+    }
+    $year = syllabus_academic_year($open);
+    if ($current !== '' && $current !== $year && !empty($syllabus->id)) {
+        $cm = get_coursemodule_from_instance('syllabus', $syllabus->id, 0, false, MUST_EXIST);
+        syllabus_archive_evaluation($syllabus, context_module::instance($cm->id));
+    }
+    return $year;
+}
+
+/**
+ * Archive le recueil d'avis en cours d'un module : ses résultats agrégés (comme la page des
+ * résultats les montre, rien sous le seuil d'anonymat) sont gardés avec leur année, puis les
+ * réponses, les participations et les copies figées des questions communes sont effacées. Les
+ * questions de l'enseignant restent pour l'année suivante. Sans réponse, rien n'est archivé : les
+ * questions sont seulement défigées.
+ *
+ * @param stdClass $syllabus Instance (mise à jour : questions défigées, plus de réponse).
+ * @param context_module $context
+ * @return int|null Identifiant de l'archive, ou null s'il n'y avait rien à archiver.
+ */
+function syllabus_archive_evaluation(stdClass $syllabus, context_module $context): ?int {
+    global $DB;
+
+    $lock = syllabus_get_lock((int) $syllabus->id);
+    try {
+        $current = $DB->get_record('syllabus', ['id' => $syllabus->id], '*', MUST_EXIST);
+        $responses = syllabus_count_responses((int) $current->id);
+        if (!$responses) {
+            // Rien à garder : les questions figées sans réponse sont simplement défigées.
+            if (!empty($current->evalfrozen)) {
+                $DB->delete_records_select('syllabus_question', "syllabusid = ? AND origin <> 'teacher'", [$current->id]);
+                $DB->update_record('syllabus', (object) ['id' => $current->id, 'evalfrozen' => 0, 'evalnotified' => 0]);
+                $syllabus->evalfrozen = 0;
+                $syllabus->evalnotified = 0;
+            }
+            return null;
+        }
+        $results = syllabus_get_results($current);
+        $questions = [];
+        foreach ($results->questions as $entry) {
+            $q = $entry->question;
+            $questions[] = ['question' => ['text' => (string) $q->text, 'kind' => (string) $q->kind,
+                'origin' => (string) $q->origin, 'sourceid' => (int) ($q->sourceid ?? 0), 'options' => (string) ($q->options ?? ''),
+                'required' => (int) ($q->required ?? 0)],
+                'count' => (int) $entry->count, 'mean' => $entry->mean ?? null,
+                'distribution' => $entry->distribution ?? [], 'labels' => $entry->labels ?? [], 'texts' => $entry->texts ?? []];
+        }
+        $transaction = $DB->start_delegated_transaction();
+        $archiveid = (int) $DB->insert_record('syllabus_evalarchive', (object) [
+            'syllabusid' => $current->id,
+            'evalyear' => $current->evalyear !== '' ? $current->evalyear
+                : syllabus_academic_year((int) ($current->evalopen ?: time())),
+            'evalopen' => (int) $current->evalopen, 'evalclose' => (int) $current->evalclose,
+            'responses' => $responses, 'eligible' => syllabus_count_eligible($context),
+            // Sous le seuil, seul le nombre de réponses est gardé : rien qui permette de les relire.
+            'results' => $results->shown ? json_encode(
+                ['threshold' => $results->threshold, 'questions' => $questions],
+                JSON_UNESCAPED_UNICODE
+            ) : null,
+            'timecreated' => time(),
+        ]);
+        $responseids = $DB->get_fieldset_select('syllabus_response', 'id', 'syllabusid = ?', [$current->id]);
+        if ($responseids) {
+            [$insql, $params] = $DB->get_in_or_equal($responseids);
+            $DB->delete_records_select('syllabus_answer', "responseid $insql", $params);
+        }
+        $DB->delete_records('syllabus_response', ['syllabusid' => $current->id]);
+        $DB->delete_records('syllabus_participant', ['syllabusid' => $current->id]);
+        $DB->delete_records_select('syllabus_question', "syllabusid = ? AND origin <> 'teacher'", [$current->id]);
+        $DB->update_record('syllabus', (object) ['id' => $current->id, 'evalfrozen' => 0, 'evalnotified' => 0]);
+        $transaction->allow_commit();
+        $syllabus->evalfrozen = 0;
+        $syllabus->evalnotified = 0;
+        return $archiveid;
+    } finally {
+        $lock->release();
+    }
+}
+
+/**
+ * Archives des avis d'un module, de la plus ancienne à la plus récente.
+ *
+ * @param int $syllabusid
+ * @return array id => stdClass
+ */
+function syllabus_get_archives(int $syllabusid): array {
+    global $DB;
+    return $DB->get_records('syllabus_evalarchive', ['syllabusid' => $syllabusid], 'evalyear ASC, timecreated ASC');
+}
+
+/**
+ * Résultats d'une archive, sous la forme de syllabus_get_results().
+ *
+ * @param stdClass $archive
+ * @return stdClass {responses, threshold, shown, questions: [{question, count, mean, distribution, labels, texts}]}
+ */
+function syllabus_archive_results(stdClass $archive): stdClass {
+    $data = $archive->results ? json_decode($archive->results, true) : null;
+    $result = (object) ['responses' => (int) $archive->responses, 'threshold' => (int) ($data['threshold'] ?? 0),
+        'shown' => (bool) $data, 'questions' => []];
+    foreach ($data['questions'] ?? [] as $entry) {
+        $result->questions[] = (object) ['question' => (object) $entry['question'], 'count' => (int) $entry['count'],
+            'mean' => $entry['mean'], 'distribution' => (array) $entry['distribution'], 'labels' => (array) $entry['labels'],
+            'texts' => (array) $entry['texts']];
+    }
+    return $result;
+}
+
+/**
+ * Évolution des moyennes d'un module d'une année à l'autre : une ligne par question à échelle
+ * (les questions communes reconnues par leur origine, celles de l'enseignant par leur texte), une
+ * colonne par année.
+ *
+ * @param array $years Année => résultats (syllabus_get_results() ou syllabus_archive_results()).
+ * @return array Lignes {text, means: [année => moyenne|null]}
+ */
+function syllabus_results_evolution(array $years): array {
+    $rows = [];
+    foreach ($years as $year => $results) {
+        foreach ($results->questions as $entry) {
+            $question = $entry->question;
+            if ($question->kind !== 'scale' || ($entry->mean ?? null) === null) {
+                continue;
+            }
+            $key = !empty($question->sourceid) ? 's' . $question->sourceid : 't' . core_text::strtolower(trim($question->text));
+            $rows[$key] = $rows[$key] ?? (object) ['text' => $question->text, 'means' => array_fill_keys(array_keys($years), null)];
+            $rows[$key]->means[$year] = $entry->mean;
+        }
+    }
+    return array_values($rows);
+}
+
+/**
+ * Moyennes des questions communes à échelle des modules donnés, pour une année passée (archives).
+ *
+ * @param int[] $syllabusids
+ * @param string $year
+ * @return array syllabusid => {responses, means: [sourceid => moyenne], archiveid}
+ */
+function syllabus_archived_means(array $syllabusids, string $year): array {
+    global $DB;
+    if (!$syllabusids) {
+        return [];
+    }
+    [$insql, $params] = $DB->get_in_or_equal($syllabusids, SQL_PARAMS_NAMED);
+    $params['year'] = $year;
+    $means = [];
+    // La dernière archive de l'année l'emporte (une réinitialisation peut en avoir fait deux).
+    foreach (
+        $DB->get_records_select(
+            'syllabus_evalarchive',
+            "syllabusid $insql AND evalyear = :year",
+            $params,
+            'timecreated ASC'
+        ) as $archive
+    ) {
+        $entry = ['responses' => (int) $archive->responses, 'means' => [], 'archiveid' => (int) $archive->id];
+        foreach (syllabus_archive_results($archive)->questions as $result) {
+            if ($result->question->kind === 'scale' && !empty($result->question->sourceid) && $result->mean !== null) {
+                $entry['means'][(int) $result->question->sourceid] = $result->mean;
+            }
+        }
+        $means[(int) $archive->syllabusid] = $entry;
+    }
+    return $means;
 }
 
 /**

@@ -3,6 +3,23 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## Modules syllabus 1.5.0 — mod_syllabus, mod_syllabusstaff, mod_syllabusstudent 2026112500 (25 novembre 2026)
+
+Avis des étudiants, annuels et gardés en mémoire.
+
+- « Avis des étudiants » remplace « évaluation du module » dans les trois modules (boutons,
+  messages, états « Non prévu », « À venir », « Ouvert », « Terminé ») ; les « modalités
+  d'évaluation » de la fiche restent les examens.
+- Un recueil d'avis par année universitaire (`syllabus.evalyear`, premier mois de l'année réglé par
+  la DEVE, septembre par défaut). Ouvrir le recueil dans une nouvelle année archive le précédent
+  (table `syllabus_evalarchive` : résultats agrégés, rien sous le seuil d'anonymat) et repart de
+  zéro, questions de l'enseignant gardées ; la réinitialisation du cours archive aussi avant
+  d'effacer.
+- Résultats d'un module par année, avec l'évolution des moyennes d'une année à l'autre ; résultats
+  comparés de la DEVE pour une année passée ; archives dans la sauvegarde et la restauration,
+  effacées avec l'activité.
+- 4 tests unitaires de plus (48) ; scénario de bout en bout étendu à une nouvelle année.
+
 ## Modules syllabus 1.4.0 — mod_syllabus, mod_syllabusstaff, mod_syllabusstudent 2026112400 (24 novembre 2026)
 
 Parcours simplifiés après un audit d'ergonomie, et tests à l'échelle d'une école

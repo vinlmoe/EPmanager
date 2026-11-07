@@ -94,3 +94,11 @@ vendor/bin/phpunit --testsuite mod_syllabusstudent_testsuite
 
 Banc de bout en bout : `docs/audit/banc/syllabus_setup.php` et `syllabus_interactions.py`
 (rapport `docs/audit/test-syllabus.pdf`).
+
+## Avis des étudiants annuels
+
+Les avis sont recueillis une fois par année universitaire (premier mois réglé dans le référentiel
+commun, septembre par défaut). Fixer une fenêtre dans une nouvelle année archive les résultats de
+l'année précédente dans `syllabus_evalarchive` (agrégés ; rien sous le seuil d'anonymat) et
+efface les réponses : chaque étudiant peut répondre de nouveau. La mise à jour depuis la 1.4.0
+date le recueil en cours de chaque module d'après son ouverture.

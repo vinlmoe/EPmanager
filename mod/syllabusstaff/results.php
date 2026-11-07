@@ -30,20 +30,42 @@ require_once($CFG->libdir . '/csvlib.class.php');
 
 $id = required_param('id', PARAM_INT);
 $evalstate = optional_param('evalstate', SYLLABUS_EVAL_CLOSED, PARAM_ALPHA);
+// Année passée (archives) : vide pour les recueils de l'année en cours.
+$year = optional_param('year', '', PARAM_TEXT);
 $download = optional_param('download', '', PARAM_ALPHA);
 $cm = get_coursemodule_from_id('syllabusstaff', $id, 0, false, MUST_EXIST);
 require_login($cm->course, true, $cm);
 [$course, $instance, $context, $canmanageall] = syllabusstaff_page_init(
     $cm,
     '/mod/syllabusstaff/results.php',
-    ['evalstate' => $evalstate]
+    array_filter(['evalstate' => $evalstate, 'year' => $year])
 );
 require_capability('mod/syllabusstaff:manageall', $context);
 
-[$rows] = syllabus_list_instances(['categoryid' => $instance->categoryid, 'evalstate' => $evalstate]);
-$ids = array_map('intval', array_keys($rows));
-$means = syllabus_common_means($ids);
-$overview = syllabus_get_overview($ids);
+// Années passées présentes dans les archives des modules du périmètre.
+[$all] = syllabus_list_instances(['categoryid' => $instance->categoryid]);
+$pastyears = [];
+if ($all) {
+    [$insql, $params] = $DB->get_in_or_equal(array_map('intval', array_keys($all)));
+    $pastyears = $DB->get_fieldset_sql("SELECT DISTINCT evalyear FROM {syllabus_evalarchive} WHERE syllabusid $insql
+                                        ORDER BY evalyear DESC", $params);
+}
+if ($year !== '' && !in_array($year, $pastyears, true)) {
+    $year = '';
+}
+if ($year === '') {
+    [$rows] = syllabus_list_instances(['categoryid' => $instance->categoryid, 'evalstate' => $evalstate]);
+    $ids = array_map('intval', array_keys($rows));
+    $means = syllabus_common_means($ids);
+    $overview = syllabus_get_overview($ids);
+    $counts = array_map(fn($info) => $info->responses, $overview);
+} else {
+    // Année passée : les modules qui en ont une archive, avec les moyennes gardées.
+    $archived = syllabus_archived_means(array_map('intval', array_keys($all)), $year);
+    $rows = array_intersect_key($all, $archived);
+    $means = array_map(fn($entry) => $entry['means'], $archived);
+    $counts = array_map(fn($entry) => $entry['responses'], $archived);
+}
 // Colonnes : questions communes à échelle (même actives ou non, pour les évaluations passées).
 $columns = array_filter(syllabus_get_common_questions(), fn($q) => $q->kind === 'scale');
 
@@ -54,9 +76,12 @@ foreach (array_values($columns) as $index => $question) {
 $data = [];
 foreach ($rows as $row) {
     // Le nom du module ouvre ses résultats détaillés.
-    $line = [html_writer::link(new moodle_url('/mod/syllabus/results.php', ['id' => $row->cmid]), format_string($row->name))
+    $target = new moodle_url('/mod/syllabus/results.php', ['id' => $row->cmid] + ($year !== ''
+        ? ['archive' => $archived[(int) $row->id]['archiveid']] : []));
+    $line = [html_writer::link($target, format_string($row->name))
         . ($row->code !== '' ? ' ' . html_writer::span(s($row->code), 'small text-muted') : ''),
-        $overview[(int) $row->id]->responses . ' / ' . syllabus_count_eligible(context_module::instance($row->cmid))];
+        $year === '' ? $counts[(int) $row->id] . ' / ' . syllabus_count_eligible(context_module::instance($row->cmid))
+            : (string) $counts[(int) $row->id]];
     foreach ($columns as $question) {
         $mean = $means[(int) $row->id][(int) $question->id] ?? null;
         $line[] = $mean === null ? '-' : syllabus_format_number($mean);
@@ -66,7 +91,7 @@ foreach ($rows as $row) {
 
 if ($download === 'csv') {
     $csv = new csv_export_writer('semicolon');
-    $csv->set_filename('evaluations-modules');
+    $csv->set_filename('avis-des-etudiants-' . ($year !== '' ? $year : syllabus_academic_year(time())));
     $csv->add_data(array_merge(array_slice($head, 0, 2), array_map(fn($q) => $q->text, array_values($columns))));
     foreach ($data as $line) {
         $csv->add_data(array_map(fn($cell) => html_entity_decode(strip_tags((string) $cell), ENT_QUOTES, 'UTF-8'), $line));
@@ -79,11 +104,27 @@ echo $OUTPUT->header();
 echo syllabusstaff_navlinks($cm, 'results', $canmanageall);
 echo $OUTPUT->heading(get_string('resultsoverview', 'mod_syllabusstaff'), 3);
 echo html_writer::tag('p', get_string('resultsoverview_help', 'mod_syllabusstaff', syllabus_setting('resultsthreshold')));
-$states = [];
-foreach ([SYLLABUS_EVAL_OPEN, SYLLABUS_EVAL_CLOSED] as $state) {
-    $states[$state] = get_string('evalstate_' . $state, 'mod_syllabus');
+// Année : celle en cours (recueils ouverts ou terminés), ou une année passée.
+$selects = '';
+if ($pastyears) {
+    $selects .= $OUTPUT->single_select(
+        new moodle_url('/mod/syllabusstaff/results.php', ['id' => $cm->id]),
+        'year',
+        array_combine($pastyears, $pastyears),
+        $year,
+        ['' => get_string('yearcurrent', 'mod_syllabus', syllabus_academic_year(time()))],
+        null,
+        ['label' => get_string('academicyear', 'mod_syllabus')]
+    );
 }
-echo $OUTPUT->single_select(new moodle_url($PAGE->url), 'evalstate', $states, $evalstate, null);
+if ($year === '') {
+    $states = [];
+    foreach ([SYLLABUS_EVAL_OPEN, SYLLABUS_EVAL_CLOSED] as $state) {
+        $states[$state] = get_string('evalstate_' . $state, 'mod_syllabus');
+    }
+    $selects .= ' ' . $OUTPUT->single_select(new moodle_url($PAGE->url), 'evalstate', $states, $evalstate, null);
+}
+echo html_writer::div($selects, 'mb-2');
 if ($columns) {
     $legend = [];
     foreach (array_values($columns) as $index => $question) {

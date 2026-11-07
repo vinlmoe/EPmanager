@@ -134,7 +134,6 @@ if (process.env.SYLLABUS) {
   const sy = JSON.parse(fs.readFileSync(process.env.SYLLABUS, 'utf8'));
   const m1 = sy.modules[0];
   const m2 = sy.modules[1];
-  const m7 = sy.modules[6];
   const sett = process.env.ETU || 'etux_4';
   // Référentiel créé par la DEVE pendant le scénario (SYREF=identifiant).
   const ref = process.env.SYREF || 0;
@@ -156,7 +155,7 @@ if (process.env.SYLLABUS) {
     ['sy-deve-livret', deve, `/mod/syllabusstaff/booklet.php?id=${sy.staffcmid}&selection=y2`],
     ['sy-ens-progression', m1.leaders[0],
       `/mod/syllabusstaff/progression.php?id=${sy.staffcmid}&compid=${process.env.SYCOMP || 0}`],
-    ['sy-ens-resultats', m7.leaders[0], `/mod/syllabus/results.php?id=${m7.cmid}`],
+    ['sy-ens-resultats', m1.leaders[0], `/mod/syllabus/results.php?id=${m1.cmid}`],
     ['sy-deve-tous', deve, `/mod/syllabusstaff/all.php?id=${sy.staffcmid}`],
     ['sy-deve-a-relire', deve, `/mod/syllabusstaff/review.php?id=${sy.staffcmid}`],
     ['sy-deve-relecture', deve, `/mod/syllabus/view.php?id=${m2.cmid}&show=working`],

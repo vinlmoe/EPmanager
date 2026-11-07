@@ -92,6 +92,13 @@ $resultslink = $rights->canseeresults && $state !== SYLLABUS_EVAL_NONE ? ' ' . h
 ) : '';
 echo html_writer::tag('p', syllabus_eval_badge($syllabus) . ' ' . s(syllabus_eval_window_label($syllabus)) . $resultslink);
 echo html_writer::tag('p', get_string('evaluation_help', 'mod_syllabus'));
+// Un recueil par année universitaire : le rappeler, avec l'année en cours du module.
+echo html_writer::tag(
+    'p',
+    get_string('annualnotice', 'mod_syllabus', (object) ['year' => $syllabus->evalyear !== ''
+    ? $syllabus->evalyear : syllabus_academic_year(time()), 'past' => count(syllabus_get_archives((int) $syllabus->id))]),
+    ['class' => 'small text-muted']
+);
 
 echo $OUTPUT->heading(get_string('evalwindowheading', 'mod_syllabus'), 4);
 $windowform->display();

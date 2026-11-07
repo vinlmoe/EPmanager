@@ -408,7 +408,7 @@ def student_evaluates(username):
                 counts['answered'] += 1
         if k == 0 and username.endswith('_1'):
             r = u.get(f'/mod/syllabus/evaluate.php?id={cmid}')
-            expect('seconde_reponse_refusee', 'évalué ce module' in r.text)
+            expect('seconde_reponse_refusee', 'donné votre avis' in r.text)
     return len(links)
 
 
@@ -436,6 +436,53 @@ r = deve.get(f'/mod/syllabusstaff/all.php?id={STAFF}&evalstate=closed')
 expect('liste_dev_filtree', '(12)' in r.text)
 pdf = Web(SETUP['students'][0]).get(f'/mod/syllabus/pdf.php?id={MODULES[0]["cmid"]}')
 expect('fiche_pdf', pdf.content[:4] == b'%PDF')
+
+# 6 ter. Avis annuels. Le recueil du premier module est daté de l'an dernier (comme s'il avait eu
+# lieu l'année universitaire précédente) ; la DEVE ouvre le recueil de cette année : l'an dernier
+# est archivé, le module repart de zéro, 20 étudiants donnent de nouveau leur avis, et les
+# résultats montrent les deux années et l'évolution des moyennes.
+first = MODULES[0]
+today = datetime.now()
+start = today.year if today.month >= 9 else today.year - 1
+lastyear, thisyear = f'{start - 1}-{start}', f'{start}-{start + 1}'
+before = sql(f"select count(*) from mdl_syllabus_response where syllabusid = {first['id']}")
+sql(f"update mdl_syllabus set evalyear = '{lastyear}' where id = {first['id']}")
+deve.post(f'/mod/syllabusstaff/all.php?id={STAFF}', [('sesskey', deve.sesskey), ('setwindow', 1),
+          ('evalopen', local(now - 120)), ('evalclose', local(now + 86400)), ('syllabusids[]', first['id'])])
+archive = sql(f"select evalyear || '|' || responses from mdl_syllabus_evalarchive where syllabusid = {first['id']}")
+expect('annee_precedente_archivee', archive == f'{lastyear}|{before}' and sql(
+    f"select count(*) || '|' || max(evalyear) from mdl_syllabus_response r join mdl_syllabus s on s.id = r.syllabusid "
+    f"where s.id = {first['id']}") == f'0|', f'{archive}')
+expect('recueil_de_l_annee', sql(f"select evalyear from mdl_syllabus where id = {first['id']}") == thisyear)
+
+
+def give_feedback(username):
+    u = Web(username)
+    page = u.get(f'/mod/syllabus/evaluate.php?id={first["cmid"]}').text
+    f = next(x for x in forms(page) if any(n.startswith('_qf__') and 'evaluate_form' in n for n, _ in x['fields']))
+    radios = {}
+    for m in re.finditer(r'<input[^>]*type="radio"[^>]*>', page):
+        name, value = re.search(r'name="(q\d+)"', m.group(0)), re.search(r'value="(\d+)"', m.group(0))
+        if name and value:
+            radios.setdefault(name.group(1), []).append(value.group(1))
+    r = u.submit(f, {**{n: random.choice(v) for n, v in radios.items()}, 'submitbutton': 'Envoyer'}, drop=('cancel',))
+    return 'Merci' in r.text
+
+
+given = phase('6 ter. étudiants : avis de la nouvelle année', give_feedback, SETUP['students'][:20], workers=10)
+expect('avis_de_la_nouvelle_annee', sum(1 for g in given if g) == 20
+       and sql(f"select count(*) from mdl_syllabus_response where syllabusid = {first['id']}") == '20')
+deve.post(f'/mod/syllabusstaff/all.php?id={STAFF}', [('sesskey', deve.sesskey), ('setwindow', 1),
+          ('evalopen', local(now - 3 * 86400)), ('evalclose', local(now - 60)), ('syllabusids[]', first['id'])])
+expect('meme_annee_sans_archive', sql(f"select count(*) from mdl_syllabus_evalarchive where syllabusid = {first['id']}") == '1')
+r = leader.get(f'/mod/syllabus/results.php?id={first["cmid"]}')
+expect('resultats_par_annee_et_evolution', lastyear in r.text and thisyear in r.text and 'syllabus-evolution' in r.text)
+archiveid = sql(f"select id from mdl_syllabus_evalarchive where syllabusid = {first['id']}")
+r = leader.get(f'/mod/syllabus/results.php?id={first["cmid"]}&archive={archiveid}')
+expect('resultats_de_l_an_dernier', 'Moyenne' in r.text and f'{before} réponse(s)' in r.text)
+r = deve.get(f'/mod/syllabusstaff/results.php?id={STAFF}&year={lastyear}')
+expect('synthese_de_l_an_dernier', len(re.findall(r'<td[^>]*>([1-5],\d+|[1-5])</td>', r.text)) >= 2
+       and f'archive={archiveid}' in r.text)
 
 # 6 bis. Livret des syllabus (cursus, année, semestre) et progression d'une compétence.
 def pdf_text(content):

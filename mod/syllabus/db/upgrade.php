@@ -29,7 +29,7 @@
  * @return bool
  */
 function xmldb_syllabus_upgrade($oldversion) {
-    global $DB;
+    global $CFG, $DB;
     $dbman = $DB->get_manager();
 
     if ($oldversion < 2026112100) {
@@ -145,6 +145,40 @@ function xmldb_syllabus_upgrade($oldversion) {
             $dbman->drop_table($old);
         }
         upgrade_mod_savepoint(true, 2026112200, 'syllabus');
+    }
+
+    if ($oldversion < 2026112500) {
+        // Avis des étudiants annuels : année universitaire du recueil en cours, et archives des
+        // résultats des années passées.
+        $table = new xmldb_table('syllabus');
+        $field = new xmldb_field('evalyear', XMLDB_TYPE_CHAR, '9', null, XMLDB_NOTNULL, null, '', 'evalnotified');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $table = new xmldb_table('syllabus_evalarchive');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
+            $table->add_field('syllabusid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
+            $table->add_field('evalyear', XMLDB_TYPE_CHAR, '9', null, XMLDB_NOTNULL);
+            $table->add_field('evalopen', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('evalclose', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('responses', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('eligible', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('results', XMLDB_TYPE_TEXT);
+            $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('syllabusid', XMLDB_KEY_FOREIGN, ['syllabusid'], 'syllabus', ['id']);
+            $table->add_index('evalyear', XMLDB_INDEX_NOTUNIQUE, ['evalyear']);
+            $dbman->create_table($table);
+        }
+        // Le recueil en cours de chaque module prend l'année universitaire de son ouverture.
+        require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
+        $rs = $DB->get_recordset_select('syllabus', 'evalopen > 0', null, '', 'id, evalopen');
+        foreach ($rs as $row) {
+            $DB->set_field('syllabus', 'evalyear', syllabus_academic_year((int) $row->evalopen), ['id' => $row->id]);
+        }
+        $rs->close();
+        upgrade_mod_savepoint(true, 2026112500, 'syllabus');
     }
 
     return true;

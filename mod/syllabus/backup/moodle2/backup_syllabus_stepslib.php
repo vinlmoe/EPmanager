@@ -44,7 +44,8 @@ class backup_syllabus_activity_structure_step extends backup_activity_structure_
         $userinfo = $this->get_setting_value('userinfo');
 
         $syllabus = new backup_nested_element('syllabus', ['id'], ['name', 'intro', 'introformat', 'code', 'ects', 'semester',
-            'studyyear', 'typeid', 'evalopen', 'evalclose', 'evalfrozen', 'evalnotified', 'timecreated', 'timemodified']);
+            'studyyear', 'typeid', 'evalopen', 'evalclose', 'evalfrozen', 'evalnotified', 'evalyear', 'timecreated',
+            'timemodified']);
         $versions = new backup_nested_element('versions');
         $version = new backup_nested_element('version', ['id'], ['version', 'status', 'objectives', 'outcomes',
             'prerequisitestext', 'content', 'methods', 'assessment', 'resit', 'bibliography', 'language', 'personalhours',
@@ -64,6 +65,9 @@ class backup_syllabus_activity_structure_step extends backup_activity_structure_
         $competencies = new backup_nested_element('competencies');
         $competency = new backup_nested_element('competency', ['id'], ['level', 'compidnumber', 'frameworkidnumber',
             'timecreated', 'timemodified']);
+        $archives = new backup_nested_element('archives');
+        $archive = new backup_nested_element('archive', ['id'], ['evalyear', 'evalopen', 'evalclose', 'responses', 'eligible',
+            'results', 'timecreated']);
         $participants = new backup_nested_element('participants');
         $participant = new backup_nested_element('participant', ['id'], ['userid']);
 
@@ -81,6 +85,8 @@ class backup_syllabus_activity_structure_step extends backup_activity_structure_
         $answers->add_child($answer);
         $syllabus->add_child($competencies);
         $competencies->add_child($competency);
+        $syllabus->add_child($archives);
+        $archives->add_child($archive);
         $syllabus->add_child($participants);
         $participants->add_child($participant);
 
@@ -101,6 +107,8 @@ class backup_syllabus_activity_structure_step extends backup_activity_structure_
             $response->set_source_table('syllabus_response', ['syllabusid' => backup::VAR_PARENTID]);
             $answer->set_source_table('syllabus_answer', ['responseid' => backup::VAR_PARENTID]);
             $participant->set_source_table('syllabus_participant', ['syllabusid' => backup::VAR_PARENTID]);
+            // Résultats des années passées : agrégés et anonymes, mais nés des réponses des étudiants.
+            $archive->set_source_table('syllabus_evalarchive', ['syllabusid' => backup::VAR_PARENTID], 'evalyear ASC');
         }
 
         $version->annotate_ids('user', 'authorid');
