@@ -413,7 +413,7 @@ function xmldb_ep_upgrade($oldversion) {
         // Empreinte des stages complémentaires validés et du barème lors de la dernière
         // synchronisation : les EP de type stage sont recalculés dès qu'elle change.
         $table = new xmldb_table('ep');
-        $field = new xmldb_field('stagesyncsig', XMLDB_TYPE_CHAR, '40', null, XMLDB_NOTNULL, null, '', 'timesynced');
+        $field = new xmldb_field('stagesyncsig', XMLDB_TYPE_CHAR, '40', null, XMLDB_NOTNULL, null, null, 'timesynced');
         if (!$dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);
         }

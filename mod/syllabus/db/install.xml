@@ -20,7 +20,7 @@
         <FIELD NAME="evalclose" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Fermeture de l'évaluation, 0 = sans fin"/>
         <FIELD NAME="evalfrozen" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Questions figées (questions communes copiées, plus de modification)"/>
         <FIELD NAME="evalnotified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Ouverture annoncée aux étudiants (date de l'ouverture annoncée)"/>
-        <FIELD NAME="evalyear" TYPE="char" LENGTH="9" NOTNULL="true" DEFAULT="" SEQUENCE="false" COMMENT="Année universitaire du recueil des avis en cours (2026-2027), vide sans recueil"/>
+        <FIELD NAME="evalyear" TYPE="char" LENGTH="9" NOTNULL="true" SEQUENCE="false" COMMENT="Année universitaire du recueil des avis en cours (2026-2027), vide sans recueil"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
       </FIELDS>

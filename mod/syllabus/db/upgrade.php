@@ -151,7 +151,7 @@ function xmldb_syllabus_upgrade($oldversion) {
         // Avis des étudiants annuels : année universitaire du recueil en cours, et archives des
         // résultats des années passées.
         $table = new xmldb_table('syllabus');
-        $field = new xmldb_field('evalyear', XMLDB_TYPE_CHAR, '9', null, XMLDB_NOTNULL, null, '', 'evalnotified');
+        $field = new xmldb_field('evalyear', XMLDB_TYPE_CHAR, '9', null, XMLDB_NOTNULL, null, null, 'evalnotified');
         if (!$dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);
         }
