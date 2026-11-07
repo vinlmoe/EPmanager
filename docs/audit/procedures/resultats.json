@@ -1,95 +1,59 @@
 {
   "execution": "5UVL",
-  "date": "2026-11-07T00:04:48.758Z",
+  "date": "2026-11-07T00:14:32.736Z",
   "site": "http://localhost:8100",
   "ep": "Bien-être animal en élevage (5UVL)",
   "etapes": [
     {
-      "etape": "1.1",
-      "role": "enseignant (ensa_5)",
-      "action": "Ouvrir « Propositions et syllabus » depuis l'activité",
-      "attendu": "La page liste les propositions de l'enseignant et propose « Proposer un nouvel EP ».",
-      "obtenu": "Conforme à l'attendu.",
-      "resultat": "réussi",
-      "duree_s": 3.4,
-      "captures": [
-        "guides/captures/01-enseignant-propositions.png"
-      ],
-      "telechargements": [],
-      "erreurs_page": [],
-      "anomalies": [],
-      "remarques": []
-    },
-    {
-      "etape": "1.2",
-      "role": "enseignant (ensa_5)",
-      "action": "Rédiger la proposition : caractéristiques, syllabus, quatre séances (dont une par un autre enseignant et une par un intervenant extérieur), enregistrer le brouillon",
-      "attendu": "Brouillon enregistré (« Syllabus enregistré. »), les quatre séances sont relues dans le formulaire.",
-      "obtenu": "EP n° 623 créé en brouillon, 4 séances relues.",
-      "resultat": "réussi",
-      "duree_s": 2.9,
-      "captures": [
-        "guides/captures/01-enseignant-proposer-ep-formulaire.png",
-        "guides/captures/01-enseignant-brouillon-enregistre.png"
-      ],
-      "telechargements": [],
-      "erreurs_page": [],
-      "anomalies": [],
-      "remarques": []
-    },
-    {
-      "etape": "1.3",
-      "role": "enseignant (ensa_5)",
-      "action": "Soumettre la proposition à la DEVE",
-      "attendu": "Redirection vers la fiche de l'EP, message « Syllabus soumis à la DEVE. », version 1 « Soumise ».",
-      "obtenu": "Conforme à l'attendu.",
-      "resultat": "réussi",
-      "duree_s": 1.3,
-      "captures": [
-        "guides/captures/01-enseignant-syllabus-soumis.png"
-      ],
-      "telechargements": [],
-      "erreurs_page": [],
-      "anomalies": [],
-      "remarques": [
-        "La fiche d'un EP non publié n'offre pas de bouton « Fiche PDF » : syllabus_pdf.php accepte pourtant version=working pour le rédacteur et la DEVE."
-      ]
-    },
-    {
-      "etape": "1.4",
-      "role": "enseignant (ensa_5)",
-      "action": "Télécharger la fiche PDF du syllabus (version de travail)",
-      "attendu": "Un PDF contenant l'intitulé, les rubriques et les séances (dont l'intervenant extérieur).",
-      "obtenu": "PDF de 150271 octets, contenu vérifié",
-      "resultat": "réussi",
-      "duree_s": 0.5,
+      "etape": "7.1",
+      "role": "DEVE (devea_1)",
+      "action": "Trancher l'élément du supplément à son étape",
+      "attendu": "L'élément d'etua_301 est dans la file de la DEVE ; après validation, « Décision enregistrée. »",
+      "obtenu": "Élément introuvable dans la file de la DEVE (49 pages parcourues)",
+      "resultat": "échec",
+      "duree_s": 25,
       "captures": [],
-      "telechargements": [
-        "audit/procedures/telechargements/syllabus-5UVL-v1-travail.pdf"
-      ],
+      "telechargements": [],
       "erreurs_page": [],
       "anomalies": [],
-      "remarques": [
-        "Téléchargement par l'adresse syllabus_pdf.php?version=working, faute de bouton dans l'interface."
-      ]
+      "remarques": []
     },
     {
-      "etape": "journal",
-      "role": "serveur",
-      "action": "Erreurs journalisées par le serveur pendant le parcours",
-      "attendu": "Aucune",
-      "obtenu": "8 ligne(s)",
-      "resultat": "anomalie",
-      "lignes": [
-        "[5730] [Sat Nov  7 00:04:47 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
-        "[5730] [Sat Nov  7 00:04:47 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
-        "[5730] [Sat Nov  7 00:04:47 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
-        "[5730] [Sat Nov  7 00:04:47 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
-        "[5730] [Sat Nov  7 00:04:47 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
-        "[5730] [Sat Nov  7 00:04:47 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515",
-        "[5730] [Sat Nov  7 00:04:47 2026] PHP Warning:  Undefined property: stdClass::$noreplyaddress in /home/user/moodle-stress/moodle/lib/classes/user.php on line 459",
-        "[5730] [Sat Nov  7 00:04:47 2026] PHP Notice:  Not sending email due to $CFG->noemailever config setting<ul style=\"text-align: left\" data-rel=\"backtrace\"><li>line 5647 of /lib/moodlelib.php: call to debugging()</li><li>line 102 of /message/output/email/message_output_email.php: call to email_to_user()</li><li>line 506 of /lib/classes/message/manager.php: call to message_output_email->send_message()</li><li>line 382 of /lib/classes/message/manager.php: call to core\\message\\manager::call_processors()</li><li>line 349 of /lib/classes/message/manager.php: call to core\\message\\manager::send_message_to_processors()</li><li>line 343 of /lib/messagelib.php: call to core\\message\\manager::send_message()</li><li>line 4631 of /mod/ep/locallib.php: call to message_send()</li><li>line 4686 of /mod/ep/locallib.php: call to ep_send_notification()</li><li>line 4351 of /mod/ep/locallib.php: call to ep_notify_proposal_submitted()</li><li>line 220 of /mod/ep/syllabus_edit.php: call to ep_submit_syllabus()</li></ul> in /home/user/moodle-stress/moodle/lib/weblib.php on line 2515"
-      ]
+      "etape": "7.2",
+      "role": "DEVE (devea_1)",
+      "action": "Valider l'année 3 d'etua_301 (year_validation.php)",
+      "attendu": "Recherche de l'étudiant, minimum atteint (6 + 4 ECTS), décision « Validée » enregistrée.",
+      "obtenu": "Ligne : Etu 301 Banc a 10 10 Minimum atteint Année validée 7/11/26 Année validée en jury. Décision Année validée Année non validée Commentaire",
+      "resultat": "réussi",
+      "duree_s": 1.8,
+      "captures": [
+        "guides/captures/07-deve-validation-annee.png"
+      ],
+      "telechargements": [],
+      "erreurs_page": [],
+      "anomalies": [],
+      "remarques": []
+    },
+    {
+      "etape": "7.3",
+      "role": "DEVE (devea_1)",
+      "action": "Émettre le supplément au diplôme certifié d'etua_301 et le télécharger",
+      "attendu": "« Supplément émis : SD-… » ; le PDF porte le numéro et le code de vérification.",
+      "obtenu": "Supplément SD-2026-2-00022, code 32db68cceb03… (17 car.)",
+      "resultat": "réussi avec anomalie",
+      "duree_s": 2.7,
+      "captures": [
+        "guides/captures/07-deve-emettre-supplement.png",
+        "guides/captures/07-deve-supplement-emis.png"
+      ],
+      "telechargements": [
+        "audit/procedures/telechargements/supplement-SD-2026-2-00022.pdf"
+      ],
+      "erreurs_page": [],
+      "anomalies": [
+        "Informations manquantes signalées pour etua_301 : date de naissance inconnue, signataire non renseigné (paramétrage du supplément) — émission forcée."
+      ],
+      "remarques": []
     }
   ]
 }

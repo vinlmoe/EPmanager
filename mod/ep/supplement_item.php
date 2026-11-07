@@ -66,8 +66,9 @@ if ($action === 'cancel' && $item) {
     redirect($returnurl, get_string('supplementitemcancelled', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
-// Un élément tranché ne se modifie plus : la décision porte sur ce qui a été examiné.
-if ($item && (int) $item->status !== EP_STATUS_PENDING) {
+// Un élément tranché, ou déjà validé à une première étape, ne se modifie plus : la décision porte
+// sur ce qui a été examiné.
+if ($item && ((int) $item->status !== EP_STATUS_PENDING || (int) $item->step !== 0)) {
     redirect($returnurl, get_string('supplementitemchanged', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
 }
 

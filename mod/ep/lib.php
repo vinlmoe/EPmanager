@@ -115,6 +115,9 @@ define('EP_SUPPLEMENT_STAMP_FILEAREA', 'supplementstamp');
  */
 define('EP_SETTINGS_FORMAT', 1);
 
+/** Zone de fichiers du livret PDF du catalogue, conservé tant qu'il est à jour (itemid 0). */
+define('EP_BOOKLET_FILEAREA', 'booklet');
+
 /** Zone de fichiers du logo des documents PDF de l'activité (itemid 0). */
 define('EP_PDFLOGO_FILEAREA', 'pdflogo');
 

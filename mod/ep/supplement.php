@@ -168,7 +168,7 @@ if ($items) {
             $pending = (int) $item->status === EP_STATUS_PENDING;
             $itemurl = new moodle_url('/mod/ep/supplement_item.php', ['id' => $cm->id, 'itemid' => $item->id]);
             $row[] = ep_render_actions([
-                get_string('supplementitemedit', 'mod_ep') => $pending ? $itemurl : null,
+                get_string('supplementitemedit', 'mod_ep') => $pending && (int) $item->step === 0 ? $itemurl : null,
                 get_string('cancelrequest', 'mod_ep') => $pending
                     ? new moodle_url($itemurl, ['action' => 'cancel', 'sesskey' => sesskey()]) : null,
             ]);
@@ -207,7 +207,8 @@ if (empty($issues)) {
             html_writer::span(
                 get_string($current ? 'supplementcurrent' : 'supplementreplaced', 'mod_ep'),
                 'badge ' . ($current ? 'badge-success' : 'badge-secondary')
-            ),
+            ) . (empty($issue->seal)
+                ? ' ' . html_writer::span(get_string('supplementunsealed', 'mod_ep'), 'badge badge-warning') : ''),
         ];
     }
     echo ep_render_paged_table([

@@ -173,7 +173,14 @@ function epsynthesis_get_active_links($synthesisid, $userid) {
             continue;
         }
 
-        if (!has_capability('mod/ep:evaluateteacher', $context, $userid)) {
+        // Inscription active au cours d'origine et accès à l'activité, pas seulement la capacité :
+        // une inscription suspendue ou expirée garde l'attribution de rôle, mais celui qui l'a
+        // perdue ne doit plus rien voir ni décider de cette promotion, ici pas plus que là-bas.
+        if (!is_enrolled($context, $userid, 'mod/ep:evaluateteacher', true)) {
+            continue;
+        }
+        $cminfo = get_fast_modinfo($cm->course, $userid)->get_cm($cm->id);
+        if (!$cminfo->uservisible) {
             continue;
         }
 

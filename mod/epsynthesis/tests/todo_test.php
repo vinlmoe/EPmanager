@@ -320,4 +320,18 @@ final class todo_test extends \advanced_testcase {
             array_map(fn($proof) => $proof->filename, $proofs[$this->itemid])
         );
     }
+
+    /**
+     * Un enseignant dont l'inscription au cours de la promotion est suspendue garde son rôle, mais
+     * la synthèse ne lui montre plus rien de cette promotion.
+     */
+    public function test_suspended_enrolment_hides_promotion(): void {
+        global $DB;
+        $this->assertArrayHasKey($this->epcmid, epsynthesis_get_active_links($this->synthesis->id, $this->teacher->id));
+
+        $courseid = $DB->get_field('ep', 'course', ['id' => $this->ep->id]);
+        $enrol = $DB->get_record('enrol', ['courseid' => $courseid, 'enrol' => 'manual'], '*', MUST_EXIST);
+        enrol_get_plugin('manual')->update_user_enrol($enrol, $this->teacher->id, ENROL_USER_SUSPENDED);
+        $this->assertSame([], epsynthesis_get_active_links($this->synthesis->id, $this->teacher->id));
+    }
 }

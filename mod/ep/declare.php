@@ -69,6 +69,10 @@ if ($creditid) {
     if (!empty($credit->activityid) && $action !== 'cancel') {
         throw new moodle_exception('errorcreditnoteditable', 'mod_ep', $returnurl->out(false));
     }
+    // Déjà validée à une première étape : elle se retire encore, mais ne se modifie plus.
+    if ($action !== 'cancel' && !ep_student_can_edit($credit)) {
+        throw new moodle_exception('errorcreditdecided', 'mod_ep', $returnurl->out(false));
+    }
 }
 
 // Retrait d'une demande (déclaration comme inscription au catalogue) tant qu'elle est en attente.

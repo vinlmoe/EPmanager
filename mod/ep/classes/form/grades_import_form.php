@@ -47,7 +47,7 @@ class grades_import_form extends \moodleform {
             'csvfile',
             get_string('importgradesfile', 'mod_ep'),
             null,
-            ['accepted_types' => ['.csv', '.txt'], 'maxfiles' => 1]
+            ['accepted_types' => ['.csv', '.txt'], 'maxfiles' => 1, 'maxbytes' => 20 * 1048576]
         );
         $mform->addRule('csvfile', null, 'required', null, 'client');
         $mform->addHelpButton('csvfile', 'importgrades', 'mod_ep');

@@ -106,8 +106,15 @@ class restore_epsynthesis_activity_structure_step extends restore_activity_struc
             $newcmid = $this->get_mappingid('course_module', $link->epcmid);
 
             if (!$newcmid) {
-                $stillvalid = $this->task->is_samesite()
-                    && get_coursemodule_from_id('ep', $link->epcmid, 0, false, IGNORE_MISSING);
+                // Même règle que pour créer un lien depuis l'administration de la synthèse : celui
+                // qui restaure doit gérer l'activité visée.
+                $epcm = $this->task->is_samesite()
+                    ? get_coursemodule_from_id('ep', $link->epcmid, 0, false, IGNORE_MISSING) : false;
+                $stillvalid = $epcm && has_capability(
+                    'mod/ep:manage',
+                    \context_module::instance($epcm->id),
+                    $this->task->get_userid()
+                );
                 if (!$stillvalid) {
                     $DB->delete_records('epsynthesis_link', ['id' => $link->id]);
                 }

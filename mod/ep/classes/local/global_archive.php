@@ -41,6 +41,12 @@ class global_archive {
     /** @var int Version du format de donnees.json. */
     const FORMAT = 1;
 
+    /** @var int Nombre maximal de fichiers dans une archive restaurée. */
+    const MAX_ENTRIES = 200000;
+
+    /** @var int Taille décompressée maximale d'une archive restaurée (4 Go). */
+    const MAX_UNCOMPRESSED = 4294967296;
+
     /**
      * Construit l'archive d'une activité.
      *
@@ -132,7 +138,7 @@ class global_archive {
         $issuerecords = $DB->get_records('ep_supplement_issue', ['epid' => $ep->id], 'id');
         foreach ($issuerecords as $issue) {
             $row = (array) $issue;
-            unset($row['id'], $row['epid'], $row['replacedby']);
+            unset($row['id'], $row['epid'], $row['replacedby'], $row['seal']);
             $row['replacedbynumber'] = $issue->replacedby ? ($issuerecords[$issue->replacedby]->number ?? '') : '';
             $row['files'] = $addfiles(EP_SUPPLEMENT_ISSUED_FILEAREA, $issue->id);
             $issues[] = $row;
@@ -283,6 +289,21 @@ class global_archive {
      * @return \stdClass {dir: dossier d'extraction, settings: array, data: array, counts: array}
      */
     public static function open(string $zippath): \stdClass {
+        // Contrôle avant extraction : une archive forgée (bombe ZIP) ne doit pas remplir le disque.
+        $zip = new \ZipArchive();
+        if ($zip->open($zippath) !== true) {
+            throw new \moodle_exception('errorarchiveinvalid', 'mod_ep');
+        }
+        $total = 0;
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $stat = $zip->statIndex($i);
+            $total += (int) ($stat['size'] ?? 0);
+        }
+        $entries = $zip->numFiles;
+        $zip->close();
+        if ($entries > self::MAX_ENTRIES || $total > self::MAX_UNCOMPRESSED) {
+            throw new \moodle_exception('errorarchivetoolarge', 'mod_ep');
+        }
         $dir = make_request_directory();
         $extracted = get_file_packer('application/zip')->extract_to_pathname($zippath, $dir);
         if (!$extracted || !is_readable($dir . '/parametrage.json') || !is_readable($dir . '/donnees.json')) {
@@ -446,6 +467,20 @@ class global_archive {
                     ?: ($row['activityname'] !== '' ? ($byname[\core_text::strtolower($row['activityname'])] ?? 0) : 0) ?: null;
                 $credit->validatedby = $credit->validatedby ? $mapstaff($credit->validatedby) : null;
                 $credit->addedby = $credit->addedby ? $mapstaff($credit->addedby) : null;
+                // Valeurs relues d'un fichier : ramenées à ce que le module sait écrire.
+                $statuses = [EP_STATUS_CANCELLED, EP_STATUS_REJECTED, EP_STATUS_PENDING, EP_STATUS_VALIDATED];
+                $credit->status = in_array((int) $credit->status, $statuses, true) ? (int) $credit->status : EP_STATUS_PENDING;
+                $credit->source = in_array($credit->source, [EP_SOURCE_STUDENT, EP_SOURCE_STAGE, EP_SOURCE_DEVE], true)
+                    ? $credit->source : EP_SOURCE_DEVE;
+                $credit->studyyear = max(0, min(6, (int) $credit->studyyear));
+                $credit->step = max(0, (int) ($credit->step ?? 0));
+                $credit->claimedects = max(0, round((float) $credit->claimedects, 2));
+                $credit->retainedects = $credit->status === EP_STATUS_VALIDATED
+                    ? max(0, round((float) $credit->retainedects, 2)) : 0;
+                $credit->grade = isset($credit->grade) && $credit->grade !== null ? round((float) $credit->grade, 2) : null;
+                $credit->pendingrole = $credit->status === EP_STATUS_PENDING
+                    && in_array($credit->pendingrole ?? '', [EP_ROLE_OWNER, EP_ROLE_REFERENT, EP_ROLE_DEVE], true)
+                    ? $credit->pendingrole : ($credit->status === EP_STATUS_PENDING ? EP_ROLE_DEVE : '');
                 // Un crédit automatique ne garde pas son lien au stage d'origine : la saisie de
                 // mod_stage de l'autre activité n'est pas celle-ci. Il devient une saisie DEVE.
                 if ($credit->source === EP_SOURCE_STAGE) {
@@ -500,6 +535,12 @@ class global_archive {
                 $item->userid = $studentid;
                 $item->categoryid = $categories[$key];
                 $item->validatedby = $item->validatedby ? $mapstaff($item->validatedby) : null;
+                $itemstatuses = [EP_STATUS_CANCELLED, EP_STATUS_REJECTED, EP_STATUS_PENDING, EP_STATUS_VALIDATED];
+                $item->status = in_array((int) $item->status, $itemstatuses, true) ? (int) $item->status : EP_STATUS_PENDING;
+                $item->step = max(0, (int) ($item->step ?? 0));
+                $item->pendingrole = $item->status === EP_STATUS_PENDING
+                    && in_array($item->pendingrole ?? '', [EP_ROLE_REFERENT, EP_ROLE_DEVE], true)
+                    ? $item->pendingrole : ($item->status === EP_STATUS_PENDING ? EP_ROLE_DEVE : '');
                 $item->id = $DB->insert_record('ep_supplement_item', $item);
                 $copyfiles($row['files'], EP_SUPPLEMENT_EVIDENCE_FILEAREA, $item->id);
                 $report->items++;
@@ -524,6 +565,9 @@ class global_archive {
                 $year->epid = $ep->id;
                 $year->userid = $studentid;
                 $year->decidedby = $year->decidedby ? $mapstaff($year->decidedby) : null;
+                $year->studyyear = max(1, min(6, (int) $year->studyyear));
+                $year->decision = empty($year->decision) ? 0 : 1;
+                $year->retainedects = max(0, round((float) $year->retainedects, 2));
                 $DB->insert_record('ep_year_validation', $year);
                 $report->years++;
             }
@@ -543,6 +587,8 @@ class global_archive {
                 $issue->userid = $studentid;
                 $issue->issuedby = $issue->issuedby ? $mapstaff($issue->issuedby) : null;
                 $issue->replacedby = null;
+                // Copie d'un document émis ailleurs : conservée, non reconnue par la vérification.
+                $issue->seal = null;
                 $number = $issue->number;
                 $suffix = 1;
                 while ($DB->record_exists('ep_supplement_issue', ['number' => $issue->number])) {

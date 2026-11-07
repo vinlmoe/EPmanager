@@ -97,6 +97,16 @@ if ($action === 'transfer') {
     $targetcm = get_coursemodule_from_id('ep', $targetcmid, 0, false, MUST_EXIST);
     $target = $DB->get_record('ep', ['id' => $targetcm->instance], '*', MUST_EXIST);
     $student = $DB->get_record('user', ['id' => $userid], '*', MUST_EXIST);
+    // L'étudiant doit déjà être inscrit dans le cours de destination : son dossier et ses
+    // justificatifs n'y vont que s'il y est étudiant.
+    if (ep_count_enrolled_students(context_module::instance($targetcm->id), '', [$userid]) !== 1) {
+        redirect(
+            $baseurl,
+            get_string('transfernotenrolled', 'mod_ep', fullname($student)),
+            null,
+            \core\output\notification::NOTIFY_ERROR
+        );
+    }
 
     if ($confirm) {
         $result = ep_transfer_student($ep, $target, $userid);

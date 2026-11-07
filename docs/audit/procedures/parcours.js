@@ -306,10 +306,11 @@ async function setDate(page, name, date) {
 async function uploadFile(page, field, file) {
     const item = page.locator(`#fitem_id_${field}`);
     await item.locator('.fp-btn-add').first().click();
-    const picker = page.locator('.moodle-dialogue-base:visible .file-picker').last();
+    const picker = page.locator('.file-picker.fp-generallayout:visible').last();
     await picker.waitFor({ state: 'visible' });
     // Le dépôt depuis l'ordinateur est le premier dépôt proposé ; on le choisit explicitement s'il y en a d'autres.
-    const upload = picker.locator('.fp-repo').filter({ hasText: /Déposer|Upload|Téléverser|Importer un fichier/i });
+    const upload = picker.locator('.fp-repo').filter({ hasText: /Déposer|Upload|Téléverser|Téléverser|Importer un fichier/i });
+    await picker.locator('.fp-repo').first().waitFor({ state: 'visible' });
     if (await upload.count()) {
         await upload.first().click();
     }
@@ -762,8 +763,9 @@ async function procedure4() {
             await shot(page, '04-etudiant-mon-supplement');
             const file = await download(page, () => page.locator('form:has(select[name="lang"]) [type="submit"]').first().click(),
                 `apercu-supplement-${RUN}.pdf`);
-            const text = pdftext(file);
-            if (!/non certifi|not certified|aperçu|preview/i.test(text)) {
+            // Filigrane oblique : lu en extraction brute, espaces et retours à la ligne retirés.
+            const text = execFileSync('pdftotext', ['-raw', file, '-'], { encoding: 'utf8' }).replace(/\s+/g, '');
+            if (!/NONCERTIFI|NOTCERTIFIED/i.test(text)) {
                 anomaly('L\'aperçu du supplément ne porte pas de mention « non certifié » lisible.');
             }
             return `Aperçu PDF de ${fs.statSync(file).size} octets.`;
@@ -819,7 +821,7 @@ async function procedure5() {
             for (const label of [CONF.ADDED_STUDENT_LABEL, CONF.WITHDRAWN_STUDENT_LABEL]) {
                 const text = (await page.locator('table tr', { hasText: label }).first().innerText()).replace(/\s+/g, ' ');
                 check(/attente/i.test(text), `${label} : ${text}`);
-                if (!/Ajouté par|ajouté par/i.test(text)) {
+                if (!/(Ajouté|Inscrit) par/i.test(text)) {
                     anomaly(`${label} : la mention de l'auteur de l'ajout est absente.`);
                 }
             }
@@ -1022,7 +1024,7 @@ async function procedure7() {
             const notes = await notifications(page);
             const issued = notes.find((n) => /Supplément émis/.test(n));
             check(issued, 'Pas de confirmation d\'émission : ' + notes.join(' | '));
-            state.number = issued.match(/:\s*(\S+?)\.?$/)[1];
+            state.number = issued.match(/Supplément émis\s*:\s*([A-Za-z0-9-]+?)\.?(\s|$)/)[1];
             row = page.locator('table tr', { hasText: CONF.STUDENT_LABEL }).first();
             await shot(page, '07-deve-supplement-emis');
             const file = await download(page, () => row.locator('a[href*="supplement_file.php"]').first().click(), `supplement-${state.number}.pdf`);

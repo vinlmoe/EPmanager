@@ -64,6 +64,7 @@ $capabilities = [
     // sens de l'activité « Gestion des stages » du même cours). Ne donne aucun droit sur les
     // autres étudiants ni sur les autres EP.
     'mod/ep:evaluateteacher' => [
+        'riskbitmask' => RISK_PERSONAL,
         'captype' => 'write',
         'contextlevel' => CONTEXT_MODULE,
         'archetypes' => [
@@ -85,6 +86,7 @@ $capabilities = [
 
     // DEVE : validation finale, saisie et retrait de crédits pour n'importe quel étudiant.
     'mod/ep:validatedeve' => [
+        'riskbitmask' => RISK_PERSONAL,
         'captype' => 'write',
         'contextlevel' => CONTEXT_MODULE,
         'archetypes' => [
@@ -95,6 +97,7 @@ $capabilities = [
 
     // DEVE : paramétrer les types d'EP, le catalogue et les minimums annuels / de cursus.
     'mod/ep:manage' => [
+        'riskbitmask' => RISK_CONFIG | RISK_PERSONAL,
         'captype' => 'write',
         'contextlevel' => CONTEXT_MODULE,
         'archetypes' => [
@@ -105,6 +108,7 @@ $capabilities = [
 
     // Voir tous les étudiants et tous leurs crédits (DEVE / gestion).
     'mod/ep:viewall' => [
+        'riskbitmask' => RISK_PERSONAL,
         'captype' => 'read',
         'contextlevel' => CONTEXT_MODULE,
         'archetypes' => [

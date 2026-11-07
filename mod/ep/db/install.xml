@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/ep/db" VERSION="20261111" COMMENT="XMLDB file for module mod_ep"
+<XMLDB PATH="mod/ep/db" VERSION="20261113" COMMENT="XMLDB file for module mod_ep"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
@@ -455,6 +455,8 @@
         <FIELD NAME="verifycode" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"
             COMMENT="Empreinte SHA-256 du contenu certifié (données du supplément, numéro, date) : imprimée sur le document, elle permet de vérifier qu'il n'a pas été altéré"/>
         <FIELD NAME="filehash" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false" COMMENT="Empreinte du fichier PDF conservé"/>
+        <FIELD NAME="seal" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false"
+            COMMENT="Sceau HMAC du site sur l'émission (voir ep_supplement_seal()) : seule une émission scellée par ce site est reconnue par la vérification ; vide pour une copie restaurée ou importée"/>
         <FIELD NAME="issuedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="timeissued" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="replacedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Émission qui remplace celle-ci"/>

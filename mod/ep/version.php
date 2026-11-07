@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_ep';
-$plugin->version   = 2026111200;
+$plugin->version   = 2026111300;
 $plugin->requires  = 2023100900; // Moodle 4.3+, comme mod_stage.
 $plugin->maturity  = MATURITY_BETA;
 $plugin->release   = '0.8.0';

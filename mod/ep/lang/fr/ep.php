@@ -951,3 +951,6 @@ $string['resetyears'] = 'Supprimer les décisions sur les années d\'étude';
 $string['resetsupplement'] = 'Supprimer les éléments du supplément au diplôme et les suppléments émis';
 $string['resetsupplement_help'] = 'Les suppléments émis sont des documents certifiés : une fois supprimés, leur code n\'est plus reconnu par la page de vérification. Téléchargez d\'abord l\'export complet de l\'activité s\'ils doivent être conservés.';
 $string['resetimportlog'] = 'Supprimer le journal des imports';
+$string['supplementunsealed'] = 'Copie restaurée : non reconnue par la page de vérification';
+$string['errorarchivetoolarge'] = 'Cette archive est trop volumineuse pour être restaurée depuis cette page (plus de 200 000 fichiers ou 4 Go une fois décompressée).';
+$string['transfernotenrolled'] = '{$a} n\'est pas étudiant du cours de destination : inscrivez-le d\'abord dans ce cours.';

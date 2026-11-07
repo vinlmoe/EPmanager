@@ -44,7 +44,9 @@ class import_file_form extends \moodleform {
     public function definition() {
         $mform = $this->_form;
         $custom = $this->_customdata + ['types' => ['.csv', '.txt'], 'help' => null, 'hidden' => [], 'parts' => [],
-            'partslabel' => '', 'partshelp' => null, 'submit' => get_string('preview')];
+            'partslabel' => '', 'partshelp' => null, 'submit' => get_string('preview'),
+            // Fichiers CSV et JSON : 20 Mo suffisent largement ; une archive suit la limite du cours.
+            'maxbytes' => in_array('.zip', $this->_customdata['types'] ?? [], true) ? 0 : 20 * 1048576];
 
         $mform->addElement('hidden', 'id');
         $mform->setType('id', PARAM_INT);
@@ -58,7 +60,7 @@ class import_file_form extends \moodleform {
             'importfile',
             $custom['filelabel'],
             null,
-            ['accepted_types' => $custom['types'], 'maxfiles' => 1]
+            ['accepted_types' => $custom['types'], 'maxfiles' => 1, 'maxbytes' => $custom['maxbytes']]
         );
         $mform->addRule('importfile', null, 'required', null, 'client');
         if ($custom['help']) {

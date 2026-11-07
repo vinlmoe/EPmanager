@@ -42,9 +42,12 @@ $context = context_module::instance($cm->id);
 $credit = $DB->get_record('ep_credit', ['id' => $creditid, 'epid' => $ep->id], '*', MUST_EXIST);
 
 $isowner = (int) $credit->userid === (int) $USER->id;
+// Même règle que l'affichage des liens dans validate.php : qui peut voir la demande peut ouvrir
+// ses justificatifs, y compris un validateur dont l'étape est passée.
 if (
     !$isowner && !has_capability('mod/ep:viewall', $context)
         && !ep_can_validate_credit($ep, $credit, $context)
+        && !ep_rights_can_view(ep_get_user_rights($ep, $context), $credit)
 ) {
     throw new moodle_exception('nopermissions', 'error', '', get_string('evidencefiles', 'mod_ep'));
 }

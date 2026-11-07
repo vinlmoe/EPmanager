@@ -364,5 +364,23 @@ function xmldb_ep_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026111100, 'ep');
     }
 
+    if ($oldversion < 2026111300) {
+        // Sceau des suppléments émis : les émissions déjà en base sont scellées, la vérification
+        // ne reconnaîtra plus que des émissions scellées par ce site.
+        $table = new xmldb_table('ep_supplement_issue');
+        $field = new xmldb_field('seal', XMLDB_TYPE_CHAR, '64', null, null, null, null, 'filehash');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        global $CFG;
+        require_once($CFG->dirroot . '/mod/ep/locallib.php');
+        $rs = $DB->get_recordset('ep_supplement_issue', ['seal' => null]);
+        foreach ($rs as $issue) {
+            $DB->set_field('ep_supplement_issue', 'seal', ep_supplement_seal($issue), ['id' => $issue->id]);
+        }
+        $rs->close();
+        upgrade_mod_savepoint(true, 2026111300, 'ep');
+    }
+
     return true;
 }

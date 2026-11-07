@@ -29,13 +29,16 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+// Page publique, sans connexion : voir plus bas.
+// phpcs:ignore moodle.Files.RequireLogin.Missing
 require(__DIR__ . '/../../config.php');
 require_once($CFG->dirroot . '/mod/ep/locallib.php');
 
 $number = trim(optional_param('number', '', PARAM_TEXT));
 $code = trim(optional_param('code', '', PARAM_ALPHANUM));
 
-require_login();
+// Page publique : elle sert à des tiers sans compte sur le site (employeur, autre établissement).
+// Aucune connexion n'est demandée ; rien n'y est écrit et rien du dossier n'y est révélé.
 $PAGE->set_context(context_system::instance());
 $PAGE->set_url(new moodle_url('/mod/ep/supplement_verify.php'));
 $PAGE->set_pagelayout('standard');

@@ -897,6 +897,11 @@ function ep_validate_credit(stdClass $credit, $byuserid, $retainedects, $comment
     $final = $role === EP_ROLE_DEVE || $next >= count($steps);
 
     $credit->retainedects = max(0, round((float) $retainedects, 2));
+    // Un responsable ou un référent ne retient pas plus que ce qui est demandé ; seule la DEVE
+    // peut aller au-delà (correction d'une demande mal saisie).
+    if ($role !== EP_ROLE_DEVE) {
+        $credit->retainedects = min($credit->retainedects, round((float) $credit->claimedects, 2));
+    }
     $credit->timemodified = time();
     if ($grade !== null) {
         $credit->grade = round((float) $grade, 2);
@@ -1023,11 +1028,16 @@ function ep_cancel_credit(stdClass $credit, $byuserid, $comment = '', $role = EP
     $credit->validatorcomment = $comment;
     $credit->timemodified = time();
 
-    if ($role === EP_ROLE_STUDENT || $role === EP_ROLE_OWNER) {
-        // L'étudiant retire sa demande, le responsable retire un participant de son EP : tant que
-        // rien n'est tranché. Revenir sur une décision appartient à la DEVE.
+    if ($role === EP_ROLE_STUDENT) {
+        // L'étudiant retire sa demande tant que rien n'est tranché. Revenir sur une décision
+        // appartient à la DEVE.
         $where = 'status = :pending AND source <> :stage';
         $params = ['pending' => EP_STATUS_PENDING, 'stage' => EP_SOURCE_STAGE];
+    } else if ($role === EP_ROLE_OWNER) {
+        // Le responsable retire un participant de son EP tant que l'inscription attend sa propre
+        // décision : une fois son étape franchie, elle appartient à l'étape suivante.
+        $where = 'status = :pending AND pendingrole = :owner AND source <> :stage';
+        $params = ['pending' => EP_STATUS_PENDING, 'owner' => EP_ROLE_OWNER, 'stage' => EP_SOURCE_STAGE];
     } else {
         $where = 'status <> :cancelled AND source <> :stage';
         $params = ['cancelled' => EP_STATUS_CANCELLED, 'stage' => EP_SOURCE_STAGE];
@@ -1207,7 +1217,9 @@ function ep_update_declaration(stdClass $credit) {
     $applied = ep_update_credit_if(
         $credit,
         ['typeid', 'studyyear', 'name', 'description', 'claimedects', 'timemodified'],
-        'status = :pending AND source = :student AND activityid IS NULL',
+        // Modifiable seulement avant toute décision : une demande déjà validée à une première étape
+        // (par le référent, avant la DEVE) ne doit plus changer sous les yeux de l'étape suivante.
+        'status = :pending AND step = 0 AND source = :student AND activityid IS NULL',
         ['pending' => EP_STATUS_PENDING, 'student' => EP_SOURCE_STUDENT]
     );
     if ($applied) {
@@ -1404,6 +1416,19 @@ function ep_can_validate_credit(stdClass $ep, stdClass $credit, context $context
  */
 function ep_student_can_cancel(stdClass $credit) {
     return (int) $credit->status === EP_STATUS_PENDING && $credit->source !== EP_SOURCE_STAGE;
+}
+
+/**
+ * Indique si l'étudiant peut encore modifier sa déclaration : en attente et sans aucune
+ * décision, même intermédiaire. Une demande validée par le référent et qui attend la DEVE se
+ * retire encore, mais ne se modifie plus : la DEVE doit trancher ce que le référent a examiné.
+ *
+ * @param stdClass $credit
+ * @return bool
+ */
+function ep_student_can_edit(stdClass $credit) {
+    return (int) $credit->status === EP_STATUS_PENDING && (int) $credit->step === 0
+        && $credit->source === EP_SOURCE_STUDENT && empty($credit->activityid);
 }
 
 /**
@@ -2533,7 +2558,7 @@ function ep_render_credit_actions(stdClass $credit, stdClass $cm, stdClass $righ
     // L'étudiant peut revenir sur sa demande tant que personne ne s'est prononcé : la modifier
     // (déclaration hors catalogue) ou la retirer (inscription au catalogue comme déclaration).
     if ($isowner && ep_student_can_cancel($credit)) {
-        if (empty($credit->activityid)) {
+        if (ep_student_can_edit($credit)) {
             $actions[get_string('edit')] =
                 new moodle_url('/mod/ep/declare.php', ['id' => $cm->id, 'creditid' => $credit->id]);
         }
@@ -5097,7 +5122,8 @@ function ep_update_supplement_item(stdClass $item) {
         'ep_supplement_item',
         $item,
         ['categoryid', 'title', 'titleen', 'description', 'periodstart', 'periodend', 'timemodified'],
-        'status = :pending',
+        // Seulement avant toute décision (voir ep_update_declaration()).
+        'status = :pending AND step = 0',
         ['pending' => EP_STATUS_PENDING]
     );
 }
@@ -5522,6 +5548,36 @@ function ep_supplement_verifycode(stdClass $data, $number, $timeissued) {
 }
 
 /**
+ * Clé secrète du site pour sceller les suppléments émis, créée au premier usage. Elle reste dans
+ * la configuration du site : ni la sauvegarde d'un cours ni l'export d'une activité ne la
+ * contiennent.
+ *
+ * @return string
+ */
+function ep_supplement_seal_secret() {
+    $secret = get_config('mod_ep', 'sealsecret');
+    if (empty($secret)) {
+        $secret = random_string(64);
+        set_config('sealsecret', $secret, 'mod_ep');
+    }
+    return $secret;
+}
+
+/**
+ * Sceau d'une émission : HMAC, avec la clé du site, de son numéro, de l'étudiant, de l'activité,
+ * de son code de vérification, de sa date et de l'empreinte du PDF. Une émission insérée par une
+ * autre voie qu'ep_issue_supplement() (restauration, import, base modifiée) n'a pas de sceau
+ * valable et n'est pas reconnue par la page de vérification.
+ *
+ * @param stdClass $issue
+ * @return string
+ */
+function ep_supplement_seal(stdClass $issue) {
+    return hash_hmac('sha256', implode('|', [(string) $issue->number, (int) $issue->userid, (int) $issue->epid,
+        (string) $issue->verifycode, (int) $issue->timeissued, (string) $issue->filehash]), ep_supplement_seal_secret());
+}
+
+/**
  * Numéro du prochain supplément d'une instance : préfixe choisi par la DEVE (ou « SD »), année,
  * instance et rang, à appeler sous le verrou de l'activité.
  *
@@ -5583,6 +5639,7 @@ function ep_issue_supplement(stdClass $ep, context $context, $userid, $issuerid,
             'timeissued' => $time,
             'replacedby' => null,
         ];
+        $issue->seal = ep_supplement_seal($issue);
         $issue->id = $DB->insert_record('ep_supplement_issue', $issue);
         $DB->set_field_select(
             'ep_supplement_issue',
@@ -5663,6 +5720,15 @@ function ep_verify_supplement($number, $code) {
     $issue = $DB->get_record('ep_supplement_issue', ['number' => trim((string) $number)]);
     $code = core_text::strtolower(preg_replace('/[^0-9a-fA-F]/', '', (string) $code));
     if (!$issue || strlen($code) < 16 || strpos($issue->verifycode, $code) !== 0) {
+        return null;
+    }
+    // Seule une émission scellée par ce site, dont le PDF conservé est intact, est reconnue.
+    if (empty($issue->seal) || !hash_equals(ep_supplement_seal($issue), $issue->seal)) {
+        return null;
+    }
+    $cm = ep_get_cm_of_instance($issue->epid);
+    $file = $cm ? ep_get_supplement_issue_file(context_module::instance($cm->id), $issue->id) : null;
+    if (!$file || sha1($file->get_content()) !== $issue->filehash) {
         return null;
     }
     return $issue;
@@ -5943,10 +6009,25 @@ function ep_import_settings(stdClass $ep, array $settings, array $parts, $userid
             $fields = ['mincursusects', 'proposalsdirectpublish', 'pdfheader', 'pdffooter', 'supplementflow',
                 'supplementevidence', 'supplementprefix', 'birthdatefield'];
             $update = (object) ['id' => $ep->id, 'timemodified' => time()];
+            // Mêmes contrôles que les formulaires de réglage : un fichier forgé ne doit pas
+            // pouvoir écrire une valeur qu'ils refuseraient.
+            $flows = \mod_ep\form\supplement_settings_form::flow_options();
+            $birthfields = \mod_ep\form\supplement_settings_form::birthdate_field_options();
+            $clean = [
+                'mincursusects' => fn($v) => max(0, round((float) $v, 2)),
+                'proposalsdirectpublish' => fn($v) => empty($v) ? 0 : 1,
+                'pdfheader' => fn($v) => clean_param((string) $v, PARAM_TEXT),
+                'pdffooter' => fn($v) => clean_param((string) $v, PARAM_TEXT),
+                'supplementflow' => fn($v) => array_key_exists((string) $v, $flows) ? (string) $v : EP_ROLE_DEVE,
+                'supplementevidence' => fn($v) => array_key_exists((int) $v, ep_evidence_options()) ? (int) $v
+                    : EP_EVIDENCE_REQUIRED,
+                'supplementprefix' => fn($v) => core_text::substr(clean_param(trim((string) $v), PARAM_ALPHANUMEXT), 0, 20),
+                'birthdatefield' => fn($v) => array_key_exists((string) $v, $birthfields) ? (string) $v : '',
+            ];
             foreach ($fields as $field) {
                 if (array_key_exists($field, $settings['instance'])) {
-                    $update->$field = $settings['instance'][$field];
-                    $ep->$field = $settings['instance'][$field];
+                    $update->$field = $clean[$field]($settings['instance'][$field]);
+                    $ep->$field = $update->$field;
                 }
             }
             $DB->update_record('ep', $update);

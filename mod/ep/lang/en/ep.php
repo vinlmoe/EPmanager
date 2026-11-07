@@ -951,3 +951,6 @@ $string['resetyears'] = 'Delete the decisions on study years';
 $string['resetsupplement'] = 'Delete the diploma supplement items and the issued supplements';
 $string['resetsupplement_help'] = 'Issued supplements are certified documents: once deleted, their verification code is no longer recognised by the verification page. Download the full export of the activity first if they must be kept.';
 $string['resetimportlog'] = 'Delete the import log';
+$string['supplementunsealed'] = 'Restored copy: not recognised by the verification page';
+$string['errorarchivetoolarge'] = 'This archive is too large to be restored from this page (more than 200,000 files or 4 GB once decompressed).';
+$string['transfernotenrolled'] = '{$a} is not a student of the target course: enrol them there first.';

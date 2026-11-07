@@ -283,6 +283,9 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
         $data->issuedby = empty($data->issuedby) ? null : ($this->get_mappingid('user', $data->issuedby) ?: null);
         $this->replacedby[$oldid] = (int) ($data->replacedby ?? 0);
         $data->replacedby = null;
+        // Copie d'un document émis ailleurs : conservée, mais non reconnue par la vérification
+        // (voir ep_supplement_seal()).
+        $data->seal = null;
         $number = $data->number;
         $suffix = 1;
         while ($DB->record_exists('ep_supplement_issue', ['number' => $data->number])) {
@@ -509,8 +512,16 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
         $newcmid = $this->get_mappingid('course_module', $stagecmid);
 
         if (!$newcmid) {
-            $stillvalid = $this->task->is_samesite()
-                && get_coursemodule_from_id('stage', $stagecmid, 0, false, IGNORE_MISSING);
+            // Sur le même site, le lien vers une activité d'un autre cours n'est gardé que si celui
+            // qui restaure peut voir tous les stages de cette activité : sinon une sauvegarde
+            // forgée lui ouvrirait les référents et les stages d'étudiants qu'il ne gère pas.
+            $stagecm = $this->task->is_samesite()
+                ? get_coursemodule_from_id('stage', $stagecmid, 0, false, IGNORE_MISSING) : false;
+            $stillvalid = $stagecm && has_capability(
+                'mod/stage:viewall',
+                \context_module::instance($stagecm->id),
+                $this->task->get_userid()
+            );
             if (!$stillvalid) {
                 $DB->set_field('ep', 'stagecmid', 0, ['id' => $epid]);
             }
