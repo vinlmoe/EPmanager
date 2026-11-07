@@ -76,8 +76,16 @@ prévenue que la demande a changé.
 Un stage donne des ECTS d'EP s'il appartient à une activité « Gestion des stages » du même cours
 (ou à celle désignée dans les paramètres), s'il est marqué **complémentaire (EP)** et
 **validé par la DEVE**. Le crédit vaut `durée retenue × ECTS par jour` ; il suit son stage
-d'origine. Recalcul chaque nuit (tâche `mod_ep\task\sync_stage_credits`), à l'ouverture des
-pages au plus toutes les cinq minutes, et à la demande depuis la page des types.
+d'origine. Recalcul dès qu'un stage concerné ou le barème change : une empreinte des stages
+complémentaires validés (nombre, durées retenues, années, mobilité, dates de modification) est
+comparée à celle du dernier calcul à l'ouverture des pages qui décomptent (1 à 2 ms), et avant la
+validation des années et l'émission d'un supplément, qui attendent le recalcul. La DEVE peut donc
+valider un stage dans « Gestion des stages » puis, aussitôt, les années ou le supplément. Mod_stage
+ne signale pas toutes ses modifications par un événement (une durée retenue corrigée, par
+exemple) : c'est pourquoi la comparaison porte sur les données elles-mêmes. Recalcul aussi chaque
+nuit (tâche `mod_ep\task\sync_stage_credits`) et à la demande depuis la page des types. Les
+enseignants référents sont lus en direct dans « Gestion des stages » : un changement d'attribution
+y vaut aussitôt pour les demandes en attente.
 
 ## Supplément au diplôme
 

@@ -42,3 +42,7 @@ crédit, élément ni décision (minimum de 6 ECTS en 3e année), pour `interact
 - `stress.py`, `profil.py`, `lourds.py`, `ruee.py` : test de stress (`../test-de-stress.tex`).
 - `muc_modinfo.php` : associe le cache `core/coursemodinfo` au magasin fichier quand le cache
   applicatif est dans APCu (voir `mod/ep/INSTALL.md`).
+- `liaison_stage_prep.php` et `liaison_stage.py` : liaison avec mod_stage par les pages des deux
+  modules (barème du type stage, validation en masse dans la page DEVE de mod_stage, corrections,
+  annulations, changement de référent, validation des années et supplément juste après une
+  validation de stage, tâche de nuit). `liaison_stage_prep.php site-x.json reset` pour rejouer.

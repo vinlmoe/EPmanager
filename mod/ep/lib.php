@@ -122,12 +122,12 @@ define('EP_BOOKLET_FILEAREA', 'booklet');
 define('EP_PDFLOGO_FILEAREA', 'pdflogo');
 
 /**
- * Délai minimal entre deux synchronisations des EP de type stage déclenchées par l'affichage
- * d'une page (voir ep_sync_stage_credits_if_due()) : la tâche planifiée quotidienne fait foi,
- * cette synchronisation d'opportunité ne sert qu'à ne pas afficher un décompte visiblement
- * périmé juste après une validation DEVE.
+ * Âge maximal d'une synchronisation des EP de type stage dont l'empreinte n'a pas changé (voir
+ * ep_sync_stage_credits_if_due()) : tout ce qui compte (stages complémentaires validés, durées,
+ * années, mobilité, barème) est dans l'empreinte et déclenche le recalcul aussitôt ; ce délai ne
+ * rattrape que ce qui n'y est pas, comme le libellé renommé d'une thématique.
  */
-define('EP_STAGE_SYNC_INTERVAL', 300);
+define('EP_STAGE_SYNC_INTERVAL', 3600);
 
 /**
  * Returns the list of features supported by this module.

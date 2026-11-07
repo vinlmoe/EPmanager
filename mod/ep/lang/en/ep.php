@@ -114,8 +114,9 @@ $string['maxectsshort'] = 'max. {$a} credits';
 $string['ectsperday'] = 'Credits per internship day';
 $string['syncstagecredits'] = 'Resynchronise internship credits';
 $string['syncstagecredits_help'] = 'Immediately recomputes the credits awarded automatically from the '
-    . 'complementary internships validated by the academic office. This is done nightly and whenever a page of '
-    . 'the activity is opened anyway: this button is there to check the effect right after changing the rate.';
+    . 'complementary internships validated by the academic office. This is done anyway as soon as an internship '
+    . 'or the rate changes (on the next page of the activity, before year validation and before issuing a '
+    . 'diploma supplement) and nightly: this button is only useful to check the result.';
 $string['syncdone'] = 'Synchronisation complete: {$a->created} created, {$a->updated} updated, '
     . '{$a->deleted} removed.';
 $string['tasksyncstagecredits'] = 'Award personalised learning credits from complementary internships';

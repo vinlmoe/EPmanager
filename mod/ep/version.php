@@ -25,10 +25,10 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_ep';
-$plugin->version   = 2026111800;
+$plugin->version   = 2026111900;
 $plugin->requires  = 2023100900; // Moodle 4.3+, comme mod_stage.
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.0.4';
+$plugin->release   = '1.0.5';
 $plugin->dependencies = [
     // Les EP de type « stage » sont attribués automatiquement à partir des stages complémentaires
     // (EP) validés par la DEVE dans l'activité « Gestion des stages » du même cours : leur

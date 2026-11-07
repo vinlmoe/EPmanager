@@ -4,14 +4,14 @@
 \usepackage[french]{babel}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage{lmodern,microtype,booktabs,tabularx,xcolor,hyperref,array}
+\usepackage{lmodern,microtype,booktabs,tabularx,xcolor,hyperref,array,amsmath}
 \usepackage[margin=2.2cm]{geometry}
 \hypersetup{colorlinks=true, linkcolor=blue!50!black, urlcolor=blue!50!black}
 \newcommand{\code}[1]{\texttt{\detokenize{#1}}}
 \newcolumntype{R}{>{\raggedleft\arraybackslash}X}
 \title{Test des interactions à 1\,000 étudiants}
 \author{Sébastien Lefebvre}
-\date{Novembre 2026 -- version 1.0.2 du module}
+\date{Novembre 2026 -- versions 1.0.3 et 1.0.5 du module}
 
 \begin{document}
 \maketitle
@@ -184,6 +184,52 @@ import de notes. Ces trois libellés emploient désormais le séparateur en text
 
 La page publique de vérification d'un supplément affichait son titre deux fois (titre de page de
 Moodle et titre du contenu). Le second est retiré.
+
+\section{Liaison avec « Gestion des stages »}
+
+Le scénario précédent laissait le barème du type stage à 0 : aucun EP de stage n'y était
+attribué. La liaison avec \code{mod_stage} a donc été vérifiée à part, par les pages des deux
+modules (\code{liaison_stage.py}), sur la même promotion : 300 stages préparés par les fonctions
+de \code{mod_stage} (200 complémentaires, dont un sur sept à l'étranger, 50 obligatoires,
+50 complémentaires laissés à valider).
+
+\paragraph{Ce que lit le module.} Quatre tables de \code{mod_stage} (saisies, détail de convention,
+enseignants référents, thématiques), en lecture seule ; aucun champ ne manque dans la version
+courante de \code{mod_stage}, et l'état « validé DEVE » y est bien l'état final d'un stage.
+
+\paragraph{Défaut trouvé.} Les EP de stage n'étaient recalculés qu'à l'ouverture de trois pages
+du module, au plus toutes les cinq minutes, et la nuit. Deux conséquences : un stage que la DEVE
+venait de valider dans « Gestion des stages » ne comptait pas si elle passait aussitôt à la
+\textbf{validation des années} (année refusée à tort) ou à l'\textbf{émission d'un supplément}
+(supplément certifié sans ce stage) ; et une durée retenue corrigée après validation restait
+fausse jusqu'à cinq minutes sur les autres pages. \code{mod_stage} ne déclenche pas d'événement
+pour une telle correction : écouter ses événements n'aurait pas suffi. Six tests unitaires
+reproduisaient le défaut.
+
+\paragraph{Correctif (1.0.5).} Une empreinte des stages complémentaires validés (nombre,
+identifiants, durées retenues, années, mobilité, dates de modification) et du barème est comparée
+à celle du dernier calcul ; le recalcul a lieu dès qu'elle change, à l'ouverture des pages qui
+décomptent, et la validation des années et l'émission d'un supplément l'attendent.
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}X l@{}}
+\toprule
+\textbf{Contrôle, après le correctif} & \textbf{Résultat} \\
+\midrule
+Barème de 0,5 ECTS par jour saisi dans le formulaire du type & conforme \\
+250 stages validés en masse dans la page DEVE de \code{mod_stage} & 0,5 s \\
+Premier tableau de bord ouvert : 200 crédits, $\text{durée} \times 0{,}5$ chacun & 0,29 s \\
+Stages obligatoires et non validés : aucun crédit & conforme \\
+20 durées revalidées (page DEVE) et 20 corrigées dans la saisie (sans événement) & suivies \\
+10 stages annulés, 10 repassés en obligatoire & crédits retirés \\
+Stage validé puis, aussitôt, décision d'année & le stage compte \\
+Stage validé puis, aussitôt, émission du supplément & le stage figure au PDF \\
+Référent changé dans \code{mod_stage} & la déclaration en attente passe au nouveau \\
+Tâche de la nuit ensuite & rien à recalculer \\
+Coût de l'empreinte / de la vérification à l'ouverture d'une page & 1,4 ms / 1,7 ms \\
+\bottomrule
+\end{tabularx}
+\end{center}
 
 \section{Ce que le test ne couvre pas}
 

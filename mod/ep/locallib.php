@@ -1667,36 +1667,90 @@ function ep_sync_stage_credits(stdClass $ep) {
 }
 
 /**
- * Resynchronise les crédits de type stage si la dernière synchronisation date de plus de
- * EP_STAGE_SYNC_INTERVAL. Appelée à l'ouverture des pages qui affichent un décompte, pour qu'une
- * validation DEVE faite dans la foulée s'y voie sans attendre la tâche planifiée de la nuit, sans
- * pour autant relancer la synchronisation à chaque rafraîchissement de page.
+ * Empreinte de ce dont dépendent les EP de type stage d'une instance : les activités « Gestion
+ * des stages » liées, les types stage et leur barème, et les stages complémentaires validés par
+ * la DEVE (nombre, identifiants, durées retenues, années, mobilité, dates de modification). Une
+ * requête d'agrégat sur les saisies : assez légère pour être calculée à chaque page.
  *
- * Si une autre requête synchronise déjà (verrou pris), la page n'attend pas : elle affiche le
- * décompte tel qu'il est, l'autre requête le mettant à jour. La date de dernière synchronisation
- * est relue sous le verrou, pour que deux pages ouvertes au même moment n'enchaînent pas deux
+ * mod_stage ne déclenche pas d'événement pour toutes ces modifications (une durée retenue
+ * corrigée par la DEVE, par exemple) : c'est en comparant cette empreinte à celle de la dernière
+ * synchronisation qu'on sait qu'il faut recalculer.
+ *
+ * @param stdClass $ep
+ * @return string sha1
+ */
+function ep_stage_sync_signature(stdClass $ep) {
+    global $CFG, $DB;
+
+    $types = [];
+    foreach (ep_get_stage_types($ep->id) as $type) {
+        $types[] = [(int) $type->id, (float) $type->ectsperday, (string) $type->stagescope];
+    }
+    $stageids = array_values(array_map(fn($instance) => (int) $instance->stage->id, ep_get_linked_stage_instances($ep)));
+    $entries = null;
+    if ($types && $stageids) {
+        require_once($CFG->dirroot . '/mod/stage/lib.php');
+        [$insql, $inparams] = $DB->get_in_or_equal($stageids, SQL_PARAMS_NAMED, 'st');
+        $entries = $DB->get_record_sql(
+            "SELECT COUNT(e.id) AS n, COALESCE(SUM(e.id), 0) AS ids, COALESCE(SUM(e.retainedduration), 0) AS days,
+                    COALESCE(SUM(e.studyyear), 0) AS years, COALESCE(SUM(e.abroad), 0) AS abroad,
+                    COALESCE(MAX(e.timemodified), 0) AS entrytime, COALESCE(MAX(d.timemodified), 0) AS detailtime
+               FROM {stage_entry} e
+               JOIN {stage_convention_detail} d ON d.entryid = e.id
+              WHERE e.stageid $insql AND e.status = :validated AND d.stagetype = :stagetype",
+            $inparams + ['validated' => STAGE_STATUS_VALIDE_DEVE, 'stagetype' => 'complementaire']
+        );
+    }
+    return sha1(json_encode([$stageids, $types, $entries ? array_values((array) $entries) : null]));
+}
+
+/**
+ * Resynchronise les crédits de type stage si les stages ou le barème ont changé depuis la
+ * dernière synchronisation (voir ep_stage_sync_signature()), ou si elle date de plus de
+ * EP_STAGE_SYNC_INTERVAL. Appelée à l'ouverture des pages qui affichent un décompte et avant ce
+ * qui en dépend (validation des années, supplément au diplôme), pour qu'un stage que la DEVE
+ * vient de valider ou de corriger dans « Gestion des stages » y compte aussitôt.
+ *
+ * Sans $wait, si une autre requête synchronise déjà (verrou pris), la page n'attend pas : elle
+ * affiche le décompte tel qu'il est, l'autre requête le mettant à jour. Avec $wait (validation
+ * des années, émission d'un supplément), elle attend cette synchronisation : la décision ou le
+ * document ne doit pas reposer sur un décompte en cours de mise à jour. L'empreinte est relue
+ * sous le verrou, pour que deux pages ouvertes au même moment n'enchaînent pas deux
  * synchronisations.
  *
  * @param stdClass $ep
- * @return void
+ * @param bool $wait Attendre le verrou de l'activité plutôt que d'y renoncer.
+ * @return bool Vrai si une synchronisation a eu lieu.
  */
-function ep_sync_stage_credits_if_due(stdClass $ep) {
+function ep_sync_stage_credits_if_due(stdClass $ep, bool $wait = false) {
     global $DB;
 
-    if (time() - (int) $ep->timesynced < EP_STAGE_SYNC_INTERVAL) {
-        return;
+    $signature = ep_stage_sync_signature($ep);
+    // L'état relu en base est reporté sur l'instance : la page travaille ensuite sur la dernière
+    // synchronisation connue, pas sur celle qu'elle avait chargée.
+    $due = function () use ($DB, $ep, $signature) {
+        $stored = $DB->get_record('ep', ['id' => $ep->id], 'id, timesynced, stagesyncsig', MUST_EXIST);
+        $ep->timesynced = (int) $stored->timesynced;
+        $ep->stagesyncsig = $stored->stagesyncsig;
+        return $stored->stagesyncsig !== $signature || time() - $ep->timesynced >= EP_STAGE_SYNC_INTERVAL;
+    };
+    if (!$due()) {
+        return false;
     }
-    $factory = \core\lock\lock_config::get_lock_factory('mod_ep_activity');
-    $lock = $factory->get_lock('ep-' . (int) $ep->id, 0);
-    if (!$lock) {
-        return;
+    if ($wait) {
+        $lock = ep_get_activity_lock($ep->id);
+    } else {
+        $lock = \core\lock\lock_config::get_lock_factory('mod_ep_activity')->get_lock('ep-' . (int) $ep->id, 0);
+        if (!$lock) {
+            return false;
+        }
     }
     try {
-        $ep->timesynced = (int) $DB->get_field('ep', 'timesynced', ['id' => $ep->id]);
-        if (time() - $ep->timesynced < EP_STAGE_SYNC_INTERVAL) {
-            return;
+        if (!$due()) {
+            return false;
         }
         ep_sync_stage_credits_locked($ep);
+        return true;
     } finally {
         $lock->release();
     }
@@ -2861,6 +2915,9 @@ function ep_sync_stage_credits_locked(stdClass $ep) {
 
     $result = (object) ['created' => 0, 'updated' => 0, 'deleted' => 0];
 
+    // Empreinte prise avant la lecture des stages : un stage modifié pendant le calcul change
+    // l'empreinte et fera recalculer la fois suivante, au lieu d'être tenu pour vu.
+    $signature = ep_stage_sync_signature($ep);
     $stagetypes = ep_get_stage_types($ep->id);
     $existing = $DB->get_records('ep_credit', ['epid' => $ep->id, 'source' => EP_SOURCE_STAGE]);
     $byref = [];
@@ -2948,8 +3005,9 @@ function ep_sync_stage_credits_locked(stdClass $ep) {
         $result->deleted++;
     }
 
-    $DB->set_field('ep', 'timesynced', $now, ['id' => $ep->id]);
+    $DB->update_record('ep', (object) ['id' => $ep->id, 'timesynced' => $now, 'stagesyncsig' => $signature]);
     $ep->timesynced = $now;
+    $ep->stagesyncsig = $signature;
 
     return $result;
 }
@@ -5050,6 +5108,9 @@ function ep_set_year_validation(stdClass $ep, $userid, $studyyear, $validated, $
 function ep_validate_years_in_bulk(stdClass $ep, $studyyear, array $userids, $byuserid, $rejectincomplete = false) {
     global $DB;
 
+    // Un stage complémentaire que la DEVE vient de valider dans « Gestion des stages » doit compter.
+    ep_sync_stage_credits_if_due($ep, true);
+
     $result = (object) ['validated' => 0, 'rejected' => 0, 'skipped' => 0];
     \mod_ep\local\progress_cache::prime((int) $ep->id, $userids);
     try {
@@ -5568,6 +5629,9 @@ function ep_get_student_birthdate(stdClass $ep, $userid) {
  */
 function ep_build_supplement(stdClass $ep, stdClass $user, $lang = 'fr') {
     global $DB;
+
+    // Les EP de type stage figurent au supplément : ceux d'un stage validé juste avant aussi.
+    ep_sync_stage_credits_if_due($ep, true);
 
     $types = ep_get_types($ep->id);
     $credits = [];

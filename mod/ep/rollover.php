@@ -41,6 +41,8 @@ $ep = $DB->get_record('ep', ['id' => $cm->instance], '*', MUST_EXIST);
 require_login($course, true, $cm);
 $context = context_module::instance($cm->id);
 require_capability('mod/ep:manage', $context);
+// EP de type stage à jour avant tout décompte (voir ep_sync_stage_credits_if_due()).
+ep_sync_stage_credits_if_due($ep);
 
 $baseurl = new moodle_url('/mod/ep/rollover.php', ['id' => $cm->id]);
 $PAGE->set_url($baseurl);

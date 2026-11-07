@@ -3,6 +3,23 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## 1.0.5 — mod_ep 2026111900, mod_epsynthesis 2026111600 (19 novembre 2026)
+
+Liaison avec « Gestion des stages » (mod_stage), vérifiée de bout en bout
+(`docs/audit/banc/liaison_stage.py`, rapport `test-des-interactions.pdf`).
+
+### Module
+- **EP de type stage recalculés dès qu'un stage change** : une empreinte des stages
+  complémentaires validés (nombre, durées retenues, années, mobilité, dates de modification) et du
+  barème est comparée à celle du dernier calcul (colonne `ep.stagesyncsig`, 1 à 2 ms). Avant, le
+  recalcul n'avait lieu qu'à l'ouverture de trois pages, au plus toutes les cinq minutes, et la
+  nuit.
+- **Validation des années et supplément au diplôme** : ils attendent ce recalcul. Avant, un stage
+  validé dans « Gestion des stages » juste avant n'y comptait pas (année refusée à tort,
+  supplément émis sans ce stage) tant qu'aucune page du module ne l'avait recalculé.
+- Recalcul aussi à l'ouverture des pages Validation, Validation des années, Émission des
+  suppléments et Rentrée.
+
 ## 1.0.4 — mod_ep 2026111800, mod_epsynthesis 2026111600 (18 novembre 2026)
 
 ### Module

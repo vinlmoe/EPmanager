@@ -43,6 +43,8 @@ $ep = $DB->get_record('ep', ['id' => $cm->instance], '*', MUST_EXIST);
 require_login($course, true, $cm);
 $context = context_module::instance($cm->id);
 require_capability('mod/ep:validatedeve', $context);
+// EP de type stage à jour avant tout décompte (voir ep_sync_stage_credits_if_due()).
+ep_sync_stage_credits_if_due($ep);
 
 // Années proposées : celles de mod_stage, sans « non précisée » qui n'a pas de minimum. Par
 // défaut, l'année courante de la promotion, celle dont la décision se prend en fin d'année.

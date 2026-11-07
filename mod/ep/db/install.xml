@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/ep/db" VERSION="20261118" COMMENT="XMLDB file for module mod_ep"
+<XMLDB PATH="mod/ep/db" VERSION="20261119" COMMENT="XMLDB file for module mod_ep"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
@@ -31,6 +31,8 @@
         <FIELD NAME="pdffooter" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Pied de page des documents PDF de l'activité"/>
         <FIELD NAME="timesynced" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="Dernière synchronisation des EP de type stage depuis mod_stage (voir ep_sync_stage_credits_if_due())"/>
+        <FIELD NAME="stagesyncsig" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false"
+            COMMENT="Empreinte des stages et du barème lors de cette synchronisation (voir ep_stage_sync_signature())"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
       </FIELDS>

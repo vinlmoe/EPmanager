@@ -47,6 +47,8 @@ $context = context_module::instance($cm->id);
 require_capability('mod/ep:view', $context);
 
 $rights = ep_get_user_rights($ep, $context);
+// EP de type stage à jour avant tout décompte (voir ep_sync_stage_credits_if_due()).
+ep_sync_stage_credits_if_due($ep);
 if (!ep_rights_has_validation_scope($rights)) {
     throw new moodle_exception('nopermissions', 'error', '', get_string('validation', 'mod_ep'));
 }

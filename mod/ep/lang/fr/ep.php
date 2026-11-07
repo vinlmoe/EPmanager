@@ -114,8 +114,9 @@ $string['maxectsshort'] = 'max. {$a} ECTS';
 $string['ectsperday'] = 'ECTS par jour de stage';
 $string['syncstagecredits'] = 'Resynchroniser les EP de type stage';
 $string['syncstagecredits_help'] = "Recalcule immédiatement les ECTS attribués automatiquement d'après les stages "
-    . "complémentaires validés par la DEVE. Ce recalcul est de toute façon fait chaque nuit et à l'ouverture des "
-    . "pages de l'activité : ce bouton sert à en vérifier l'effet tout de suite après avoir changé le barème.";
+    . "complémentaires validés par la DEVE. Ce recalcul est de toute façon fait dès qu'un stage ou le barème change "
+    . "(à l'ouverture suivante d'une page de l'activité, avant la validation des années et l'émission d'un "
+    . "supplément) et chaque nuit : ce bouton n'est utile que pour vérifier le résultat.";
 $string['syncdone'] = 'Synchronisation terminée : {$a->created} crédit(s) créé(s), {$a->updated} mis à jour, '
     . '{$a->deleted} retiré(s).';
 $string['tasksyncstagecredits'] = 'Attribution des ECTS d\'EP issus des stages complémentaires';

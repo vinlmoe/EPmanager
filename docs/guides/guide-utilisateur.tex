@@ -5,9 +5,9 @@
 
 % Version du guide : à mettre à jour à chaque modification, avec une ligne dans l'historique.
 \newcommand{\titreguide}{Guide utilisateur}
-\newcommand{\versionguide}{1.1}
+\newcommand{\versionguide}{1.2}
 \newcommand{\dateguide}{novembre 2026}
-\newcommand{\versionep}{1.0.4}
+\newcommand{\versionep}{1.0.5}
 \newcommand{\versionsynthese}{1.0.2}
 
 \usepackage{guide-commun}
@@ -36,6 +36,7 @@ pas}{gu-etu-tableau-de-bord}
 document, captures prises sur une promotion de 1\,000 étudiants. \\
 1.1 & novembre 2026 & Séances du programme sans date (EP Manager 1.0.4) ; qui valide les
 syllabus. \\
+1.2 & novembre 2026 & EP de stage recalculés dès qu'un stage change (EP Manager 1.0.5). \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -685,7 +686,9 @@ Pour chaque type :
 Un changement de circuit vaut pour les nouvelles demandes et pour les étapes restantes des
 demandes en cours ; les décisions déjà prises restent dans l'historique. Le bouton
 \bouton{Resynchroniser les EP de type stage} recalcule aussitôt les ECTS attribués d'après les
-stages (le calcul est de toute façon refait chaque nuit).
+stages ; il n'est utile que pour vérifier le résultat, car le calcul est refait de lui-même dès
+qu'un stage ou le barème change : la DEVE peut valider un stage dans « Gestion des stages » puis,
+aussitôt, les années ou le supplément, le stage y compte.
 \end{astuce}
 
 \section{Minimums d'ECTS}\label{sec:minimums}
