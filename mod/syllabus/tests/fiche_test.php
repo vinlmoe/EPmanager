@@ -32,6 +32,8 @@ require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
  * @covers    ::syllabus_submit
  * @covers    ::syllabus_review
  * @covers    ::syllabus_list_instances
+ * @covers    ::syllabus_get_published_bulk
+ * @covers    \mod_syllabus\form\fiche_form
  */
 final class fiche_test extends \advanced_testcase {
     /** @var \stdClass */
@@ -212,5 +214,42 @@ final class fiche_test extends \advanced_testcase {
         $this->assertSame(2, $total);
         [, $total] = syllabus_list_instances(['courseids' => [$other->id]]);
         $this->assertSame(1, $total);
+    }
+
+    /**
+     * Le brouillon s'enregistre vide ; la soumission exige objectifs, acquis, contenu, modalités
+     * d'évaluation et au moins une séance (ou du travail personnel).
+     */
+    public function test_submit_requires_essentials(): void {
+        $form = new \mod_syllabus\form\fiche_form(
+            new \moodle_url('/mod/syllabus/edit.php', ['id' => $this->cm->id]),
+            ['teachers' => [], 'sessioncount' => 1, 'canpublish' => false]
+        );
+        $empty = ['id' => $this->cm->id, 'personalhours' => 0, 'sessionrow' => [['sessiontitle' => '', 'sessionduration' => 0]]];
+        $this->assertSame([], $form->validation($empty + ['submitbutton' => 1], []));
+        $errors = $form->validation($empty + ['submitforreview' => 1], []);
+        $this->assertSame(['objectives', 'outcomes', 'content', 'assessment', 'sessionrow[0]'], array_keys($errors));
+        $full = ['objectives' => 'O', 'outcomes' => 'A', 'content' => 'C', 'assessment' => 'E', 'submitforreview' => 1];
+        $this->assertSame([], $form->validation(array_merge($empty, $full, ['personalhours' => 10]), []));
+        $this->assertSame([], $form->validation(array_merge($empty, $full, ['sessionrow' => [['sessiontitle' => 'Cours',
+            'sessionduration' => 2]]]), []));
+    }
+
+    /**
+     * Fiches publiées de plusieurs modules en une lecture : la plus récente, et rien pour un module
+     * sans fiche publiée.
+     */
+    public function test_published_bulk(): void {
+        $this->setAdminUser();
+        $other = $this->getDataGenerator()->create_module('syllabus', ['course' => $this->course->id]);
+        $this->assertSame([], syllabus_get_published_bulk([]));
+        foreach ([1, 2] as $round) {
+            $version = syllabus_start_working($this->syllabus, (int) $this->leader->id);
+            syllabus_save_working($version, (object) ['objectives' => 'Version ' . $round], null, (int) $this->leader->id);
+            syllabus_publish($this->syllabus, syllabus_get_working((int) $this->syllabus->id), (int) $this->deve->id, '');
+        }
+        $published = syllabus_get_published_bulk([(int) $this->syllabus->id, (int) $other->id]);
+        $this->assertSame([(int) $this->syllabus->id], array_keys($published));
+        $this->assertSame('Version 2', $published[$this->syllabus->id]->objectives);
     }
 }

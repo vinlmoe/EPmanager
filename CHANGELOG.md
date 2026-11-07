@@ -3,6 +3,34 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## Modules syllabus 1.4.0 — mod_syllabus, mod_syllabusstaff, mod_syllabusstudent 2026112400 (24 novembre 2026)
+
+Parcours simplifiés après un audit d'ergonomie, et tests à l'échelle d'une école
+(`docs/audit/test-syllabus-charge.pdf`).
+
+- **Étudiants** : formulaire d'évaluation compact (échelles sur une ligne), rappel « une seule
+  réponse », retour à « Mes modules » après l'envoi ; « Mes modules » rangé par année et période ;
+  état « Terminée » au lieu de « Close ».
+- **Enseignants** : la page du module résume « Où en est ce module » (fiche, compétences,
+  questions, évaluation, caractéristiques manquantes) avec un bouton par étape ; brouillon
+  enregistré sans quitter la rédaction ; soumission refusée sans objectifs, acquis, contenu,
+  modalités d'évaluation et séances ; séances balisées, langue préremplie, travail personnel avec
+  les séances ; période choisie parmi celles de l'école ; la DEVE n'est plus proposée comme
+  responsable ni intervenante ; compétences sans tableau en double, domaines visés par leurs
+  sous-compétences ; message des questions figées selon l'état réel ; résultats avec taux et
+  tableau des moyennes ; navigation dans l'ordre du travail ; titres d'onglet distincts.
+- **DEVE** : décision de relecture sous la fiche, rubriques modifiées signalées, retour à
+  « Fiches à relire » ; liste à relire avec responsables et nature de la version ; fenêtre en lot
+  avec ouverture obligatoire et bouton distinct (confirmé) pour retirer l'évaluation, cases
+  grisées hors droits ; suppressions confirmées ; saisie des compétences enchaînée sous le même
+  parent avec code proposé ; matrice « Toutes les années » et couverture des domaines ; modules
+  cliquables dans les résultats comparés.
+- **Performances** : fiches publiées et responsables lus en groupe dans la progression et le
+  livret (trois fois moins de requêtes).
+- 12 tests unitaires de plus (44) ; banc : jeu de données d'une école (60 modules, 1 000
+  étudiants), chronométrage, paliers jusqu'à 400 utilisateurs, endurance, ruée de 1 000
+  évaluations simultanées, traitements lourds simultanés ; scénario de bout en bout 44/44.
+
 ## Modules syllabus 1.3.0 — mod_syllabus, mod_syllabusstaff 2026112300 (23 novembre 2026)
 
 Livret des syllabus et progression des compétences le long du cursus.

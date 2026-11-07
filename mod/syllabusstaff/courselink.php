@@ -55,7 +55,7 @@ if ($frameworkid && optional_param('save', 0, PARAM_BOOL) && confirm_sesskey()) 
     $result = syllabus_set_links($courseid, 0, $frameworkid, optional_param_array('levels', [], PARAM_INT));
     redirect(
         $matrixurl,
-        get_string('competenciessaved', 'mod_syllabus', $result),
+        format_string($target->fullname) . ' : ' . get_string('competenciessaved', 'mod_syllabus', $result),
         null,
         \core\output\notification::NOTIFY_SUCCESS
     );

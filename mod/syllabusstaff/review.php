@@ -33,6 +33,7 @@ require_capability('mod/syllabusstaff:manageall', $context);
 
 [$rows] = syllabus_list_instances(['categoryid' => $instance->categoryid, 'status' => SYLLABUS_STATUS_SUBMITTED]);
 $overview = syllabus_get_overview(array_keys($rows));
+$teachers = syllabus_get_teachers_bulk(array_map('intval', array_keys($rows)));
 
 echo $OUTPUT->header();
 echo syllabusstaff_navlinks($cm, 'review', $canmanageall);
@@ -43,17 +44,32 @@ if (!$rows) {
     echo $OUTPUT->notification(get_string('nothingtoreview', 'mod_syllabusstaff'), 'info');
 } else {
     $table = new html_table();
-    $table->head = [get_string('course'), get_string('module', 'mod_syllabus'), get_string('submittedon', 'mod_syllabusstaff'),
-        get_string('actions')];
+    $table->head = [get_string('module', 'mod_syllabus'), get_string('teachers', 'mod_syllabus'),
+        get_string('version'), get_string('submittedon', 'mod_syllabusstaff'), get_string('actions')];
+    // Après sa décision, la DEVE revient ici.
+    $returnto = $PAGE->url->out_as_local_url(false);
     foreach ($rows as $row) {
-        $working = $overview[(int) $row->id]->working;
-        $table->data[] = [format_string($row->coursename), format_string($row->name),
-            $working ? userdate($working->timesubmitted, get_string('strftimedatetimeshort', 'langconfig')) : '-',
-            html_writer::link(
-                new moodle_url('/mod/syllabus/view.php', ['id' => $row->cmid, 'show' => 'working']),
+        $info = $overview[(int) $row->id];
+        $working = $info->working;
+        $version = $info->published ? get_string('replacesversion', 'mod_syllabusstaff', $info->published->version)
+            : get_string('firstversion', 'mod_syllabusstaff');
+        $action = has_capability('mod/syllabus:manage', context_module::instance($row->cmid))
+            ? html_writer::link(
+                new moodle_url(
+                    '/mod/syllabus/view.php',
+                    ['id' => $row->cmid, 'show' => 'working', 'returnto' => $returnto],
+                    'review'
+                ),
                 get_string('review', 'mod_syllabusstaff'),
                 ['class' => 'btn btn-sm btn-primary']
-            )];
+            ) : html_writer::span(get_string('nomanageright', 'mod_syllabusstaff'), 'small text-muted');
+        $table->data[] = [
+            format_string($row->name) . ($row->code !== '' ? html_writer::div(s($row->code), 'small text-muted') : ''),
+            s(implode(', ', array_map('fullname', $teachers[(int) $row->id]))) ?: '-',
+            $version,
+            $working ? userdate($working->timesubmitted, get_string('strftimedatetimeshort', 'langconfig')) : '-',
+            $action,
+        ];
     }
     echo html_writer::table($table);
 }

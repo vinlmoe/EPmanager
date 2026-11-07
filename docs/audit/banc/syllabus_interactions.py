@@ -270,8 +270,14 @@ u = Web(returned['leaders'][0])
 f = form_with(u.get(f'/mod/syllabus/edit.php?id={returned["cmid"]}').text, 'objectives')
 u.submit(f, {'assessment': 'Examen écrit de 2 h (70 %) et deux contrôles continus (30 %).', 'submitforreview': 'Soumettre'},
          drop=('submitbutton', 'cancel'))
-deve.post(f'/mod/syllabus/view.php?id={returned["cmid"]}&show=working', {'sesskey': deve.sesskey, 'decision': 'publish',
-          'reviewcomment': ''})
+# La dernière fiche est relue comme la DEVE le fait : depuis « Fiches à relire », décision sous la
+# fiche, retour à la liste.
+r = deve.get(f'/mod/syllabusstaff/review.php?id={STAFF}')
+link = html.unescape(re.search(r'href="([^"]*/mod/syllabus/view\.php\?id=' + str(returned['cmid']) + r'[^"]*)"', r.text).group(1))
+page = deve.get(link).text
+expect('decision_sous_la_fiche', 'returnto=' in link and page.index('id="review"') > page.index('Objectifs'))
+r = deve.post(link.split('#')[0], {'sesskey': deve.sesskey, 'decision': 'publish', 'reviewcomment': ''})
+expect('retour_aux_fiches_a_relire', '/mod/syllabusstaff/review.php' in r.url and '(0)' in r.text)
 expect('fiches_publiees', sql(f"select count(*) from mdl_syllabus_version where syllabusid in ({idlist}) "
                               "and status='published'") == '12')
 # 3 bis. Compétences. La DEVE crée le référentiel dans le suivi des modules et en importe les
@@ -369,15 +375,17 @@ counts = {'answered': 0, 'skipped': 0, 'listed': 0}
 def student_evaluates(username):
     u = Web(username)
     r = u.get(f'/mod/syllabusstudent/view.php?id={STUDENT}')
-    links = sorted(set(re.findall(r'href="[^"]*/mod/syllabus/evaluate\.php\?id=(\d+)"', r.text)))
+    # Les liens portent le retour à « Mes modules » (returnto) : l'étudiant y revient après chaque envoi.
+    links = sorted(set(re.findall(r'href="([^"]*/mod/syllabus/evaluate\.php\?id=(\d+)[^"]*)"', r.text)), key=lambda x: x[1])
+    links = list({cmid: html.unescape(url) for url, cmid in links}.items())
     with lock:
         counts['listed'] += len(links)
-    for k, cmid in enumerate(links):
+    for k, (cmid, url) in enumerate(links):
         if random.random() < 0.1:
             with lock:
                 counts['skipped'] += 1
             continue
-        page = u.get(f'/mod/syllabus/evaluate.php?id={cmid}').text
+        page = u.get(url).text
         f = next(x for x in forms(page) if any(n.startswith('_qf__') and 'evaluate_form' in n for n, _ in x['fields']))
         answers = {}
         radios = {}
@@ -393,8 +401,8 @@ def student_evaluates(username):
             if random.random() < 0.4:
                 answers[name] = random.choice(['Plus de cas pratiques.', 'Rythme trop rapide.', 'Très bon module.'])
         r = u.submit(f, dict(answers, submitbutton='Envoyer'), drop=('cancel',))
-        if 'Merci' not in r.text:
-            anomaly(f'{username}: évaluation du cm {cmid} non confirmée')
+        if 'Merci' not in r.text or '/mod/syllabusstudent/view.php' not in r.url:
+            anomaly(f'{username}: évaluation du cm {cmid} non confirmée, ou pas de retour à « Mes modules »')
         else:
             with lock:
                 counts['answered'] += 1
@@ -452,7 +460,8 @@ t = time.time()
 again = deve.get(book + '&selection=all&download=1')
 second = time.time() - t
 prefix = hashlib.sha1(b'all').hexdigest()[:12]
-stored = sql("select count(*) from mdl_files where component='mod_syllabusstaff' and filearea='booklet' "
+stored = sql("select count(*) from mdl_files f join mdl_context x on x.id = f.contextid and x.contextlevel = 70 "
+             f"where x.instanceid = {STAFF} and component='mod_syllabusstaff' and filearea='booklet' "
              f"and filename like '{prefix}-%'")
 expect('livret_conserve', again.content == pdf.content and stored == '1', f'{second:.2f} s, {stored} fichier')
 for selection, wanted in (('y2', [m for m in MODULES if m['studyyear'] == 2]),

@@ -104,13 +104,21 @@ if ($frameworkid) {
         try {
             syllabus_save_comp((object) ['id' => $data->compid, 'frameworkid' => $frameworkid, 'parentid' => $data->parentid,
                 'idnumber' => $data->idnumber, 'name' => $data->name, 'description' => $data->description]);
-            redirect($fwurl, get_string('changessaved'), null, \core\output\notification::NOTIFY_SUCCESS);
+            // Après un ajout, le formulaire reste ouvert sous le même parent pour enchaîner les sœurs.
+            $next = $data->compid ? $fwurl : new moodle_url($fwurl, ['parentid' => $data->parentid], 'compform');
+            redirect($next, get_string('changessaved'), null, \core\output\notification::NOTIFY_SUCCESS);
         } catch (moodle_exception $e) {
             \core\notification::error($e->getMessage());
         }
     }
+    $parentid = optional_param('parentid', 0, PARAM_INT);
     $defaults = ['id' => $cm->id, 'frameworkid' => $frameworkid, 'compid' => 0, 'action' => 'editcomp',
-        'parentid' => optional_param('parentid', 0, PARAM_INT)];
+        'parentid' => $parentid];
+    // Code proposé pour une nouvelle sous-compétence : celui du parent, suivi du rang suivant (C1.4).
+    if ($parentid && isset($tree[$parentid])) {
+        $children = count(array_filter($tree, fn($c) => (int) $c->parentid === $parentid));
+        $defaults['idnumber'] = $tree[$parentid]->idnumber . '.' . ($children + 1);
+    }
     if ($compid && isset($tree[$compid])) {
         $defaults = array_merge($defaults, ['compid' => $compid, 'parentid' => $tree[$compid]->parentid,
             'idnumber' => $tree[$compid]->idnumber, 'name' => $tree[$compid]->name, 'description' => $tree[$compid]->description]);
@@ -154,8 +162,12 @@ if (!$frameworkid) {
                 html_writer::link(new moodle_url($baseurl, ['frameworkid' => $framework->id]), get_string(
                     'open',
                     'mod_syllabusstaff'
-                )) . ' · ' . html_writer::link(new moodle_url($baseurl, ['action' => 'deleteframework',
-                    'target' => $framework->id, 'sesskey' => sesskey()]), get_string('delete'), ['class' => 'text-danger']),
+                )) . ' · ' . $OUTPUT->action_link(new moodle_url($baseurl, ['action' => 'deleteframework',
+                    'target' => $framework->id, 'sesskey' => sesskey()]), get_string('delete'), new confirm_action(get_string(
+                        'confirmdeleteframework',
+                        'mod_syllabusstaff',
+                        format_string($framework->name)
+                    )), ['class' => 'text-danger']),
             ];
         }
         echo html_writer::table($table);
@@ -178,23 +190,29 @@ if ($tree) {
     $table = new html_table();
     $table->attributes['class'] = 'generaltable syllabusstaff-tree';
     $table->head = [get_string('code', 'mod_syllabusstaff'), get_string('competency', 'mod_syllabus'), get_string('actions')];
+    $siblings = [];
+    foreach ($tree as $comp) {
+        $siblings[(int) $comp->parentid][] = (int) $comp->id;
+    }
     foreach ($tree as $comp) {
         $act = fn($a, $label, $extra = []) => html_writer::link(new moodle_url($fwurl, ['action' => $a, 'compid' => $comp->id,
             'sesskey' => sesskey()] + $extra), $label);
-        $links = [
+        $rank = array_search((int) $comp->id, $siblings[(int) $comp->parentid], true);
+        $links = array_filter([
             html_writer::link(new moodle_url($fwurl, ['compid' => $comp->id]) . '#compform', get_string('edit')),
             html_writer::link(new moodle_url($fwurl, ['parentid' => $comp->id]) . '#compform', get_string(
                 'addchild',
                 'mod_syllabusstaff'
             )),
-            $act('up', get_string('moveup', 'syllabusstaff')),
-            $act('down', get_string('movedown', 'syllabusstaff')),
-            html_writer::link(
+            $rank > 0 ? $act('up', get_string('moveup', 'syllabusstaff')) : '',
+            $rank < count($siblings[(int) $comp->parentid]) - 1 ? $act('down', get_string('movedown', 'syllabusstaff')) : '',
+            $OUTPUT->action_link(
                 new moodle_url($fwurl, ['action' => 'deletecomp', 'compid' => $comp->id, 'sesskey' => sesskey()]),
                 get_string('delete'),
+                new confirm_action(get_string('confirmdeletecomp', 'mod_syllabusstaff', format_string($comp->name))),
                 ['class' => 'text-danger']
             ),
-        ];
+        ]);
         $name = html_writer::span(format_string($comp->name), $comp->isleaf ? '' : 'font-weight-bold');
         $table->data[] = [s($comp->idnumber), html_writer::div($name, '', ['style' => 'padding-left:'
             . (1.5 * $comp->depth) . 'rem']), implode(' · ', $links)];
@@ -206,9 +224,14 @@ if ($tree) {
 
 echo html_writer::tag('h5', get_string($compid ? 'editcompetency' : 'addcompetency', 'mod_syllabusstaff'), ['id' => 'compform']);
 $compform->display();
-echo html_writer::tag('h5', get_string('importcompetencies', 'mod_syllabusstaff'));
+// Import et réglages du référentiel, repliés : ils servent moins souvent que l'arbre.
+echo html_writer::start_tag('details', ['class' => 'mb-3', 'open' => $tree ? null : 'open']);
+echo html_writer::tag('summary', html_writer::tag('strong', get_string('importcompetencies', 'mod_syllabusstaff')));
 echo html_writer::tag('p', get_string('importcompetencies_help', 'mod_syllabusstaff'), ['class' => 'small text-muted']);
 $importform->display();
-echo html_writer::tag('h5', get_string('editframework', 'mod_syllabusstaff'));
+echo html_writer::end_tag('details');
+echo html_writer::start_tag('details', ['class' => 'mb-3']);
+echo html_writer::tag('summary', html_writer::tag('strong', get_string('editframework', 'mod_syllabusstaff')));
 $fwform->display();
+echo html_writer::end_tag('details');
 echo $OUTPUT->footer();

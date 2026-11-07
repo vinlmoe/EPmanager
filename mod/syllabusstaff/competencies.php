@@ -75,9 +75,22 @@ $matrix = $frameworkid ? syllabus_competency_matrix($frameworkid, array_keys($co
 $symbol = function (?stdClass $cell): string {
     return $cell ? get_string('levelshort_' . $cell->level, 'mod_syllabus') . ($cell->coursewide ? '*' : '') : '';
 };
+// Couverture : cours qui visent la compétence ; pour un domaine, cours qui visent le domaine ou
+// l'une de ses sous-compétences.
+// Descendants lus dans l'arbre déjà chargé (dans l'ordre de l'arbre, les enfants suivent leur parent).
+$descendants = [];
+foreach (array_reverse($tree, true) as $compid => $comp) {
+    $descendants[$compid] = array_merge([$compid], $descendants[$compid] ?? []);
+    if ((int) $comp->parentid) {
+        $descendants[(int) $comp->parentid] = array_merge($descendants[(int) $comp->parentid] ?? [], $descendants[$compid]);
+    }
+}
 $coverage = [];
 foreach ($tree as $compid => $comp) {
-    $coverage[$compid] = count(array_filter($columns, fn($c) => isset($matrix[$c->courseid][$compid])));
+    $ids = $descendants[$compid];
+    $coverage[$compid] = count(array_filter($columns, function ($c) use ($matrix, $ids) {
+        return (bool) array_intersect_key($matrix[$c->courseid] ?? [], array_flip($ids));
+    }));
 }
 
 if ($download === 'csv' && $frameworkid) {
@@ -126,7 +139,8 @@ echo html_writer::div($OUTPUT->single_select(
         ['frameworkid' => $frameworkid]
     ),
     'studyyear',
-    syllabus_studyyear_options(),
+    // 0 : toutes les années (le filtre ne retient pas les modules sans année).
+    [0 => get_string('allyears', 'mod_syllabusstaff')] + array_slice(syllabus_studyyear_options(), 1, null, true),
     $studyyear,
     null,
     null,

@@ -76,6 +76,7 @@ Voir [`mod/ep/INSTALL.md`](mod/ep/INSTALL.md) puis
 | `docs/audit/test-de-charge.pdf`, `docs/audit/test-de-concurrence.pdf` | Mesures sur une promotion de 2 000 étudiants |
 | `docs/audit/test-des-interactions.pdf` | Une promotion de 1 000 étudiants de l'inscription au supplément émis, par l'interface web, avec contrôles en base |
 | `docs/audit/test-syllabus.pdf` | Modules syllabus de bout en bout : 12 modules, compétences, 200 étudiants, plus de 2 000 évaluations |
+| `docs/audit/test-syllabus-charge.pdf` | Modules syllabus à l'échelle d'une école (60 modules, 1 000 étudiants) : temps des pages, stress, ruée, traitements lourds, audit des parcours |
 | `docs/audit/test-de-stress.pdf` | Montée en charge jusqu'à saturation, endurance et traitements lourds sur six promotions |
 | `docs/plan-mise-a-niveau.pdf` | Plan de la mise à niveau 1.0 |
 | `CHANGELOG.md` | Historique des versions |

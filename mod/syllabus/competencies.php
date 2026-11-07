@@ -64,14 +64,21 @@ $linked = syllabus_get_module_competencies($syllabus);
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('competencies', 'mod_syllabus'));
 echo html_writer::tag('p', get_string('competencies_help', 'mod_syllabus'));
-echo $OUTPUT->heading(get_string('targetedcompetencies', 'mod_syllabus', count($linked)), 4);
-echo syllabus_render_competencies($linked);
+// Qui peut lier voit les niveaux dans le formulaire : le tableau ne se répète pas au-dessus.
+if (!$canlink || !$frameworkid) {
+    echo $OUTPUT->heading(get_string('targetedcompetencies', 'mod_syllabus', count($linked)), 4);
+    echo syllabus_render_competencies($linked);
+}
 
 if ($canlink) {
     if (!$frameworks) {
         echo $OUTPUT->notification(get_string('noframeworks', 'mod_syllabus'), 'info');
     } else {
-        echo $OUTPUT->heading(get_string('linkcompetencies', 'mod_syllabus'), 4);
+        echo $OUTPUT->heading(get_string('linkcompetencies', 'mod_syllabus') . ' (' . get_string(
+            'competenciesn',
+            'mod_syllabus',
+            count($linked)
+        ) . ')', 4);
         $options = [0 => get_string('chooseframework', 'mod_syllabus')] + array_map(
             fn($f) => format_string($f->name),
             $frameworks

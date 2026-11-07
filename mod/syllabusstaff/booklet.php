@@ -48,13 +48,15 @@ if (!in_array($selection, $valid, true)) {
     $selection = 'all';
 }
 $modules = syllabus_filter_by_selection($all, $selection);
-$teachers = syllabus_get_teachers_bulk(array_map(fn($m) => (int) $m->id, $modules));
+$ids = array_map(fn($m) => (int) $m->id, $modules);
+$teachers = syllabus_get_teachers_bulk($ids);
+$published = syllabus_get_published_bulk($ids);
 foreach ($modules as $module) {
-    $module->published = syllabus_get_published((int) $module->id);
+    $module->published = $published[(int) $module->id] ?? null;
     $module->teachers = $teachers[(int) $module->id] ?? [];
 }
 
-if ($download && $modules) {
+if ($download && array_filter($modules, fn($m) => $m->published)) {
     // Un livret de tout le cursus compte des centaines de pages.
     core_php_time_limit::raise();
     raise_memory_limit(MEMORY_EXTRA);
@@ -88,13 +90,17 @@ if (!$modules) {
     echo $OUTPUT->footer();
     exit;
 }
-$published = count(array_filter($modules, fn($m) => $m->published));
-echo html_writer::tag('p', get_string('bookletcount', 'mod_syllabusstaff', (object) ['published' => $published,
+$publishedcount = count(array_filter($modules, fn($m) => $m->published));
+echo html_writer::tag('p', get_string('bookletcount', 'mod_syllabusstaff', (object) ['published' => $publishedcount,
     'total' => count($modules)]));
-echo html_writer::link(
+echo $publishedcount ? html_writer::link(
     new moodle_url($PAGE->url, ['download' => 1]),
     get_string('bookletdownload', 'mod_syllabusstaff'),
-    ['class' => 'btn btn-primary mb-3' . ($published ? '' : ' disabled')]
+    ['class' => 'btn btn-primary mb-3']
+) : html_writer::span(
+    get_string('bookletdownload', 'mod_syllabusstaff'),
+    'btn btn-primary disabled mb-3',
+    ['aria-disabled' => 'true']
 );
 
 $table = new html_table();

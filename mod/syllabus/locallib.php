@@ -245,13 +245,24 @@ function syllabus_get_teachers_bulk(array $syllabusids): array {
 }
 
 /**
- * Personnes qui peuvent être désignées responsables : inscrits au cours avec mod/syllabus:edit.
+ * Personnes qui peuvent être désignées responsables : inscrits au cours avec mod/syllabus:edit,
+ * hors la DEVE.
  *
  * @param context_module $context
  * @return array userid => stdClass user
  */
 function syllabus_potential_teachers(context_module $context): array {
-    return get_enrolled_users($context, 'mod/syllabus:edit', 0, 'u.*', 'u.lastname, u.firstname', 0, 0, true);
+    global $DB;
+    $users = get_enrolled_users($context, 'mod/syllabus:edit', 0, 'u.*', 'u.lastname, u.firstname', 0, 0, true);
+    // La DEVE (gestionnaire) n'est pas proposée, sauf si elle est déjà responsable de ce module.
+    $current = $DB->get_fieldset_select('syllabus_teacher', 'userid', 'syllabusid = ?', [$context->instanceid > 0
+        ? (int) $DB->get_field('course_modules', 'instance', ['id' => $context->instanceid]) : 0]);
+    foreach (array_keys(get_users_by_capability($context, 'mod/syllabus:manage', 'u.id')) as $managerid) {
+        if (isset($users[$managerid]) && !in_array($managerid, array_map('intval', $current), true)) {
+            unset($users[$managerid]);
+        }
+    }
+    return $users;
 }
 
 /**
@@ -302,6 +313,27 @@ function syllabus_get_published(int $syllabusid): ?stdClass {
         1
     );
     return $records ? reset($records) : null;
+}
+
+/**
+ * Versions publiées de plusieurs modules, en une requête.
+ *
+ * @param int[] $syllabusids
+ * @return array syllabusid => version publiée (les modules sans fiche publiée n'y sont pas)
+ */
+function syllabus_get_published_bulk(array $syllabusids): array {
+    global $DB;
+    if (!$syllabusids) {
+        return [];
+    }
+    [$insql, $params] = $DB->get_in_or_equal(array_values($syllabusids), SQL_PARAMS_NAMED);
+    $params['status'] = SYLLABUS_STATUS_PUBLISHED;
+    $published = [];
+    // Tri par version : la plus récente l'emporte si une ancienne était restée publiée.
+    foreach ($DB->get_records_select('syllabus_version', "syllabusid $insql AND status = :status", $params, 'version ASC') as $v) {
+        $published[(int) $v->syllabusid] = $v;
+    }
+    return $published;
 }
 
 /**
@@ -1377,7 +1409,12 @@ function syllabus_page_init($cm, string $path, array $params = []): array {
     $context = context_module::instance($cm->id);
     require_capability('mod/syllabus:view', $context);
     $PAGE->set_url(new moodle_url($path, ['id' => $cm->id] + $params));
-    $PAGE->set_title(format_string($syllabus->name));
+    // Onglets du navigateur distincts : le nom de la page, puis celui du module.
+    $titles = ['edit' => 'editsyllabus', 'evaluation' => 'evaluation', 'evaluate' => 'evaluatemodule', 'results' => 'results',
+        'competencies' => 'competencies', 'teachers' => 'teachers'];
+    $page = basename($path, '.php');
+    $PAGE->set_title(isset($titles[$page]) ? get_string($titles[$page], 'mod_syllabus') . moodle_page::TITLE_SEPARATOR
+        . format_string($syllabus->name) : format_string($syllabus->name));
     $PAGE->set_heading(format_string($course->fullname));
     $PAGE->set_context($context);
     return [$cm, $course, $syllabus, $context, syllabus_get_rights($syllabus, $context)];
@@ -2010,15 +2047,24 @@ function syllabus_render_competencies(array $competencies): string {
  * @return string HTML
  */
 function syllabus_render_link_form(moodle_url $action, int $frameworkid, array $linked): string {
+    $submit = html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('savechanges'),
+        'class' => 'btn btn-primary']);
+    // Le bouton est aussi en tête : l'arbre peut compter des dizaines de lignes.
     $html = html_writer::start_tag('form', ['method' => 'post', 'action' => $action->out(false)])
         . html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()])
-        . html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'save', 'value' => 1]);
+        . html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'save', 'value' => 1])
+        . html_writer::div($submit, 'mb-2');
     $table = new html_table();
     $table->attributes['class'] = 'generaltable syllabus-competency-tree';
     $table->head = [get_string('competency', 'mod_syllabus'), get_string('level', 'mod_syllabus')];
     foreach (syllabus_get_framework_tree($frameworkid) as $competency) {
         $label = html_writer::span(format_string($competency->name), $competency->isleaf ? '' : 'font-weight-bold')
             . ' ' . html_writer::span(s($competency->idnumber), 'small text-muted');
+        // Un domaine se vise par ses sous-compétences ; un lien direct déjà posé reste modifiable.
+        if (!$competency->isleaf && empty($linked[$competency->id])) {
+            $table->data[] = [html_writer::div($label, '', ['style' => 'padding-left:' . (1.5 * $competency->depth) . 'rem']), ''];
+            continue;
+        }
         $select = html_writer::select(
             syllabus_competency_levels(true),
             'levels[' . $competency->id . ']',
@@ -2030,8 +2076,7 @@ function syllabus_render_link_form(moodle_url $action, int $frameworkid, array $
         $table->data[] = [html_writer::div($label, '', ['style' => 'padding-left:' . (1.5 * $competency->depth) . 'rem']),
             $select];
     }
-    return $html . html_writer::table($table) . html_writer::empty_tag('input', ['type' => 'submit',
-        'value' => get_string('savechanges'), 'class' => 'btn btn-primary']) . html_writer::end_tag('form');
+    return $html . html_writer::table($table) . $submit . html_writer::end_tag('form');
 }
 
 // Cursus : périodes, livret, progression d'une compétence.

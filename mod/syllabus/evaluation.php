@@ -84,14 +84,26 @@ if (!$frozen) {
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('evaluation', 'mod_syllabus'));
-echo html_writer::tag('p', syllabus_eval_badge($syllabus) . ' ' . s(syllabus_eval_window_label($syllabus)));
+$state = syllabus_eval_state($syllabus);
+$resultslink = $rights->canseeresults && $state !== SYLLABUS_EVAL_NONE ? ' ' . html_writer::link(
+    new moodle_url('/mod/syllabus/results.php', ['id' => $cm->id]),
+    get_string('results', 'mod_syllabus'),
+    ['class' => 'btn btn-sm btn-secondary ml-2']
+) : '';
+echo html_writer::tag('p', syllabus_eval_badge($syllabus) . ' ' . s(syllabus_eval_window_label($syllabus)) . $resultslink);
 echo html_writer::tag('p', get_string('evaluation_help', 'mod_syllabus'));
 
 echo $OUTPUT->heading(get_string('evalwindowheading', 'mod_syllabus'), 4);
 $windowform->display();
 
 if ($frozen) {
-    echo $OUTPUT->notification(get_string('frozennotice', 'mod_syllabus'), 'info');
+    // Le message suit l'état réel : ouverte, terminée, ou repoussée après une première ouverture.
+    $notice = match ($state) {
+        SYLLABUS_EVAL_CLOSED => 'frozennotice_closed',
+        SYLLABUS_EVAL_OPEN => 'frozennotice',
+        default => 'frozennotice_other',
+    };
+    echo $OUTPUT->notification(get_string($notice, 'mod_syllabus'), 'info');
     echo $OUTPUT->heading(get_string('evalquestions', 'mod_syllabus'), 4);
     echo syllabus_render_questions(syllabus_get_module_questions((int) $syllabus->id));
 } else {
@@ -103,26 +115,30 @@ if ($frozen) {
     $actions = function ($question, $index, $count) use ($baseurl, $OUTPUT) {
         $links = [];
         $links[] = html_writer::link(
-            new moodle_url($baseurl, ['action' => 'editquestion', 'questionid' => $question->id]),
+            new moodle_url($baseurl, ['action' => 'editquestion', 'questionid' => $question->id], 'questionform'),
             get_string('edit')
         );
         if ($index > 0) {
             $links[] = html_writer::link(new moodle_url($baseurl, ['action' => 'up', 'questionid' => $question->id,
-                'sesskey' => sesskey()]), get_string('moveup'));
+                'sesskey' => sesskey()]), get_string('moveup', 'mod_syllabus'));
         }
         if ($index < $count - 1) {
             $links[] = html_writer::link(new moodle_url($baseurl, ['action' => 'down', 'questionid' => $question->id,
-                'sesskey' => sesskey()]), get_string('movedown'));
+                'sesskey' => sesskey()]), get_string('movedown', 'mod_syllabus'));
         }
-        $links[] = html_writer::link(new moodle_url($baseurl, ['action' => 'delete', 'questionid' => $question->id,
-            'sesskey' => sesskey()]), get_string('delete'), ['class' => 'text-danger']);
+        $links[] = $OUTPUT->action_link(new moodle_url($baseurl, ['action' => 'delete', 'questionid' => $question->id,
+            'sesskey' => sesskey()]), get_string('delete'), new confirm_action(get_string(
+                'confirmdeletequestion',
+                'mod_syllabus',
+                format_string($question->text)
+            )), ['class' => 'text-danger']);
         return implode(' · ', $links);
     };
     echo syllabus_render_questions(syllabus_get_module_questions((int) $syllabus->id, 'teacher'), $actions);
     echo $OUTPUT->heading(get_string(
         $action === 'editquestion' && $questionid ? 'editquestion' : 'addquestion',
         'mod_syllabus'
-    ), 5);
+    ), 5, '', 'questionform');
     $questionform->display();
 }
 echo $OUTPUT->footer();

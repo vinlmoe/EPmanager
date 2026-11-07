@@ -45,12 +45,24 @@ require_capability('mod/syllabusstaff:manageall', $context);
 // Fenêtre d'évaluation en lot.
 if (optional_param('setwindow', 0, PARAM_BOOL) && confirm_sesskey()) {
     $ids = optional_param_array('syllabusids', [], PARAM_INT);
-    $open = optional_param('evalopen', '', PARAM_RAW);
-    $close = optional_param('evalclose', '', PARAM_RAW);
-    $open = syllabusstaff_parse_datetime($open);
-    $close = syllabusstaff_parse_datetime($close);
-    if ($close && (!$open || $close <= $open)) {
-        redirect($PAGE->url, get_string('errorcloseafteropen', 'mod_syllabus'), null, \core\output\notification::NOTIFY_ERROR);
+    // Deux boutons : « Appliquer » fixe la fenêtre (ouverture obligatoire) ; « Retirer » enlève
+    // l'évaluation des modules cochés, après confirmation dans le navigateur.
+    $remove = optional_param('removewindow', '', PARAM_RAW) !== '';
+    $open = $remove ? 0 : syllabusstaff_parse_datetime(optional_param('evalopen', '', PARAM_RAW));
+    $close = $remove ? 0 : syllabusstaff_parse_datetime(optional_param('evalclose', '', PARAM_RAW));
+    $error = match (true) {
+        !$ids => 'errornoselection',
+        !$remove && !$open => 'erroropenrequired',
+        $close && $close <= $open => 'errorcloseafteropen',
+        default => '',
+    };
+    if ($error !== '') {
+        redirect(
+            $PAGE->url,
+            get_string($error, $error === 'errorcloseafteropen' ? 'mod_syllabus' : 'mod_syllabusstaff'),
+            null,
+            \core\output\notification::NOTIFY_ERROR
+        );
     }
     $result = syllabusstaff_set_windows($ids, $open, $close);
     redirect(
@@ -85,12 +97,17 @@ if ($rows) {
         . html_writer::empty_tag('input', ['type' => 'datetime-local', 'name' => 'evalclose', 'id' => 'bulkclose',
             'class' => 'form-control mr-3'])
         . html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('setwindow', 'mod_syllabusstaff'),
-            'class' => 'btn btn-primary']);
+            'class' => 'btn btn-primary mr-2'])
+        . html_writer::empty_tag('input', ['type' => 'submit', 'name' => 'removewindow',
+            'value' => get_string('removewindow', 'mod_syllabusstaff'), 'class' => 'btn btn-outline-danger',
+            'id' => 'syllabusstaff-removewindow']);
     echo $OUTPUT->box(html_writer::tag('h5', get_string('bulkwindow', 'mod_syllabusstaff'))
         . html_writer::tag('p', get_string('bulkwindow_help', 'mod_syllabusstaff'), ['class' => 'small text-muted'])
         . html_writer::div($fields, 'form-inline'), 'generalbox');
 }
 echo html_writer::end_tag('form');
 $PAGE->requires->js_amd_inline("document.getElementById('syllabusstaff-selectall')?.addEventListener('change', e => "
-    . "document.querySelectorAll('.syllabusstaff-select').forEach(c => { c.checked = e.target.checked; }));");
+    . "document.querySelectorAll('.syllabusstaff-select:not([disabled])').forEach(c => { c.checked = e.target.checked; }));"
+    . "document.getElementById('syllabusstaff-removewindow')?.addEventListener('click', e => { if (!window.confirm("
+    . json_encode(get_string('removewindowconfirm', 'mod_syllabusstaff')) . ")) { e.preventDefault(); } });");
 echo $OUTPUT->footer();

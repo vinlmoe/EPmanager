@@ -30,6 +30,8 @@ require_once($CFG->dirroot . '/mod/syllabusstaff/locallib.php');
  * @covers    ::syllabusstaff_set_windows
  * @covers    ::syllabus_common_means
  * @covers    ::syllabusstaff_booklet_file
+ * @covers    ::syllabusstaff_scope_courses
+ * @covers    ::syllabusstaff_navlinks
  */
 final class staff_test extends \advanced_testcase {
     /**
@@ -127,5 +129,44 @@ final class staff_test extends \advanced_testcase {
         $this->assertSame('PDF 3', $changed->get_content());
         $files = get_file_storage()->get_area_files($context->id, 'mod_syllabusstaff', 'booklet', 0, 'id', false);
         $this->assertCount(2, $files);
+    }
+
+    /**
+     * Périmètre : la catégorie et ses sous-catégories, ou tout le site sans la page d'accueil.
+     */
+    public function test_scope(): void {
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $cursus = $gen->create_category();
+        $year = $gen->create_category(['parent' => $cursus->id]);
+        $elsewhere = $gen->create_category();
+        $a = $gen->create_course(['category' => $cursus->id]);
+        $b = $gen->create_course(['category' => $year->id]);
+        $c = $gen->create_course(['category' => $elsewhere->id]);
+        $scoped = (object) ['categoryid' => $cursus->id];
+        $ids = array_map('intval', array_keys(syllabusstaff_scope_courses($scoped)));
+        sort($ids);
+        $this->assertSame([(int) $a->id, (int) $b->id], $ids);
+        $this->assertTrue(syllabusstaff_course_in_scope($scoped, $b));
+        $this->assertFalse(syllabusstaff_course_in_scope($scoped, $c));
+        $site = array_keys(syllabusstaff_scope_courses((object) ['categoryid' => 0]));
+        $this->assertNotContains(SITEID, $site);
+        $this->assertContains((int) $c->id, array_map('intval', $site));
+    }
+
+    /**
+     * Onglets : ceux de la DEVE seulement avec le droit de tout gérer.
+     */
+    public function test_navlinks(): void {
+        $cm = (object) ['id' => 7];
+        $teacher = syllabusstaff_navlinks($cm, 'view', false);
+        $deve = syllabusstaff_navlinks($cm, 'view', true);
+        foreach (['view.php', 'competencies.php', 'progression.php', 'booklet.php'] as $page) {
+            $this->assertStringContainsString($page, $teacher);
+        }
+        foreach (['all.php', 'review.php', 'results.php', 'referential.php', 'frameworks.php'] as $page) {
+            $this->assertStringNotContainsString($page, $teacher);
+            $this->assertStringContainsString($page, $deve);
+        }
     }
 }

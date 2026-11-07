@@ -24,9 +24,15 @@ if (($argv[2] ?? '') === 'reset') {
     foreach (get_coursemodules_in_course('syllabusstudent', $site['courseid']) as $cm) {
         course_delete_module($cm->id);
     }
-    $DB->delete_records('syllabus_complink');
-    $DB->delete_records('syllabus_comp');
-    $DB->delete_records('syllabus_framework');
+    // Seul le référentiel du scénario est effacé : celui du jeu de données à l'échelle
+    // (syllabus_charge_setup.php) reste. Les types et questions communes, communs au site, sont
+    // recréés par le scénario : le jeu à l'échelle se génère donc après lui.
+    if ($fw = $DB->get_record('syllabus_framework', ['idnumber' => 'REFVET'])) {
+        $DB->delete_records_select('syllabus_complink', 'compid IN (SELECT id FROM {syllabus_comp} WHERE frameworkid = ?)',
+            [$fw->id]);
+        $DB->delete_records('syllabus_comp', ['frameworkid' => $fw->id]);
+        $DB->delete_records('syllabus_framework', ['id' => $fw->id]);
+    }
     $DB->delete_records('syllabus_question', ['syllabusid' => 0]);
     $DB->delete_records('syllabus_type');
     echo "ok\n";

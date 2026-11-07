@@ -53,6 +53,8 @@ if (!$potential) {
     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'save', 'value' => 1]);
     $table = new html_table();
     $table->head = [get_string('teacherselect', 'mod_syllabus'), get_string('fullname'), get_string('email')];
+    // Les responsables actuels en tête.
+    $potential = array_filter($potential, fn($u) => isset($current[$u->id])) + $potential;
     foreach ($potential as $user) {
         $table->data[] = [
             html_writer::checkbox(

@@ -26,10 +26,17 @@ require('../../config.php');
 require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
 
 $id = required_param('id', PARAM_INT);
+// Page d'où vient l'étudiant (« Mes modules ») : il y revient après l'envoi pour évaluer le suivant.
+$returnto = optional_param('returnto', '', PARAM_LOCALURL);
 $cm = get_coursemodule_from_id('syllabus', $id, 0, false, MUST_EXIST);
 require_login($cm->course, true, $cm);
-[$cm, $course, $syllabus, $context, $rights] = syllabus_page_init($cm, '/mod/syllabus/evaluate.php');
+[$cm, $course, $syllabus, $context, $rights] = syllabus_page_init(
+    $cm,
+    '/mod/syllabus/evaluate.php',
+    $returnto !== '' ? ['returnto' => $returnto] : []
+);
 $viewurl = new moodle_url('/mod/syllabus/view.php', ['id' => $cm->id]);
+$backurl = $returnto !== '' ? new moodle_url($returnto) : $viewurl;
 
 $problem = syllabus_evaluation_problem($syllabus, $context, (int) $USER->id);
 if ($problem !== null) {
@@ -49,7 +56,7 @@ if (!$questions) {
 $mform = new \mod_syllabus\form\evaluate_form($PAGE->url, ['questions' => $questions]);
 $mform->set_data(['id' => $cm->id]);
 if ($mform->is_cancelled()) {
-    redirect($viewurl);
+    redirect($backurl);
 } else if ($data = $mform->get_data()) {
     $answers = [];
     foreach ($questions as $question) {
@@ -60,7 +67,7 @@ if ($mform->is_cancelled()) {
     }
     $errors = syllabus_submit_response($syllabus, $context, (int) $USER->id, $answers);
     if (!$errors) {
-        redirect($viewurl, get_string('evalthanks', 'mod_syllabus'), null, \core\output\notification::NOTIFY_SUCCESS);
+        redirect($backurl, get_string('evalthanks', 'mod_syllabus'), null, \core\output\notification::NOTIFY_SUCCESS);
     }
     \core\notification::error(get_string('evalerrors', 'mod_syllabus'));
 }

@@ -44,3 +44,4 @@ $string['scope_help'] = 'Course category whose modules are shown (subcategories 
 $string['syllabusstudent:addinstance'] = 'Add a "My modules" activity';
 $string['syllabusstudent:view'] = 'See one\'s modules';
 $string['todo'] = 'Evaluations to do ({$a})';
+$string['allmymodules'] = 'All my modules ({$a})';

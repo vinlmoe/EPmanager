@@ -47,14 +47,16 @@ $overview = syllabus_get_overview($ids);
 // Colonnes : questions communes à échelle (même actives ou non, pour les évaluations passées).
 $columns = array_filter(syllabus_get_common_questions(), fn($q) => $q->kind === 'scale');
 
-$head = [get_string('course'), get_string('module', 'mod_syllabus'), get_string('responses', 'mod_syllabusstaff')];
+$head = [get_string('module', 'mod_syllabus'), get_string('responses', 'mod_syllabusstaff')];
 foreach (array_values($columns) as $index => $question) {
     $head[] = 'Q' . ($index + 1);
 }
 $data = [];
 foreach ($rows as $row) {
-    $line = [format_string($row->coursename), format_string($row->name), $overview[(int) $row->id]->responses . ' / '
-        . syllabus_count_eligible(context_module::instance($row->cmid))];
+    // Le nom du module ouvre ses résultats détaillés.
+    $line = [html_writer::link(new moodle_url('/mod/syllabus/results.php', ['id' => $row->cmid]), format_string($row->name))
+        . ($row->code !== '' ? ' ' . html_writer::span(s($row->code), 'small text-muted') : ''),
+        $overview[(int) $row->id]->responses . ' / ' . syllabus_count_eligible(context_module::instance($row->cmid))];
     foreach ($columns as $question) {
         $mean = $means[(int) $row->id][(int) $question->id] ?? null;
         $line[] = $mean === null ? '-' : syllabus_format_number($mean);
@@ -65,7 +67,7 @@ foreach ($rows as $row) {
 if ($download === 'csv') {
     $csv = new csv_export_writer('semicolon');
     $csv->set_filename('evaluations-modules');
-    $csv->add_data(array_merge(array_slice($head, 0, 3), array_map(fn($q) => $q->text, array_values($columns))));
+    $csv->add_data(array_merge(array_slice($head, 0, 2), array_map(fn($q) => $q->text, array_values($columns))));
     foreach ($data as $line) {
         $csv->add_data(array_map(fn($cell) => html_entity_decode(strip_tags((string) $cell), ENT_QUOTES, 'UTF-8'), $line));
     }

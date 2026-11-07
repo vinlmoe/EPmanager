@@ -74,12 +74,16 @@ if ($comp) {
             $coursewide[(int) $link->courseid][] = $link;
         }
     }
+    $linked = array_keys($bymodule);
+    $published = syllabus_get_published_bulk($linked);
+    $teachers = syllabus_get_teachers_bulk($linked);
     foreach ($rows as $row) {
         if (empty($bymodule[(int) $row->id])) {
             continue;
         }
         $row->links = $bymodule[(int) $row->id];
-        $row->published = syllabus_get_published((int) $row->id);
+        $row->published = $published[(int) $row->id] ?? null;
+        $row->teachers = $teachers[(int) $row->id] ?? [];
         [$key] = syllabus_period_of($row);
         $periods[$key]->modules[] = $row;
         foreach ($row->links as $link) {
@@ -250,10 +254,7 @@ foreach ($periods as $period) {
         }
         $body = html_writer::div($title . ' ' . $badges, 'font-weight-bold mb-1')
             . html_writer::div(get_string('ectsn', 'mod_syllabusstaff', syllabus_format_number($module->ects))
-                . ' · ' . s(implode(', ', array_map(
-                    'fullname',
-                    syllabus_get_teachers((int) $module->id)
-                ))), 'small text-muted mb-2');
+                . ' · ' . s(implode(', ', array_map('fullname', $module->teachers))), 'small text-muted mb-2');
         if ($module->published) {
             $text = '';
             foreach ($excerpt as $field) {

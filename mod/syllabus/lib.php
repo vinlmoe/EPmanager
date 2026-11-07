@@ -178,45 +178,31 @@ function syllabus_extend_settings_navigation(settings_navigation $settingsnav, n
         return;
     }
     $rights = syllabus_get_rights($syllabus, $cm->context);
+    // Dans l'ordre du travail du responsable : rédiger, lier les compétences, préparer
+    // l'évaluation, en lire les résultats ; les responsables en dernier (réglage ponctuel).
+    $pages = [];
     if ($rights->canedit) {
-        $node->add(
-            get_string('editsyllabus', 'mod_syllabus'),
-            new moodle_url('/mod/syllabus/edit.php', ['id' => $cm->id]),
-            navigation_node::TYPE_SETTING,
-            null,
-            'syllabusedit'
-        );
+        $working = syllabus_get_working((int) $syllabus->id);
+        $pages['edit'] = $working ? 'continueediting' : (syllabus_get_published((int) $syllabus->id) ? 'proposeupdate'
+            : 'writefiche');
+    }
+    $pages['competencies'] = 'competencies';
+    if ($rights->canedit || $rights->canmanage) {
+        $pages['evaluation'] = 'evaluation';
+    }
+    if ($rights->canseeresults) {
+        $pages['results'] = 'results';
     }
     if ($rights->canedit || $rights->canmanage) {
-        $node->add(
-            get_string('teachers', 'mod_syllabus'),
-            new moodle_url('/mod/syllabus/teachers.php', ['id' => $cm->id]),
-            navigation_node::TYPE_SETTING,
-            null,
-            'syllabusteachers'
-        );
-        $node->add(
-            get_string('evaluation', 'mod_syllabus'),
-            new moodle_url('/mod/syllabus/evaluation.php', ['id' => $cm->id]),
-            navigation_node::TYPE_SETTING,
-            null,
-            'syllabusevaluation'
-        );
+        $pages['teachers'] = 'teachers';
     }
-    $node->add(
-        get_string('competencies', 'mod_syllabus'),
-        new moodle_url('/mod/syllabus/competencies.php', ['id' => $cm->id]),
-        navigation_node::TYPE_SETTING,
-        null,
-        'syllabuscompetencies'
-    );
-    if ($rights->canseeresults) {
+    foreach ($pages as $page => $label) {
         $node->add(
-            get_string('results', 'mod_syllabus'),
-            new moodle_url('/mod/syllabus/results.php', ['id' => $cm->id]),
+            get_string($label, 'mod_syllabus'),
+            new moodle_url('/mod/syllabus/' . $page . '.php', ['id' => $cm->id]),
             navigation_node::TYPE_SETTING,
             null,
-            'syllabusresults'
+            'syllabus' . $page
         );
     }
 }

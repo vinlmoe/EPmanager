@@ -72,7 +72,7 @@ echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('results', 'mod_syllabus'));
 echo html_writer::tag('p', syllabus_eval_badge($syllabus) . ' ' . s(syllabus_eval_window_label($syllabus)));
 echo html_writer::tag('p', get_string('responsesrate', 'mod_syllabus', (object) ['responses' => $results->responses,
-    'eligible' => $eligible]));
+    'eligible' => $eligible]) . ($eligible ? ' (' . round(100 * $results->responses / $eligible) . ' %)' : ''));
 if (!$results->shown) {
     echo $OUTPUT->notification(get_string('belowthreshold', 'mod_syllabus', $results->threshold), 'info');
     echo $OUTPUT->footer();
@@ -82,6 +82,22 @@ echo html_writer::div(html_writer::link(new moodle_url($PAGE->url, ['download' =
     'downloadcsv',
     'mod_syllabus'
 ), ['class' => 'btn btn-secondary']), 'mb-3');
+
+// En tête, les moyennes des questions à échelle : l'essentiel en un coup d'œil, le détail ensuite.
+$summary = new html_table();
+$summary->attributes = ['class' => 'generaltable syllabus-means'];
+$summary->head = [get_string('question', 'mod_syllabus'), get_string('mean', 'mod_syllabus')];
+foreach (array_values($results->questions) as $index => $entry) {
+    if ($entry->mean !== null) {
+        $summary->data[] = [($index + 1) . '. ' . format_string($entry->question->text), html_writer::tag(
+            'strong',
+            syllabus_format_number($entry->mean)
+        ) . ' / 5'];
+    }
+}
+if ($summary->data) {
+    echo html_writer::table($summary);
+}
 
 $number = 0;
 foreach ($results->questions as $entry) {

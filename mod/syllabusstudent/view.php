@@ -45,6 +45,9 @@ $todo = array_filter($modules, fn($row) => $row->evalproblem === null);
 $teachers = syllabus_get_teachers_bulk(array_keys($modules));
 $types = syllabus_get_types();
 $format = get_string('strftimedatetimeshort', 'langconfig');
+// Après une évaluation, l'étudiant revient ici pour évaluer le module suivant.
+$evaluateurl = fn($row) => new moodle_url('/mod/syllabus/evaluate.php', ['id' => $row->cmid,
+    'returnto' => $PAGE->url->out_as_local_url(false)]);
 
 echo $OUTPUT->header();
 
@@ -58,7 +61,7 @@ if ($todo) {
         $deadline = $row->evalclose ? get_string('before', 'mod_syllabusstudent', userdate($row->evalclose, $format))
             : get_string('nodeadline', 'mod_syllabusstudent');
         $items[] = html_writer::link(
-            new moodle_url('/mod/syllabus/evaluate.php', ['id' => $row->cmid]),
+            $evaluateurl($row),
             get_string('evaluate', 'mod_syllabusstudent', format_string($row->name)),
             ['class' => 'btn btn-primary mr-2 mb-1']
         )
@@ -69,8 +72,8 @@ if ($todo) {
     echo html_writer::tag('p', get_string('nothingtodo', 'mod_syllabusstudent'), ['class' => 'text-muted']);
 }
 
-// Tous les modules.
-echo $OUTPUT->heading(get_string('mymodules', 'mod_syllabusstudent', count($modules)), 3);
+// Tous les modules, dans l'ordre du cursus (année, période).
+echo $OUTPUT->heading(get_string('allmymodules', 'mod_syllabusstudent', count($modules)), 3);
 if (!$modules) {
     echo $OUTPUT->notification(get_string('nomodules', 'mod_syllabusstudent'), 'info');
 } else {
@@ -79,12 +82,22 @@ if (!$modules) {
     $table->head = [get_string('module', 'mod_syllabus'), get_string('moduletype', 'mod_syllabus'), get_string(
         'ects',
         'mod_syllabus'
-    ), get_string('semester', 'mod_syllabus'), get_string('teachers', 'mod_syllabus'),
+    ), get_string('teachers', 'mod_syllabus'),
         get_string('evaluation', 'mod_syllabus')];
-    foreach ($modules as $row) {
+    $current = null;
+    foreach (syllabus_sort_by_period($modules) as $row) {
+        [$period, $label] = syllabus_period_of($row);
+        if ($period !== $current) {
+            $cell = new html_table_cell(html_writer::tag('strong', s($label)));
+            $cell->colspan = 5;
+            $separator = new html_table_row([$cell]);
+            $separator->attributes['class'] = 'table-active';
+            $table->data[] = $separator;
+            $current = $period;
+        }
         $status = match ($row->evalproblem) {
             null => html_writer::link(
-                new moodle_url('/mod/syllabus/evaluate.php', ['id' => $row->cmid]),
+                $evaluateurl($row),
                 get_string('evaluatenow', 'mod_syllabusstudent'), ['class' => 'btn btn-sm btn-primary']
             ),
             'evaldone' => html_writer::span(get_string('evaluated', 'mod_syllabusstudent'), 'badge badge-success'),
@@ -94,13 +107,13 @@ if (!$modules) {
         };
         $table->data[] = [
             html_writer::link(new moodle_url('/mod/syllabus/view.php', ['id' => $row->cmid]), format_string($row->name))
-                . html_writer::div(
-                    format_string($row->coursename) . ($row->code !== '' ? ' · ' . s($row->code) : ''),
-                    'small text-muted'
-                ),
+                // Le cours n'est rappelé que s'il ne porte pas le nom du module.
+                . html_writer::div(implode(' · ', array_filter([
+                    format_string($row->coursename) !== format_string($row->name) ? format_string($row->coursename) : '',
+                    s($row->code),
+                ])), 'small text-muted'),
             $row->typeid && isset($types[$row->typeid]) ? format_string($types[$row->typeid]->name) : '-',
             syllabus_format_number($row->ects),
-            s($row->semester) ?: '-',
             s(implode(', ', array_map('fullname', $teachers[(int) $row->id]))) ?: '-',
             $status,
         ];

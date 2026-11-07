@@ -41,15 +41,20 @@ if ($working && $working->status === SYLLABUS_STATUS_SUBMITTED) {
 $source = $working ?: syllabus_get_published((int) $syllabus->id);
 $sessions = $source ? array_values(syllabus_get_sessions((int) $source->id)) : [];
 
+// Intervenants proposés : les enseignants du cours (pas la DEVE), et ceux déjà nommés dans les séances.
 $teachers = [];
-foreach (get_enrolled_users($context, 'mod/syllabus:edit', 0, 'u.*', 'u.lastname, u.firstname') as $user) {
+foreach (syllabus_potential_teachers($context) as $user) {
+    $teachers[$user->id] = fullname($user);
+}
+$named = array_diff(array_filter(array_map(fn($s) => (int) $s->teacherid, $sessions)), array_keys($teachers));
+foreach ($named ? $DB->get_records_list('user', 'id', $named) : [] as $user) {
     $teachers[$user->id] = fullname($user);
 }
 $canpublish = $rights->canmanage || !syllabus_setting('reviewrequired');
 $mform = new \mod_syllabus\form\fiche_form($PAGE->url, ['teachers' => $teachers,
     'sessioncount' => max(3, count($sessions) + 1), 'canpublish' => $canpublish]);
 
-$formdata = ['id' => $cm->id, 'language' => '', 'personalhours' => 0];
+$formdata = ['id' => $cm->id, 'language' => get_string('defaultlanguage', 'mod_syllabus'), 'personalhours' => 0];
 if ($source) {
     foreach (array_keys(syllabus_text_fields()) as $field) {
         $formdata[$field] = $source->$field;
@@ -85,12 +90,8 @@ if ($mform->is_cancelled()) {
         }
         redirect($viewurl, get_string('fiche' . $result, 'mod_syllabus'), null, \core\output\notification::NOTIFY_SUCCESS);
     }
-    redirect(
-        new moodle_url($viewurl, ['show' => 'working']),
-        get_string('fichesaved', 'mod_syllabus'),
-        null,
-        \core\output\notification::NOTIFY_SUCCESS
-    );
+    // Brouillon enregistré : on reste sur la rédaction.
+    redirect($PAGE->url, get_string('fichesaved', 'mod_syllabus'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
 echo $OUTPUT->header();
@@ -99,5 +100,11 @@ if ($working && $working->status === SYLLABUS_STATUS_RETURNED && trim((string) $
     echo $OUTPUT->notification(get_string('reviewcommentis', 'mod_syllabus', s($working->reviewcomment)), 'warning');
 }
 echo $OUTPUT->notification(get_string($canpublish ? 'editnotice_publish' : 'editnotice_review', 'mod_syllabus'), 'info');
+if ($working) {
+    echo html_writer::div(html_writer::link(new moodle_url($viewurl, ['show' => 'working']), get_string(
+        'showworking',
+        'mod_syllabus'
+    ), ['class' => 'btn btn-sm btn-outline-secondary']), 'mb-3');
+}
 $mform->display();
 echo $OUTPUT->footer();

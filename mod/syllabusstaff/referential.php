@@ -128,7 +128,8 @@ $form = html_writer::start_tag('form', ['method' => 'post', 'action' => $baseurl
         false,
         ['id' => 'teacherresults', 'class' => 'custom-select']
     ), 'mb-2')
-    . html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('savechanges'), 'class' => 'btn btn-primary'])
+    . html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('savesettings', 'mod_syllabusstaff'),
+        'class' => 'btn btn-primary'])
     . html_writer::end_tag('form');
 echo $OUTPUT->box(html_writer::tag('h4', get_string('settings', 'mod_syllabusstaff')) . $form, 'generalbox mb-3');
 
@@ -144,8 +145,12 @@ foreach (syllabus_get_types() as $type) {
         . html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('rename', 'syllabusstaff'),
             'class' => 'btn btn-secondary'])
         . html_writer::end_tag('form');
-    $delete = html_writer::link(new moodle_url($baseurl, ['action' => 'deletetype', 'typeid' => $type->id,
-        'sesskey' => sesskey()]), get_string('delete'), ['class' => 'text-danger']);
+    $delete = $OUTPUT->action_link(new moodle_url($baseurl, ['action' => 'deletetype', 'typeid' => $type->id,
+        'sesskey' => sesskey()]), get_string('delete'), new confirm_action(get_string(
+            'confirmdeletetype',
+            'mod_syllabusstaff',
+            format_string($type->name)
+        )), ['class' => 'text-danger']);
     $table->data[] = [$rename, $DB->count_records('syllabus', ['typeid' => $type->id]), $delete];
 }
 $html .= $table->data ? html_writer::table($table) : '';
@@ -157,28 +162,42 @@ $html .= html_writer::start_tag('form', ['method' => 'post', 'action' => $baseur
     . html_writer::end_tag('form');
 echo $OUTPUT->box(html_writer::tag('h4', get_string('moduletypes', 'mod_syllabusstaff')) . $html, 'generalbox mb-3');
 
-// 3. Questions communes.
-$actions = function ($question, $index, $count) use ($baseurl) {
+// 3. Questions communes. Une question se déplace parmi celles de même portée (tous les modules, ou
+// un même type) : « Monter » et « Descendre » ne sont proposés que s'il y a une voisine.
+$common = syllabus_get_common_questions();
+$groups = [];
+foreach ($common as $question) {
+    $groups[$question->origin . '-' . $question->typeid][] = (int) $question->id;
+}
+$actions = function ($question, $index, $count) use ($baseurl, $groups, $OUTPUT) {
+    $siblings = $groups[$question->origin . '-' . $question->typeid];
+    $position = array_search((int) $question->id, $siblings, true);
     $links = [html_writer::link(
-        new moodle_url($baseurl, ['action' => 'editquestion', 'questionid' => $question->id]),
+        new moodle_url($baseurl, ['action' => 'editquestion', 'questionid' => $question->id], 'questionform'),
         get_string('edit')
     )];
     foreach (['up' => 'moveup', 'down' => 'movedown'] as $move => $label) {
-        $links[] = html_writer::link(new moodle_url($baseurl, ['action' => $move, 'questionid' => $question->id,
-            'sesskey' => sesskey()]), get_string($label, 'syllabusstaff'));
+        if (($move === 'up' && $position > 0) || ($move === 'down' && $position < count($siblings) - 1)) {
+            $links[] = html_writer::link(new moodle_url($baseurl, ['action' => $move, 'questionid' => $question->id,
+                'sesskey' => sesskey()]), get_string($label, 'syllabusstaff'));
+        }
     }
-    $links[] = html_writer::link(new moodle_url($baseurl, ['action' => 'delete', 'questionid' => $question->id,
-        'sesskey' => sesskey()]), get_string('delete'), ['class' => 'text-danger']);
+    $links[] = $OUTPUT->action_link(new moodle_url($baseurl, ['action' => 'delete', 'questionid' => $question->id,
+        'sesskey' => sesskey()]), get_string('delete'), new confirm_action(get_string(
+            'confirmdeletequestion',
+            'mod_syllabus',
+            format_string($question->text)
+        )), ['class' => 'text-danger']);
     return implode(' · ', $links);
 };
 echo $OUTPUT->box_start('generalbox mb-3');
 echo html_writer::tag('h4', get_string('commonquestions', 'mod_syllabusstaff'));
 echo html_writer::tag('p', get_string('commonquestions_help', 'mod_syllabusstaff'), ['class' => 'text-muted']);
-echo syllabus_render_questions(syllabus_get_common_questions(), $actions, true);
+echo syllabus_render_questions($common, $actions, true);
 echo html_writer::tag('h5', get_string(
     $action === 'editquestion' && $questionid ? 'editquestion' : 'addquestion',
     'mod_syllabus'
-));
+), ['id' => 'questionform']);
 $questionform->display();
 echo $OUTPUT->box_end();
 echo $OUTPUT->footer();

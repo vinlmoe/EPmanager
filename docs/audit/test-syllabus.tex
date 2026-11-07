@@ -10,7 +10,7 @@
 \newcommand{\code}[1]{\texttt{\detokenize{#1}}}
 \title{Test des modules syllabus et de leur évaluation}
 \author{Sébastien Lefebvre}
-\date{Novembre 2026 -- version 1.3.0 des modules}
+\date{Novembre 2026 -- version 1.4.0 des modules}
 
 \begin{document}
 \maketitle
@@ -43,6 +43,8 @@ DEVE : référentiel (relecture obligatoire, seuil de 5 réponses, 2 types, 4 qu
 communes dont une pour le type « Clinique »), type de chaque module dans ses réglages & conforme \\
 12 responsables en parallèle : fiche rédigée (rubriques, 3 séances) et soumise, 2 questions & 2,7 s \\
 Fiches à relire listées ; 11 publiées, 1 renvoyée puis corrigée et publiée & conforme \\
+Dernière relecture depuis « Fiches à relire » : décision sous la fiche, retour à la liste vide &
+conforme \\
 DEVE, page « Référentiels de compétences » du suivi : référentiel créé, CSV de 25 lignes
 importé (domaines placés après leurs compétences), une compétence ajoutée à la main & 26
 compétences, 21 rattachées \\
@@ -53,11 +55,11 @@ Matrice compétences $\times$ cours (une case par lien, cours sans module compri
 non couverte signalée, export CSV, compétences sur la fiche, matrice ouverte aux enseignants &
 54 cases \\
 Fenêtre d'évaluation des 12 modules fixée en lot & conforme \\
-Tâche d'ouverture : questions figées, étudiants prévenus & 2\,400 messages, 21 s \\
-200 étudiants (40 en parallèle) : « Mes modules » (12 modules chacun), puis 9 évaluations sur 10
-& 2\,156 réponses en 103 s \\
+Tâche d'ouverture : questions figées, étudiants prévenus & 2\,400 messages, 22 s \\
+200 étudiants (40 en parallèle) : « Mes modules » (12 modules chacun), puis 9 évaluations sur 10,
+chacune suivie du retour à « Mes modules » & 2\,145 réponses en 121 s \\
 Seconde réponse d'un étudiant & refusée \\
-Une réponse anonyme par participation, réponses obligatoires toutes présentes & 2\,156 / 2\,156 \\
+Une réponse anonyme par participation, réponses obligatoires toutes présentes & 2\,145 / 2\,145 \\
 Table des réponses : ni étudiant ni heure (\code{id}, \code{syllabusid}, \code{daysubmitted}) &
 conforme \\
 Questions par module : 3 communes, + 1 pour les modules « Clinique », + 2 de l'enseignant &
@@ -79,13 +81,16 @@ Anomalies dans les pages & 0 \\
 \end{tabularx}
 \end{center}
 
-Résultat : \textbf{42 contrôles sur 42}. S'y ajoutent 32 tests unitaires (droits, circuit de
+Résultat : \textbf{44 contrôles sur 44}. S'y ajoutent 44 tests unitaires (droits, circuit de
 relecture, figeage des questions, anonymat, seuil, visibilité des résultats, tâche,
 réinitialisation, sauvegarde et restauration, RGPD, synthèses, compétences : import CSV en
 arbre, contrôle des parents, déplacement, liaison et retrait, suppression refusée d'une
 compétence visée, matrice, restauration des niveaux ; cursus : ordre des périodes, choix
 d'édition, livret et ses signets, conservation du livret, constats de progression, liens d'un
-sous-arbre) et le test de conformité RGPD de Moodle, réussi pour les trois modules.
+sous-arbre ; référentiel commun, messages, suppressions, périmètre, fiche incomplète refusée à
+la soumission) et le test de conformité RGPD de Moodle, réussi pour les trois modules. La
+charge à l'échelle d'une école et l'audit des parcours font l'objet du rapport \emph{Modules
+syllabus à l'échelle d'une école}.
 
 La mise à jour depuis la version 1.1.0, qui s'appuyait sur les compétences de Moodle, a été
 jouée sur le banc : 53 liens recopiés avec leurs niveaux, référentiel de 25 compétences recopié,

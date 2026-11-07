@@ -36,10 +36,18 @@ class fiche {
      *
      * @param stdClass $syllabus Instance.
      * @param stdClass|null $version Version à afficher.
+     * @param stdClass|null $compare Version de référence : les rubriques qui en diffèrent sont signalées (relecture).
+     * @param bool $withname Nom du module dans le tableau (PDF) ; à l'écran, il est déjà le titre de la page.
      * @return string HTML
      */
-    public static function render(stdClass $syllabus, ?stdClass $version): string {
-        return self::characteristics($syllabus) . self::version($syllabus, $version) . self::competencies($syllabus);
+    public static function render(
+        stdClass $syllabus,
+        ?stdClass $version,
+        ?stdClass $compare = null,
+        bool $withname = true
+    ): string {
+        return self::characteristics($syllabus, $version, $withname) . self::version($syllabus, $version, $compare)
+            . self::competencies($syllabus);
     }
 
     /**
@@ -64,9 +72,11 @@ class fiche {
      * Caractéristiques du module, en tableau à deux colonnes.
      *
      * @param stdClass $syllabus
+     * @param stdClass|null $version Pour la langue d'enseignement.
+     * @param bool $withname
      * @return string HTML
      */
-    public static function characteristics(stdClass $syllabus): string {
+    public static function characteristics(stdClass $syllabus, ?stdClass $version = null, bool $withname = true): string {
         global $CFG, $DB;
         require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
 
@@ -82,6 +92,12 @@ class fiche {
             get_string('studyyear', 'mod_syllabus') => syllabus_studyyear_label($syllabus->studyyear),
             get_string('teachers', 'mod_syllabus') => $teachers ? s(implode(', ', array_map('fullname', $teachers))) : '-',
         ];
+        if (!$withname) {
+            unset($rows[get_string('module', 'mod_syllabus')]);
+        }
+        if ($version && trim((string) $version->language) !== '') {
+            $rows[get_string('language', 'mod_syllabus')] = s($version->language);
+        }
         $table = new html_table();
         $table->attributes = ['class' => 'generaltable syllabus-characteristics', 'border' => '1', 'cellpadding' => '4'];
         foreach ($rows as $label => $value) {
@@ -95,9 +111,10 @@ class fiche {
      *
      * @param stdClass $syllabus
      * @param stdClass|null $version
+     * @param stdClass|null $compare Version de référence : rubriques et séances modifiées signalées.
      * @return string HTML
      */
-    public static function version(stdClass $syllabus, ?stdClass $version): string {
+    public static function version(stdClass $syllabus, ?stdClass $version, ?stdClass $compare = null): string {
         global $CFG, $DB;
         require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
 
@@ -105,19 +122,29 @@ class fiche {
             return html_writer::tag('p', get_string('nofiche', 'mod_syllabus'), ['class' => 'syllabus-empty']);
         }
         $labelsep = get_string('labelsep', 'langconfig');
+        $changed = ' ' . html_writer::span(get_string('changedsincepublished', 'mod_syllabus'), 'badge badge-warning');
         $html = '';
         foreach (syllabus_text_fields() as $field => $label) {
             $text = trim((string) ($version->$field ?? ''));
+            $mark = $compare && $text !== trim((string) ($compare->$field ?? '')) ? $changed : '';
             if ($text !== '') {
-                $html .= html_writer::tag('h4', $label) . format_text($text, FORMAT_PLAIN);
+                $html .= html_writer::tag('h4', $label . $mark) . format_text($text, FORMAT_PLAIN);
+            } else if ($mark !== '') {
+                $html .= html_writer::tag('h4', $label . $mark) . html_writer::tag(
+                    'p',
+                    get_string('fieldremoved', 'mod_syllabus'),
+                    ['class' => 'text-muted']
+                );
             }
-        }
-        if (trim((string) $version->language) !== '') {
-            $html .= html_writer::tag('p', html_writer::tag('strong', get_string('language', 'mod_syllabus') . $labelsep)
-                . s($version->language));
         }
 
         $sessions = syllabus_get_sessions((int) $version->id);
+        $sessionsmark = '';
+        if ($compare) {
+            $signature = fn(array $list) => array_map(fn($s) => [$s->title, $s->kind, (float) $s->duration, (int) $s->teacherid,
+                (string) $s->teachername], array_values($list));
+            $sessionsmark = $signature($sessions) !== $signature(syllabus_get_sessions((int) $compare->id)) ? $changed : '';
+        }
         if ($sessions) {
             $ids = array_unique(array_filter(array_map(fn($s) => (int) $s->teacherid, $sessions)));
             $users = $ids ? $DB->get_records_list('user', 'id', $ids) : [];
@@ -132,7 +159,7 @@ class fiche {
                 $table->data[] = [s($session->title), $kinds[$session->kind] ?? s($session->kind),
                     syllabus_format_number($session->duration), $teacher !== '' ? s($teacher) : '-'];
             }
-            $html .= html_writer::tag('h4', get_string('sessions', 'mod_syllabus')) . html_writer::table($table);
+            $html .= html_writer::tag('h4', get_string('sessions', 'mod_syllabus') . $sessionsmark) . html_writer::table($table);
         }
 
         $hours = syllabus_hours($sessions, $version->personalhours);

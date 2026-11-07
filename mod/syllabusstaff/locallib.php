@@ -46,7 +46,13 @@ function syllabusstaff_page_init($cm, string $path, array $params = []): array {
     $context = context_module::instance($cm->id);
     require_capability('mod/syllabusstaff:view', $context);
     $PAGE->set_url(new moodle_url($path, ['id' => $cm->id] + $params));
-    $PAGE->set_title(format_string($instance->name));
+    // Onglets du navigateur distincts : le nom de la page, puis celui de l'activité.
+    $titles = ['competencies' => 'competencymatrix', 'progression' => 'progression', 'booklet' => 'booklet',
+        'all' => 'allmodules', 'review' => 'toreview', 'results' => 'resultsoverview', 'referential' => 'referential',
+        'frameworks' => 'competencyframeworks', 'courselink' => 'coursewithoutmodule'];
+    $page = basename($path, '.php');
+    $PAGE->set_title(isset($titles[$page]) ? get_string($titles[$page], 'mod_syllabusstaff') . moodle_page::TITLE_SEPARATOR
+        . format_string($instance->name) : format_string($instance->name));
     $PAGE->set_heading(format_string($course->fullname));
     $PAGE->set_context($context);
     return [$course, $instance, $context, has_capability('mod/syllabusstaff:manageall', $context)];
@@ -80,24 +86,35 @@ function syllabusstaff_navlinks($cm, string $current, bool $canmanageall): strin
 }
 
 /**
- * Tableau de modules : cours, module, type, fiche, évaluation, réponses, liens.
+ * Tableau de modules : module (lien vers sa fiche), type, responsables, fiche, évaluation,
+ * réponses, liens.
  *
  * @param array $rows Lignes de syllabus_list_instances().
- * @param bool $selectable Case à cocher par ligne (actions en lot).
+ * @param bool $selectable Case à cocher par ligne (actions en lot de la DEVE) ; désactivée là où
+ *     l'utilisateur n'a pas le rôle de la DEVE.
+ * @param int[] $highlight Modules à signaler (fiche à rédiger ou renvoyée), placés en tête.
  * @return string HTML
  */
-function syllabusstaff_render_modules(array $rows, bool $selectable = false): string {
+function syllabusstaff_render_modules(array $rows, bool $selectable = false, array $highlight = []): string {
+    global $USER;
+
     if (!$rows) {
         return html_writer::tag('p', get_string('nomodules', 'mod_syllabusstaff'), ['class' => 'text-muted']);
+    }
+    if ($highlight) {
+        // Les modules signalés en tête, chaque groupe dans son ordre d'origine.
+        $first = array_filter($rows, fn($row) => in_array((int) $row->id, $highlight, true));
+        $rows = $first + array_diff_key($rows, $first);
     }
     $ids = array_map(fn($row) => (int) $row->id, $rows);
     $overview = syllabus_get_overview($ids);
     $teachers = syllabus_get_teachers_bulk($ids);
     $types = syllabus_get_types();
+    $teacherresults = syllabus_setting('teacherresults');
 
     $table = new html_table();
     $table->attributes['class'] = 'generaltable syllabusstaff-modules';
-    $table->head = [get_string('course'), get_string('module', 'mod_syllabus'), get_string('moduletype', 'mod_syllabus'),
+    $table->head = [get_string('module', 'mod_syllabus'), get_string('moduletype', 'mod_syllabus'),
         get_string('teachers', 'mod_syllabus'), get_string('fiche', 'mod_syllabus'), get_string('evaluation', 'mod_syllabus'),
         get_string('responses', 'mod_syllabusstaff'), get_string('actions')];
     if ($selectable) {
@@ -119,23 +136,28 @@ function syllabusstaff_render_modules(array $rows, bool $selectable = false): st
             $badges[] = html_writer::span(syllabus_status_label($info->working->status), 'badge badge-info');
         }
         $context = context_module::instance($row->cmid);
-        $eligible = syllabus_eval_state($row) === SYLLABUS_EVAL_NONE ? '-' : $info->responses . ' / '
-            . syllabus_count_eligible($context);
-        $links = [html_writer::link(new moodle_url('/mod/syllabus/view.php', ['id' => $row->cmid]), get_string(
-            'fiche',
-            'mod_syllabus'
-        )),
-            html_writer::link(
-                new moodle_url('/mod/syllabus/evaluation.php', ['id' => $row->cmid]),
-                get_string('evaluation', 'mod_syllabusstaff')
-            ),
-            html_writer::link(
+        $state = syllabus_eval_state($row);
+        $eligible = $state === SYLLABUS_EVAL_NONE ? '-' : $info->responses . ' / ' . syllabus_count_eligible($context);
+        $canmanage = has_capability('mod/syllabus:manage', $context);
+        // Résultats : la DEVE toujours, un responsable après la fermeture (ou dès l'ouverture si
+        // la DEVE l'a réglé ainsi). Pas de lien vers une page qui le renverrait ailleurs.
+        $seeresults = $canmanage || (isset($teachers[(int) $row->id][(int) $USER->id]) && ($state === SYLLABUS_EVAL_CLOSED
+            || ($state === SYLLABUS_EVAL_OPEN && $teacherresults === 'always')));
+        $links = [html_writer::link(
+            new moodle_url('/mod/syllabus/evaluation.php', ['id' => $row->cmid]),
+            get_string('evaluation', 'mod_syllabusstaff')
+        )];
+        if ($seeresults && $state !== SYLLABUS_EVAL_NONE) {
+            $links[] = html_writer::link(
                 new moodle_url('/mod/syllabus/results.php', ['id' => $row->cmid]),
                 get_string('results', 'mod_syllabusstaff')
-            )];
+            );
+        }
+        $secondary = array_filter([s($row->code), format_string($row->coursename) !== format_string($row->name)
+            ? html_writer::link(new moodle_url('/course/view.php', ['id' => $row->course]), format_string($row->coursename)) : '']);
         $cells = [
-            html_writer::link(new moodle_url('/course/view.php', ['id' => $row->course]), format_string($row->coursename)),
-            format_string($row->name) . ($row->code !== '' ? html_writer::div(s($row->code), 'small text-muted') : ''),
+            html_writer::link(new moodle_url('/mod/syllabus/view.php', ['id' => $row->cmid]), format_string($row->name))
+                . ($secondary ? html_writer::div(implode(' · ', $secondary), 'small text-muted') : ''),
             $row->typeid && isset($types[$row->typeid]) ? format_string($types[$row->typeid]->name) : '-',
             s(implode(', ', array_map('fullname', $teachers[(int) $row->id]))) ?: '-',
             implode(' ', $badges),
@@ -144,10 +166,17 @@ function syllabusstaff_render_modules(array $rows, bool $selectable = false): st
             implode(' · ', $links),
         ];
         if ($selectable) {
-            array_unshift($cells, html_writer::checkbox('syllabusids[]', $row->id, false, '', ['class' => 'syllabusstaff-select',
-                'aria-label' => format_string($row->name)]));
+            $attributes = ['class' => 'syllabusstaff-select', 'aria-label' => format_string($row->name)];
+            if (!$canmanage) {
+                $attributes += ['disabled' => 'disabled', 'title' => get_string('nomanageright', 'mod_syllabusstaff')];
+            }
+            array_unshift($cells, html_writer::checkbox('syllabusids[]', $row->id, false, '', $attributes));
         }
-        $table->data[] = $cells;
+        $tablerow = new html_table_row($cells);
+        if (in_array((int) $row->id, $highlight, true)) {
+            $tablerow->attributes['class'] = 'table-warning';
+        }
+        $table->data[] = $tablerow;
     }
     return html_writer::table($table);
 }

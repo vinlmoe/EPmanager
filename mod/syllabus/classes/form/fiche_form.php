@@ -51,8 +51,6 @@ class fiche_form extends \moodleform {
         $mform->addElement('text', 'language', get_string('language', 'mod_syllabus'), ['size' => '30']);
         $mform->setType('language', PARAM_TEXT);
         $mform->addRule('language', get_string('maximumchars', '', 50), 'maxlength', 50, 'client');
-        $mform->addElement('float', 'personalhours', get_string('personalhours', 'mod_syllabus'), ['size' => '8']);
-        $mform->setDefault('personalhours', 0);
 
         $mform->addElement('header', 'sessionshdr', get_string('sessions', 'mod_syllabus'));
         $mform->setExpanded('sessionshdr');
@@ -61,26 +59,28 @@ class fiche_form extends \moodleform {
         // Les champs d'une ligne sont groupés sous sessionrow[n][...] : un groupe qui préfixe ses
         // éléments est numéroté par repeat_elements() d'après sa ligne.
         $row = [
-            $mform->createElement('text', 'sessiontitle', get_string('sessiontitle', 'mod_syllabus'), ['size' => '30']),
+            $mform->createElement('text', 'sessiontitle', get_string('sessiontitle', 'mod_syllabus'), ['size' => '30',
+                'placeholder' => get_string('sessiontitle', 'mod_syllabus')]),
             $mform->createElement(
                 'select',
                 'sessionkind',
                 get_string('sessionkind', 'mod_syllabus'),
                 syllabus_session_kind_options()
             ),
-            $mform->createElement('float', 'sessionduration', get_string('sessionduration', 'mod_syllabus'), ['size' => '5']),
+            $mform->createElement('float', 'sessionduration', get_string('sessionduration', 'mod_syllabus'), ['size' => '5',
+                'placeholder' => get_string('hoursshort', 'mod_syllabus')]),
             $mform->createElement('select', 'sessionteacher', get_string('sessionteacher', 'mod_syllabus'), $teacheroptions),
             $mform->createElement(
                 'text',
                 'sessionteachername',
                 get_string('sessionteachername', 'mod_syllabus'),
-                ['size' => '20']
+                ['size' => '20', 'placeholder' => get_string('sessionteachername', 'mod_syllabus')]
             ),
         ];
         $elements = [$mform->createElement(
             'group',
             'sessionrow',
-            get_string('sessiontitle', 'mod_syllabus') . ' {no}',
+            get_string('sessionn', 'mod_syllabus', '{no}'),
             $row,
             ' ',
             true
@@ -101,6 +101,9 @@ class fiche_form extends \moodleform {
             get_string('addsessions', 'mod_syllabus'),
             true
         );
+        // Le travail personnel s'ajoute aux séances dans le volume horaire : il est saisi avec elles.
+        $mform->addElement('float', 'personalhours', get_string('personalhours', 'mod_syllabus'), ['size' => '8']);
+        $mform->setDefault('personalhours', 0);
 
         $submitlabel = !empty($this->_customdata['canpublish'])
             ? get_string('savepublish', 'mod_syllabus') : get_string('savesubmit', 'mod_syllabus');
@@ -114,7 +117,8 @@ class fiche_form extends \moodleform {
     }
 
     /**
-     * Durées positives.
+     * Durées positives ; une fiche soumise (ou publiée) a ses rubriques essentielles et au moins
+     * une séance ou des heures de travail personnel. Le brouillon reste libre.
      *
      * @param array $data
      * @param array $files
@@ -128,6 +132,17 @@ class fiche_form extends \moodleform {
         foreach ($data['sessionrow'] ?? [] as $index => $row) {
             if ((float) ($row['sessionduration'] ?? 0) < 0) {
                 $errors['sessionrow[' . $index . ']'] = get_string('errornegative', 'mod_syllabus');
+            }
+        }
+        if (!empty($data['submitforreview'])) {
+            foreach (['objectives', 'outcomes', 'content', 'assessment'] as $field) {
+                if (trim((string) ($data[$field] ?? '')) === '') {
+                    $errors[$field] = get_string('requiredtosubmit', 'mod_syllabus');
+                }
+            }
+            $titled = array_filter($data['sessionrow'] ?? [], fn($row) => trim((string) ($row['sessiontitle'] ?? '')) !== '');
+            if (!$titled && (float) ($data['personalhours'] ?? 0) <= 0) {
+                $errors['sessionrow[0]'] = get_string('errornosessions', 'mod_syllabus');
             }
         }
         return $errors;

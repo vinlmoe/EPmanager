@@ -74,9 +74,12 @@ class evaluate_form extends \moodleform {
             foreach ($choices as $value => $choicelabel) {
                 $radios[] = $mform->createElement('radio', $name, '', s($choicelabel), self::radio_value($question, $value));
             }
-            $mform->addGroup($radios, $name . 'group', $label, \html_writer::empty_tag('br'), false);
+            // Échelle et oui/non sur une ligne ; les choix, plus longs, un par ligne.
+            $separator = $question->kind === 'choice' ? \html_writer::empty_tag('br') : ' ';
+            $mform->addGroup($radios, $name . 'group', $label, $separator, false);
             $mform->setType($name, PARAM_INT);
         }
+        $mform->addElement('static', 'onlyonce', '', \html_writer::tag('em', get_string('evalonlyonce', 'mod_syllabus')));
         $this->add_action_buttons(true, get_string('submitevaluation', 'mod_syllabus'));
     }
 

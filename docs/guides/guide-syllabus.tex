@@ -4,9 +4,9 @@
 \documentclass[11pt,a4paper]{article}
 
 \newcommand{\titreguide}{Syllabus et évaluation des modules}
-\newcommand{\versionguide}{1.3}
+\newcommand{\versionguide}{1.4}
 \newcommand{\dateguide}{novembre 2026}
-\newcommand{\versionep}{1.3.0}
+\newcommand{\versionep}{1.4.0}
 \newcommand{\versionsynthese}{1.0.0}
 
 \usepackage{guide-commun}
@@ -56,6 +56,10 @@ modules (création, arbre, import CSV), sans passer par l'administration du site
 aussi les cours sans module. \\
 1.3 & novembre 2026 & Livret des syllabus d'un semestre, d'une année ou de tout le cursus ;
 progression d'une compétence le long du cursus ; matrice dans l'ordre du cursus. \\
+1.4 & novembre 2026 & Parcours simplifiés après audit : page du module résumée (« Où en est ce
+module »), brouillon sans quitter la rédaction, relecture avec retour à la liste, évaluation
+compacte avec retour à « Mes modules », période choisie dans une liste, fenêtre retirée par un
+bouton distinct. \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -173,9 +177,9 @@ toute donnée sensible.
 \section{Mes modules}
 
 Dans le cours de votre promotion, ouvrez l'activité \og Mes modules\fg{}. En tête, les
-\textbf{évaluations à faire}, la plus urgente d'abord ; en dessous, tous vos modules : type,
-ECTS, période, responsables, et où vous en êtes de l'évaluation (\statut{Évalué}, ouverture à
-venir, close).
+\textbf{évaluations à faire}, la plus urgente d'abord ; en dessous, tous vos modules, rangés par
+année et période : type, crédits, responsables, et où vous en êtes de l'évaluation
+(\statut{Évalué}, ouverture à venir, \statut{Terminée}).
 
 \capture{sy-etu-mes-modules}{Mes modules : évaluations à faire, puis tous les modules.}
 
@@ -192,13 +196,14 @@ horaire, et les \textbf{compétences visées} avec leur niveau. Elle se téléch
     (sur la fiche).
   \item Répondez aux questions de la DEVE, puis à celles de l'enseignant. Les questions
     marquées d'un astérisque sont obligatoires ; aucune réponse n'est cochée d'avance.
-  \item Cliquez sur \bouton{Envoyer mon évaluation}.
+  \item Cliquez sur \bouton{Envoyer mon évaluation}. Vous revenez à \og Mes modules\fg{} : le
+    module suivant à évaluer est en tête.
 \end{etapes}
 
 \capture{sy-etu-evaluer}{Formulaire d'évaluation.}
 
-Vous ne pouvez répondre qu'une fois, pendant la fenêtre d'évaluation. Vos réponses sont
-anonymes (section~\ref{sec:principe-evaluation}).
+Vous ne pouvez répondre qu'une fois, pendant la fenêtre d'évaluation : vérifiez vos réponses
+avant d'envoyer. Vos réponses sont anonymes (section~\ref{sec:principe-evaluation}).
 
 \newpage
 % ===========================================================================
@@ -208,14 +213,24 @@ anonymes (section~\ref{sec:principe-evaluation}).
 \section{Mes modules}
 
 L'activité \og Suivi des modules\fg{} du cours d'équipe liste les modules dont vous êtes
-responsable : état de la fiche, de l'évaluation, nombre de réponses, et les liens vers la fiche,
-l'évaluation et les résultats. Un bandeau signale les modules sans fiche publiée ou dont la
-fiche a été renvoyée.
+responsable : état de la fiche, de l'évaluation, nombre de réponses. Le nom d'un module ouvre sa
+page. Les modules qui vous attendent (sans fiche publiée, ou fiche renvoyée par la DEVE) sont en
+tête, surlignés.
 
 \capture{sy-ens-mes-modules}{Suivi des modules : mes modules.}
 
-Sur la page du module, deux encadrés résument l'évaluation (fenêtre, réponses) et la rédaction
-(version publiée, version en cours), avec les boutons utiles.
+La page du module s'ouvre sur \textbf{Où en est ce module} : une ligne par étape, cochée quand
+elle est faite, avec son bouton :
+\begin{itemize}
+  \item la \textbf{fiche} : version publiée, version en cours et son état, commentaire de la DEVE
+    si elle l'a renvoyée ; \bouton{Rédiger la fiche}, \bouton{Reprendre la rédaction} ou
+    \bouton{Mettre à jour la fiche} ;
+  \item les \textbf{compétences} visées ;
+  \item l'\textbf{évaluation} : état, fenêtre, nombre de questions de l'enseignant, réponses
+    reçues ; \bouton{Fenêtre et questions}, \bouton{Résultats de l'évaluation} ;
+  \item au besoin, les caractéristiques à renseigner dans les paramètres (crédits, période,
+    année d'étude).
+\end{itemize}
 
 \capture{sy-ens-fiche}{Page du module vue par son responsable.}
 
@@ -231,16 +246,22 @@ Sur la page du module, deux encadrés résument l'évaluation (fenêtre, répons
     travaux dirigés, travaux pratiques, clinique, terrain, projet, autre), durée et intervenant
     (un enseignant du cours, ou le nom d'un intervenant extérieur). Les séances ne sont pas
     datées : la fiche décrit le module, pas le calendrier de l'année.
-  \item \bouton{Enregistrer le brouillon} autant que nécessaire, puis \bouton{Enregistrer et
-    soumettre à la DEVE} (ou \bouton{Enregistrer et publier} si la relecture est désactivée).
+  \item \bouton{Enregistrer le brouillon} autant que nécessaire : vous restez sur la rédaction.
+    Puis \bouton{Enregistrer et soumettre à la DEVE} (ou \bouton{Enregistrer et publier} si la
+    relecture est désactivée).
 \end{etapes}
+
+Pour être soumise, la fiche doit avoir ses objectifs, ses acquis d'apprentissage, son contenu,
+ses modalités d'évaluation, et au moins une séance (ou des heures de travail personnel) ; le
+brouillon, lui, s'enregistre à tout moment. La langue est préremplie (\og Français\fg{}).
 
 \capture{sy-ens-redaction}{Rédaction de la fiche.}
 
 \capture{sy-ens-seances}{Programme des séances.}
 
 Les caractéristiques du module (code, ECTS, période, année d'étude, type de module) se règlent
-dans les \chemin{Paramètres} de l'activité. Les \chemin{Responsables} se choisissent parmi les
+dans les \chemin{Paramètres} de l'activité. La \textbf{période} se choisit parmi celles déjà
+utilisées dans l'école (ou se saisit) : elle range le module dans le cursus. Les \chemin{Responsables} se choisissent parmi les
 enseignants du cours ; celui qui ajoute l'activité en devient responsable.
 
 \capture[0.85\linewidth]{sy-ens-responsables}{Responsables du module.}
@@ -248,12 +269,12 @@ enseignants du cours ; celui qui ajoute l'activité en devient responsable.
 \section{Lier le module aux compétences}
 
 \begin{etapes}
-  \item \chemin{Compétences} (onglets du module, ou menu \og Plus\fg{}) : la page rappelle les
-    compétences déjà visées.
-  \item Choisissez le \textbf{référentiel} : ses compétences s'affichent en arbre.
+  \item \chemin{Compétences} (onglets du module, ou le bouton de \og Où en est ce module\fg{}).
+  \item Choisissez le \textbf{référentiel} (s'il y en a plusieurs) : ses compétences s'affichent
+    en arbre, avec le niveau déjà donné.
   \item Pour chaque compétence que le module vise, choisissez le niveau ; laissez
-    \og Non visée\fg{} pour les autres.
-  \item \bouton{Enregistrer les modifications}.
+    \og Non visée\fg{} pour les autres. Un domaine se vise par ses sous-compétences.
+  \item \bouton{Enregistrer les modifications} (en tête ou en bas de l'arbre).
 \end{etapes}
 
 \capture{sy-ens-competences}{Compétences visées par le module et liaison au référentiel.}
@@ -288,8 +309,8 @@ compétence maîtrisée pour l'introduire auprès d'un autre public peut être v
 
 \section{Éditer le livret des syllabus}\label{sec:livret}
 
-\chemin{Livret des syllabus} (suivi des modules) : choisissez l'\textbf{édition} -- tout le
-cursus, une année d'étude ou une période (semestre) --, puis \bouton{Afficher}. La page liste les
+\chemin{Livret des syllabus} (suivi des modules) : choisissez le \textbf{périmètre du livret} --
+tout le cursus, une année d'étude ou une période (semestre) --, puis \bouton{Afficher}. La page liste les
 modules retenus, période par période, avec leurs crédits, leurs responsables et l'état de leur
 fiche. \bouton{Télécharger le livret (PDF)} produit :
 \begin{itemize}
@@ -310,15 +331,18 @@ et resservi tant que rien n'a changé (fiches, responsables, compétences, date 
 \begin{itemize}
   \item la \textbf{fenêtre} : ouverture et, au besoin, fermeture ;
   \item les \textbf{questions de la DEVE} qui s'appliqueront à votre module (pour information) ;
-  \item \textbf{vos questions} : ajoutez-les, modifiez-les, réordonnez-les jusqu'à l'ouverture.
+  \item \textbf{vos questions} : ajoutez-les, modifiez-les (\og Modifier\fg{} amène au
+    formulaire), réordonnez-les jusqu'à l'ouverture ; une suppression se confirme.
 \end{itemize}
+Une fois l'évaluation ouverte, les questions sont figées ; le message de la page dit si elle est
+ouverte ou terminée, et un bouton mène aux résultats.
 
 \capture{sy-ens-evaluation}{Évaluation du module ouverte : fenêtre et questions figées.}
 
 \section{Lire les résultats}
 
-\chemin{Résultats de l'évaluation} donne le nombre de réponses sur le nombre d'étudiants, et
-pour chaque question la moyenne (échelle), la répartition des réponses, ou la liste des
+\chemin{Résultats de l'évaluation} donne le nombre de réponses sur le nombre d'étudiants (et le
+taux), un tableau des moyennes des questions à échelle, puis pour chaque question la moyenne (échelle), la répartition des réponses, ou la liste des
 réponses libres (dans l'ordre alphabétique, rien ne rappelant l'ordre des réponses). Les
 résultats s'exportent en CSV. Ils sont visibles après la fermeture de l'évaluation, sauf si la
 DEVE les a ouverts dès l'ouverture, et seulement au-delà du nombre minimal de réponses.
@@ -362,16 +386,20 @@ Il vaut pour tous les modules du site.
 
 \chemin{Tous les modules} liste les modules du périmètre, filtrables par nom ou code, type,
 état de la fiche et état de l'évaluation. Cochez des modules, saisissez une ouverture (et une
-fermeture), puis \bouton{Appliquer} : la même fenêtre est fixée pour tous, là où vous avez le
-rôle de la DEVE (les autres sont signalés). Laisser l'ouverture vide retire l'évaluation.
+fermeture), puis \bouton{Appliquer} : la même fenêtre est fixée pour tous. Les cases des cours
+où vous n'avez pas le rôle de la DEVE sont grisées. \bouton{Retirer l'évaluation} efface la
+fenêtre des modules cochés, après confirmation. Le nom d'un module ouvre sa page.
 
 \capture{sy-deve-tous}{Tous les modules, avec la fenêtre d'évaluation en lot.}
 
 \section{Relire les fiches}
 
-\chemin{Fiches à relire} liste les fiches soumises. \bouton{Relire} ouvre la version proposée,
-avec le formulaire de décision : \bouton{Publier}, \bouton{Renvoyer aux responsables} ou
-\bouton{Refuser} (un commentaire est alors obligatoire). Les responsables sont prévenus.
+\chemin{Fiches à relire} liste les fiches soumises, avec leurs responsables et s'il s'agit
+d'une première version ou d'une mise à jour. \bouton{Relire} ouvre la version proposée ; pour
+une mise à jour, les rubriques et les séances modifiées depuis la version publiée portent la
+marque \statut{modifiée}. La décision se prend \textbf{sous la fiche} : \bouton{Publier},
+\bouton{Renvoyer aux responsables} ou \bouton{Refuser} (un commentaire est alors demandé). Les
+responsables sont prévenus, et vous revenez à la liste des fiches à relire.
 
 \capture{sy-deve-a-relire}{Fiches à relire.}
 
@@ -385,7 +413,10 @@ avec le formulaire de décision : \bouton{Publier}, \bouton{Renvoyer aux respons
     un nom, une description.
   \item Ouvrez-le, puis ajoutez les compétences : code (\og D1.2\fg{}), intitulé, compétence
     parente (aucune pour un domaine), description. Chaque ligne de l'arbre se modifie, reçoit
-    des sous-compétences, monte ou descend parmi ses s\oe urs, ou se supprime.
+    des sous-compétences, monte ou descend parmi ses s\oe urs, ou se supprime (après
+    confirmation). Après \og Ajouter une sous-compétence\fg{}, le formulaire reste ouvert sous
+    le même parent, avec le code suivant proposé (\og D1.3\fg{}) : il suffit de saisir
+    l'intitulé.
   \item Ou importez un fichier \textbf{CSV} : une ligne d'en-tête, puis une ligne par
     compétence, colonnes \og Code\fg{}, \og Code parent\fg{} (vide pour un domaine),
     \og Intitulé\fg{}, \og Description\fg{} ; séparateur point-virgule, virgule ou tabulation.
@@ -407,13 +438,14 @@ supprime pas, ni le référentiel qui la contient : retirez d'abord les liens. L
 
 \section{Matrice des compétences}
 
-\chemin{Compétences} (suivi des modules) croise un référentiel avec les cours du périmètre :
+\chemin{Matrice des compétences} (suivi des modules) croise un référentiel avec les cours du périmètre :
 une ligne par compétence, une colonne par cours, dans l'ordre du cursus (année, période), les
 cours sans module liés en dernier.
 Une case porte le niveau (I, A, M), suivi de \og *\fg{} quand la compétence est visée par le
 cours lui-même (cours sans module). La dernière colonne compte les cours qui visent la
-compétence ; une compétence qu'aucun cours ne vise est surlignée. Filtre par année d'étude,
-export CSV. Les enseignants y ont accès aussi.
+compétence (pour un domaine : l'une de ses sous-compétences) ; une compétence qu'aucun cours ne
+vise est surlignée. Filtre par année d'étude (\og Toutes les années\fg{} par défaut), export CSV.
+Les enseignants y ont accès aussi.
 
 \capture{sy-deve-competences}{Matrice compétences $\times$ cours, avec la couverture du référentiel.}
 
@@ -430,9 +462,9 @@ module.
 \chemin{Résultats des évaluations} donne, module par module, le nombre de réponses et la
 moyenne de chaque question commune à échelle : les mêmes questions, posées partout, se
 comparent d'un module à l'autre. Les modules sous le seuil d'anonymat n'ont pas de moyenne.
-Export CSV.
+Le nom d'un module ouvre ses résultats détaillés. Export CSV.
 
-\capture{sy-deve-resultats}{Résultats comparés des évaluations closes.}
+\capture{sy-deve-resultats}{Résultats comparés des évaluations terminées.}
 
 \newpage
 % ===========================================================================
@@ -493,6 +525,9 @@ supprimé sont effacés avec lui.
   \item[Un enseignant du cours ne peut pas rédiger la fiche.] Il n'est pas désigné responsable
     (\chemin{Responsables}). Tant qu'un module n'a aucun responsable, tout enseignant du cours
     peut le rédiger.
+  \item[Je ne peux pas soumettre ma fiche.] Les rubriques signalées sont vides : objectifs,
+    acquis d'apprentissage, contenu, modalités d'évaluation, et au moins une séance (ou des
+    heures de travail personnel). Enregistrez le brouillon et complétez-la.
   \item[Je ne peux plus modifier mes questions.] L'évaluation est ouverte : les questions sont
     figées pour que toutes les réponses portent sur les mêmes questions.
   \item[Je ne vois pas les résultats.] Ils s'affichent après la fermeture (sauf réglage de la

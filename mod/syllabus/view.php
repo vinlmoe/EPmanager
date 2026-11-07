@@ -30,9 +30,15 @@ use mod_syllabus\output\fiche;
 
 $id = required_param('id', PARAM_INT);
 $show = optional_param('show', '', PARAM_ALPHA);
+// Liste d'où vient la DEVE (« Fiches à relire ») : elle y revient après sa décision.
+$returnto = optional_param('returnto', '', PARAM_LOCALURL);
 $cm = get_coursemodule_from_id('syllabus', $id, 0, false, MUST_EXIST);
 require_login($cm->course, true, $cm);
-[$cm, $course, $syllabus, $context, $rights] = syllabus_page_init($cm, '/mod/syllabus/view.php', $show ? ['show' => $show] : []);
+[$cm, $course, $syllabus, $context, $rights] = syllabus_page_init(
+    $cm,
+    '/mod/syllabus/view.php',
+    array_filter(['show' => $show, 'returnto' => $returnto])
+);
 
 $published = syllabus_get_published((int) $syllabus->id);
 $working = ($rights->canedit || $rights->canmanage) ? syllabus_get_working((int) $syllabus->id) : null;
@@ -55,7 +61,7 @@ if ($decision !== '' && data_submitted() && confirm_sesskey()) {
     }
     $done = syllabus_review($syllabus, $cm, $working, (int) $USER->id, $decision, $comment);
     redirect(
-        new moodle_url('/mod/syllabus/view.php', ['id' => $cm->id]),
+        $returnto !== '' ? new moodle_url($returnto) : new moodle_url('/mod/syllabus/view.php', ['id' => $cm->id]),
         $done ? get_string('reviewdone_' . $decision, 'mod_syllabus') : get_string('reviewchanged', 'mod_syllabus'),
         null,
         $done ? \core\output\notification::NOTIFY_SUCCESS : \core\output\notification::NOTIFY_WARNING
@@ -66,100 +72,132 @@ if ($decision !== '' && data_submitted() && confirm_sesskey()) {
 (new completion_info($course))->set_module_viewed($cm);
 
 echo $OUTPUT->header();
-
-// Évaluation : ce que l'étudiant peut faire, ou l'état pour les responsables et la DEVE.
 $state = syllabus_eval_state($syllabus);
-$evalhtml = '';
+$shown = ($show === 'working' && $working) ? $working : $published;
+$reviewing = $show === 'working' && $working && $working->status === SYLLABUS_STATUS_SUBMITTED && $rights->canmanage;
+
+// Étudiant : l'invitation à évaluer, en tête et sous la fiche.
+$invite = '';
 if ($rights->canevaluate && !$rights->canedit) {
     $problem = syllabus_evaluation_problem($syllabus, $context, (int) $USER->id);
     if ($problem === null) {
-        $evalhtml = html_writer::tag('p', get_string('evalinvite', 'mod_syllabus', syllabus_eval_window_label($syllabus)))
+        $window = syllabus_eval_window_label($syllabus);
+        $invite = $OUTPUT->box(html_writer::tag('p', get_string('evalinvite', 'mod_syllabus', $window))
             . $OUTPUT->single_button(
                 new moodle_url('/mod/syllabus/evaluate.php', ['id' => $cm->id]),
                 get_string('evaluatemodule', 'mod_syllabus'),
                 'get',
                 ['type' => 'primary']
-            );
+            ), 'generalbox mb-3');
     } else if ($problem !== 'evalnone') {
-        $evalhtml = html_writer::tag('p', get_string($problem . '_student', 'mod_syllabus', syllabus_eval_window_label($syllabus)));
+        $invite = $OUTPUT->box(html_writer::tag('p', get_string(
+            $problem . '_student',
+            'mod_syllabus',
+            syllabus_eval_window_label($syllabus)
+        )), 'generalbox mb-3');
     }
-} else if ($rights->canedit || $rights->canmanage) {
-    $a = (object) ['responses' => syllabus_count_responses((int) $syllabus->id), 'eligible' => syllabus_count_eligible($context)];
-    $evalhtml = html_writer::tag('p', syllabus_eval_badge($syllabus) . ' ' . s(syllabus_eval_window_label($syllabus)))
-        . ($state !== SYLLABUS_EVAL_NONE ? html_writer::tag('p', get_string('responsesrate', 'mod_syllabus', $a)) : '');
-    $links = [html_writer::link(
-        new moodle_url('/mod/syllabus/evaluation.php', ['id' => $cm->id]),
-        get_string('evaluationsettings', 'mod_syllabus'),
-        ['class' => 'btn btn-secondary mr-2']
-    )];
-    if ($rights->canseeresults) {
-        $links[] = html_writer::link(
-            new moodle_url('/mod/syllabus/results.php', ['id' => $cm->id]),
-            get_string('results', 'mod_syllabus'),
-            ['class' => 'btn btn-secondary']
-        );
-    }
-    $evalhtml .= html_writer::div(implode('', $links));
-}
-if ($evalhtml !== '') {
-    echo $OUTPUT->box(html_writer::tag('h4', get_string('evaluation', 'mod_syllabus')) . $evalhtml, 'generalbox mb-3');
+    echo $invite;
 }
 
-// Rédaction : version publiée, version de travail, actions.
+// Responsables et DEVE : où en est le module, étape par étape, avec le lien de chaque étape.
 if ($rights->canedit || $rights->canmanage) {
-    $lines = [];
-    $lines[] = $published
+    $steps = [];
+    $done = fn(bool $ok) => html_writer::span($ok ? '✓' : '○', $ok ? 'text-success mr-2' : 'text-muted mr-2');
+    // 1. La fiche.
+    $text = $published
         ? get_string('publishedversion', 'mod_syllabus', (object) ['version' => $published->version,
             'date' => userdate($published->timereviewed ?: $published->timemodified, get_string('strftimedate', 'langconfig'))])
         : get_string('nopublished', 'mod_syllabus');
     if ($working) {
-        $lines[] = get_string('workingversion', 'mod_syllabus', (object) ['version' => $working->version,
+        $text .= ' ' . get_string('workingversion', 'mod_syllabus', (object) ['version' => $working->version,
             'status' => syllabus_status_label($working->status)]);
-        if ($working->status === SYLLABUS_STATUS_RETURNED && trim((string) $working->reviewcomment) !== '') {
-            $lines[] = get_string('reviewcommentis', 'mod_syllabus', s($working->reviewcomment));
-        }
     }
-    $buttons = [];
+    $actions = [];
     if ($rights->canedit && (!$working || $working->status !== SYLLABUS_STATUS_SUBMITTED)) {
-        $buttons[] = html_writer::link(
+        $actions[] = html_writer::link(
             new moodle_url('/mod/syllabus/edit.php', ['id' => $cm->id]),
             get_string($working ? 'continueediting' : ($published ? 'proposeupdate' : 'writefiche'), 'mod_syllabus'),
-            ['class' => 'btn btn-primary mr-2']
+            ['class' => 'btn btn-sm ' . ($published && !$working ? 'btn-secondary' : 'btn-primary') . ' ml-2']
         );
     }
     if ($working && $show !== 'working') {
-        $buttons[] = html_writer::link(
-            new moodle_url($PAGE->url, ['show' => 'working']),
-            get_string('showworking', 'mod_syllabus'),
-            ['class' => 'btn btn-secondary mr-2']
-        );
-    } else if ($show === 'working') {
-        $buttons[] = html_writer::link(
+        $actions[] = html_writer::link(new moodle_url($PAGE->url, ['show' => 'working']), get_string(
+            $working->status === SYLLABUS_STATUS_SUBMITTED && $rights->canmanage ? 'reviewnow' : 'showworking',
+            'mod_syllabus'
+        ), ['class' => 'btn btn-sm btn-secondary ml-2']);
+    } else if ($show === 'working' && $published) {
+        $actions[] = html_writer::link(
             new moodle_url('/mod/syllabus/view.php', ['id' => $cm->id]),
             get_string('showpublished', 'mod_syllabus'),
-            ['class' => 'btn btn-secondary mr-2']
+            ['class' => 'btn btn-sm btn-secondary ml-2']
         );
     }
-    echo $OUTPUT->box(html_writer::tag('h4', get_string('fichestate', 'mod_syllabus'))
-        . html_writer::alist(array_map('s', $lines)) . html_writer::div(implode('', $buttons)), 'generalbox mb-3');
-
-    if ($show === 'working' && $working && $working->status === SYLLABUS_STATUS_SUBMITTED && $rights->canmanage) {
-        $form = html_writer::start_tag('form', ['method' => 'post', 'action' => $PAGE->url->out(false)])
-            . html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()])
-            . html_writer::tag('label', get_string('reviewcomment', 'mod_syllabus'), ['for' => 'reviewcomment'])
-            . html_writer::tag('textarea', '', ['name' => 'reviewcomment', 'id' => 'reviewcomment', 'rows' => 3,
-                'class' => 'form-control mb-2']);
-        foreach (['publish' => 'btn-primary', 'return' => 'btn-secondary', 'reject' => 'btn-danger'] as $value => $class) {
-            $form .= html_writer::tag('button', get_string('decide_' . $value, 'mod_syllabus'), ['type' => 'submit',
-                'name' => 'decision', 'value' => $value, 'class' => 'btn ' . $class . ' mr-2']);
-        }
-        echo $OUTPUT->box(html_writer::tag('h4', get_string('reviewheading', 'mod_syllabus')) . $form
-            . html_writer::end_tag('form'), 'generalbox mb-3');
+    $line = $done((bool) $published) . html_writer::tag('strong', get_string('fiche', 'mod_syllabus')) . ' : ' . s($text)
+        . implode('', $actions);
+    if ($working && $working->status === SYLLABUS_STATUS_RETURNED && trim((string) $working->reviewcomment) !== '') {
+        $line .= html_writer::div(
+            get_string('reviewcommentis', 'mod_syllabus', s($working->reviewcomment)),
+            'alert alert-warning mt-1 mb-0 py-1'
+        );
     }
+    $steps[] = $line;
+    // 2. Les compétences.
+    $competencies = count(syllabus_get_module_competencies($syllabus));
+    $steps[] = $done($competencies > 0) . html_writer::tag('strong', get_string('competencies', 'mod_syllabus')) . ' : '
+        . get_string($competencies ? 'competenciesn' : 'nocompetencies', 'mod_syllabus', $competencies)
+        . html_writer::link(new moodle_url('/mod/syllabus/competencies.php', ['id' => $cm->id]), get_string(
+            $competencies ? 'change' : 'linkcompetenciesshort',
+            'mod_syllabus'
+        ), ['class' => 'btn btn-sm btn-secondary ml-2']);
+    // 3. L'évaluation : questions de l'enseignant, fenêtre, réponses.
+    $questions = count(syllabus_get_module_questions((int) $syllabus->id, 'teacher'));
+    $evaltext = syllabus_eval_badge($syllabus) . ' ' . s(syllabus_eval_window_label($syllabus)) . ' · '
+        . get_string('teacherquestionsn', 'mod_syllabus', $questions);
+    if ($state !== SYLLABUS_EVAL_NONE) {
+        $evaltext .= ' · ' . get_string('responsesrate', 'mod_syllabus', (object) [
+            'responses' => syllabus_count_responses((int) $syllabus->id), 'eligible' => syllabus_count_eligible($context)]);
+    }
+    $evallinks = html_writer::link(new moodle_url('/mod/syllabus/evaluation.php', ['id' => $cm->id]), get_string(
+        'evaluationsettings',
+        'mod_syllabus'
+    ), ['class' => 'btn btn-sm btn-secondary ml-2']);
+    if ($rights->canseeresults) {
+        $evallinks .= html_writer::link(new moodle_url('/mod/syllabus/results.php', ['id' => $cm->id]), get_string(
+            'results',
+            'mod_syllabus'
+        ), ['class' => 'btn btn-sm btn-secondary ml-2']);
+    }
+    $steps[] = $done($state !== SYLLABUS_EVAL_NONE) . html_writer::tag('strong', get_string('evaluation', 'mod_syllabus'))
+        . ' : ' . $evaltext . $evallinks;
+    // Caractéristiques manquantes : elles comptent pour le livret, la frise et la matrice.
+    $missing = [];
+    if ((float) $syllabus->ects <= 0) {
+        $missing[] = get_string('ects', 'mod_syllabus');
+    }
+    if (trim((string) $syllabus->semester) === '') {
+        $missing[] = get_string('semester', 'mod_syllabus');
+    }
+    if (!(int) $syllabus->studyyear) {
+        $missing[] = get_string('studyyear', 'mod_syllabus');
+    }
+    if ($missing && has_capability('moodle/course:manageactivities', $context)) {
+        $steps[] = $done(false) . get_string('missingcharacteristics', 'mod_syllabus', implode(', ', $missing))
+            . html_writer::link(new moodle_url('/course/modedit.php', ['update' => $cm->id]), get_string(
+                'settings'
+            ), ['class' => 'btn btn-sm btn-secondary ml-2']);
+    }
+    $list = html_writer::alist($steps, ['class' => 'list-unstyled mb-0 syllabus-steps']);
+    if ($reviewing) {
+        $list .= html_writer::div(html_writer::link(
+            '#review',
+            get_string('reviewgoto', 'mod_syllabus'),
+            ['class' => 'btn btn-primary']
+        ), 'mt-2');
+    }
+    echo $OUTPUT->box(html_writer::tag('h4', get_string('modulestate', 'mod_syllabus')) . $list, 'generalbox mb-3');
 }
 
-// La fiche.
-$shown = ($show === 'working' && $working) ? $working : $published;
+// La fiche (et, à la relecture, les rubriques modifiées depuis la version publiée).
 if ($shown) {
     echo html_writer::div(
         html_writer::link(new moodle_url('/mod/syllabus/pdf.php', ['id' => $cm->id,
@@ -170,6 +208,28 @@ if ($shown) {
 if ($show === 'working' && $working) {
     echo $OUTPUT->notification(get_string('workingnotice', 'mod_syllabus', syllabus_status_label($working->status)), 'info');
 }
-echo fiche::render($syllabus, $shown);
+$compare = ($show === 'working' && $working && $published) ? $published : null;
+echo fiche::render($syllabus, $shown, $compare, false);
+
+// Décision de la DEVE, sous la fiche qu'elle vient de lire.
+if ($reviewing) {
+    $form = html_writer::start_tag('form', ['method' => 'post', 'action' => $PAGE->url->out(false)])
+        . html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()])
+        . html_writer::tag('label', get_string('reviewcomment', 'mod_syllabus'), ['for' => 'reviewcomment'])
+        . html_writer::tag('textarea', '', ['name' => 'reviewcomment', 'id' => 'reviewcomment', 'rows' => 3,
+            'class' => 'form-control mb-2', 'required' => 'required']);
+    foreach (['publish' => 'btn-primary', 'return' => 'btn-secondary', 'reject' => 'btn-danger'] as $value => $class) {
+        // Publier n'exige pas de commentaire : le navigateur ne le réclame que pour renvoyer ou refuser.
+        $attributes = ['type' => 'submit', 'name' => 'decision', 'value' => $value, 'class' => 'btn ' . $class . ' mr-2'];
+        if ($value === 'publish') {
+            $attributes['formnovalidate'] = 'formnovalidate';
+        }
+        $form .= html_writer::tag('button', get_string('decide_' . $value, 'mod_syllabus'), $attributes);
+    }
+    $form .= html_writer::tag('p', get_string('decisionhelp', 'mod_syllabus'), ['class' => 'small text-muted mt-2 mb-0']);
+    echo html_writer::div($OUTPUT->box(html_writer::tag('h4', get_string('reviewheading', 'mod_syllabus')) . $form
+        . html_writer::end_tag('form'), 'generalbox mt-3'), '', ['id' => 'review']);
+}
+echo $invite;
 
 echo $OUTPUT->footer();

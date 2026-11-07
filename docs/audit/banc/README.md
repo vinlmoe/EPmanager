@@ -50,3 +50,8 @@ crédit, élément ni décision (minimum de 6 ECTS en 3e année), pour `interact
   pages web (référentiel DEVE, fiches, relecture, fenêtre en lot, tâche d'ouverture, 200
   étudiants qui évaluent, résultats), rapport `../test-syllabus.tex`. `syllabus_setup.php
   site-x.json reset` pour rejouer.
+- `syllabus_charge_setup.php`, `syllabus_pages.py`, `syllabus_stress.py`, `syllabus_ruee.py`,
+  `syllabus_lourds.py`, `syllabus_profil.py` : modules syllabus à l'échelle d'une école (cinq
+  années de douze modules, 1 000 étudiants), rapport `../test-syllabus-charge.tex`. Le jeu se
+  génère après le scénario de bout en bout (qui recrée le référentiel commun) ;
+  `syllabus_charge_setup.php site-x.json reset` pour le supprimer.

@@ -39,7 +39,7 @@ class mod_syllabus_mod_form extends moodleform_mod {
      * Définition du formulaire.
      */
     public function definition() {
-        global $COURSE;
+        global $COURSE, $DB;
         $mform = $this->_form;
 
         $mform->addElement('header', 'general', get_string('general', 'form'));
@@ -57,7 +57,21 @@ class mod_syllabus_mod_form extends moodleform_mod {
         $mform->setDefault('code', $COURSE->shortname);
         $mform->addElement('float', 'ects', get_string('ects', 'mod_syllabus'), ['size' => '6']);
         $mform->setDefault('ects', 0);
-        $mform->addElement('text', 'semester', get_string('semester', 'mod_syllabus'), ['size' => '20']);
+        // Période : choisie parmi celles déjà utilisées sur le site (S1, S2...), ou saisie. Une même
+        // période écrite de deux façons ferait deux colonnes dans la frise, le livret et la matrice.
+        $periods = $DB->get_fieldset_sql("SELECT DISTINCT semester FROM {syllabus} WHERE semester <> '' ORDER BY semester");
+        natcasesort($periods);
+        $mform->addElement(
+            'autocomplete',
+            'semester',
+            get_string('semester', 'mod_syllabus'),
+            ['' => ''] + array_combine($periods, $periods),
+            ['tags' => true, 'multiple' => false,
+            'noselectionstring' => get_string(
+                'periodnone',
+                'mod_syllabus'
+            )]
+        );
         $mform->setType('semester', PARAM_TEXT);
         $mform->addHelpButton('semester', 'semester', 'mod_syllabus');
         $mform->addElement('select', 'studyyear', get_string('studyyear', 'mod_syllabus'), syllabus_studyyear_options());
@@ -65,6 +79,7 @@ class mod_syllabus_mod_form extends moodleform_mod {
         $mform->addHelpButton('typeid', 'moduletype', 'mod_syllabus');
 
         $mform->addElement('header', 'evaluationhdr', get_string('evaluation', 'mod_syllabus'));
+        $mform->addElement('static', 'evaluationnote', '', get_string('evalwindownote', 'mod_syllabus'));
         $mform->addElement('date_time_selector', 'evalopen', get_string('evalopen', 'mod_syllabus'), ['optional' => true]);
         $mform->addHelpButton('evalopen', 'evalopen', 'mod_syllabus');
         $mform->addElement('date_time_selector', 'evalclose', get_string('evalclose', 'mod_syllabus'), ['optional' => true]);
