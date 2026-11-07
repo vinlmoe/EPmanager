@@ -123,6 +123,20 @@ Par défaut, `validatedeve`, `manage` et `viewall` sont données aux rôles « e
 éditeur » dans le cours de la promotion, les leur retirer au niveau de l'activité ou du cours,
 et donner à la DEVE le rôle « gestionnaire ».
 
+## Dimensionnement et réglages du serveur
+
+Mesures du test de stress (`docs/audit/test-de-stress.pdf`), sur un serveur de 4 cœurs avec six
+promotions (10 000 étudiants, 540 000 crédits) :
+
+- une page du module coûte de 50 à 75 ms de processeur, à peine plus qu'une page ordinaire de
+  Moodle ; un serveur de 4 cœurs en sert environ 50 par seconde, sans erreur jusqu'à 400
+  utilisateurs simultanés sans temps de réflexion, et en continu pendant une demi-heure ;
+- activer les **connexions persistantes** à la base (`$CFG->dboptions['dbpersist'] = 1;` dans
+  `config.php`, ou un pool de connexions comme pgbouncer) : +23 % de débit ;
+- dimensionner PHP-FPM à environ 4 processus par cœur (`pm = static`) et prévoir 512 Mo de mémoire
+  par processus pour les exports complets et les livrets PDF ;
+- Redis pour les sessions et le cache applicatif n'est utile qu'avec plusieurs serveurs web.
+
 ## Tests
 
 ```bash

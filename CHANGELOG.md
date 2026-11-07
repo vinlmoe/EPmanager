@@ -3,6 +3,27 @@
 Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
 a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
 
+## 1.0.1 — mod_ep 2026111500, mod_epsynthesis 2026111400 (15 novembre 2026)
+
+Test de stress et optimisations.
+
+- **Test de stress** sur un serveur de type production (nginx, PHP-FPM, PostgreSQL réglé), six
+  promotions (10 000 étudiants, 538 000 crédits) : montée en charge de 25 à 400 utilisateurs
+  simultanés sans temps de réflexion, endurance de 30 minutes, traitements lourds simultanés
+  (exports complets, livrets, émission groupée, restauration) sous charge. Aucune erreur, aucune
+  dérive ; rapport `docs/audit/test-de-stress.pdf`, outils `docs/audit/banc/stress.py`,
+  `profil.py`, `lourds.py`.
+- **Index** (promotion, EP, état) et (promotion, état, date) sur les crédits : places prises et
+  états par EP lus sur l'index seul (10 à 17 ms → 2,6 ms), file de la DEVE lue dans l'ordre de
+  l'index (19 ms → 0,3 ms) ; total des listes sans jointure inutile (17 ms → 1,5 ms).
+- Synthèse enseignant : libellés calculés une fois par type, noms seulement pour les lignes
+  affichées (143 ms → 113 ms pour six promotions).
+- Participants d'un EP : étudiants à ajouter lus par recherche et limite, et non plus toute la
+  promotion à chaque affichage.
+- Libellés d'état et d'année mis en mémoire pour la requête.
+- Débit global +27 à +35 % avec les connexions persistantes à la base, recommandées dans
+  `mod/ep/INSTALL.md` (section « Dimensionnement et réglages du serveur »).
+
 ## 1.0.0 — mod_ep 2026111400, mod_epsynthesis 2026111400 (14 novembre 2026)
 
 Lots 8 et 9 : banc de charge et de concurrence, parcours de bout en bout, revue de sécurité,

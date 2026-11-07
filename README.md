@@ -62,6 +62,7 @@ Voir [`mod/ep/INSTALL.md`](mod/ep/INSTALL.md) puis
 | `docs/guides/guide-etudiant.pdf` | Étudiants |
 | `docs/formats-import.pdf` | Formats des imports et des exports |
 | `docs/audit/test-de-charge.pdf`, `docs/audit/test-de-concurrence.pdf` | Mesures sur une promotion de 2 000 étudiants |
+| `docs/audit/test-de-stress.pdf` | Montée en charge jusqu'à saturation, endurance et traitements lourds sur six promotions |
 | `docs/plan-mise-a-niveau.pdf` | Plan de la mise à niveau 1.0 |
 | `CHANGELOG.md` | Historique des versions |
 
