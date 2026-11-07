@@ -58,3 +58,8 @@ crédit, élément ni décision (minimum de 6 ECTS en 3e année), pour `interact
   années de douze modules, 1 000 étudiants), rapport `../test-syllabus-charge.tex`. Le jeu se
   génère après le scénario de bout en bout (qui recrée le référentiel commun) ;
   `syllabus_charge_setup.php site-x.json reset` pour le supprimer.
+- `balayage_droits.py site-x.json syllabus.json [comptes...]` : chaque page des cinq modules
+  appelée par un étudiant d'une autre promotion, un étudiant inscrit et le responsable d'un autre
+  module ; les pages non refusées sont listées sur la sortie d'erreur, à examiner une à une.
+  Rapport `../audit-complet.tex`. Les scripts PHP du banc se lancent en `sudo -u www-data` avec
+  des fichiers lisibles par ce compte (copier au besoin `site-x.json` à côté de Moodle).

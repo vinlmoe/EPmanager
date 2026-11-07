@@ -1,7 +1,43 @@
 # Historique des versions
 
-Une section par version de module, la plus récente en tête. Les dates sont celles du commit qui
-a fixé le numéro dans `version.php`. À tenir à jour à chaque modification de `version.php`.
+Une section par version de module, la plus récente en tête. Les dates sont celles que portent les
+numéros de `version.php` (AAAAMMJJ) : fixés à l'avance pendant le développement, ils ne
+correspondent pas toujours au jour du commit. À tenir à jour à chaque modification de
+`version.php`.
+
+## Audit complet — mod_ep 1.0.6, mod_epsynthesis 1.0.3, mod_syllabus et mod_syllabusstaff 1.5.1 (2026112600)
+
+Corrections issues de l'audit complet de la branche (`docs/audit/audit-complet.pdf`) : six
+revues du code, balayage des droits sur le banc, scénario de bout en bout rejoué (51/51).
+
+- **Sécurité, mod_ep** : le supplément et la situation d'un étudiant ne s'ouvrent que pour un
+  étudiant inscrit à l'activité (un compte DEVE lisait le supplément, date de naissance comprise,
+  de n'importe quel compte du site) ; changer le type d'une déclaration en attente fait suivre le
+  circuit du nouveau type (l'étape DEVE pouvait être sautée) ; libellés des listes déroulantes
+  échappés ; cellules des exports CSV neutralisées contre les formules.
+- **Sécurité, modules syllabus** : l'envoi d'un avis est un événement anonyme ; dès qu'un avis a
+  été donné, seule la DEVE déplace la fenêtre du recueil (par la page du recueil comme par les
+  paramètres) ; les résultats comparés ne montrent que les modules dont l'utilisateur gère les
+  avis ; suppressions de questions, types, référentiels et compétences confirmées sur une page
+  du serveur, et non plus en JavaScript seulement.
+- **Intégrité** : rentrée protégée contre une double application ; suppression d'un EP du
+  catalogue sous verrou, sans orphelins (versions du syllabus, séances, prérequis), avec page de
+  confirmation (le bouton échouait sur la clé de session) ; sceau des suppléments sauvegardé et
+  rétabli après suppression et restauration sur le même site (diplômes remis vérifiables) ;
+  décisions d'un crédit écarté à la restauration plus rattachées au crédit précédent ; crédits
+  de stage convertis en saisies DEVE lors d'un transfert vers une activité qui ne lit pas les
+  mêmes stages ; émission groupée des suppléments reprenable sans double émission ; copie d'un
+  cours sans données utilisateurs : recueil des avis sans fenêtre.
+- **Robustesse** : intitulé des crédits de stage borné à 255 caractères et rédigé dans la langue
+  du site ; messages des décisions en lot envoyés après le verrou ; tâche d'ouverture des avis :
+  étudiants ayant répondu lus en une requête, module marqué avant l'envoi ; requêtes portables
+  (moyenne décimale sous SQL Server, chaîne vide sous Oracle, sans `DISTINCT` sur la fiche
+  utilisateur, alias non réservé).
+- **Accessibilité et langues** : listes de filtres, cases à cocher et indicateurs d'étape nommés
+  pour les lecteurs d'écran ; tableaux larges défilants sur téléphone ; chaînes absentes du cœur
+  remplacées.
+- `$plugin->supported = [403, 405]` dans les cinq modules ; 7 tests unitaires de plus (190) ;
+  balayage des droits ajouté au banc (`docs/audit/banc/balayage_droits.py`).
 
 ## Modules syllabus 1.5.0 — mod_syllabus, mod_syllabusstaff, mod_syllabusstudent 2026112500 (25 novembre 2026)
 
