@@ -102,7 +102,12 @@ if ($rights->canevaluate && !$rights->canedit) {
 // Responsables et DEVE : où en est le module, étape par étape, avec le lien de chaque étape.
 if ($rights->canedit || $rights->canmanage) {
     $steps = [];
-    $done = fn(bool $ok) => html_writer::span($ok ? '✓' : '○', $ok ? 'text-success mr-2' : 'text-muted mr-2');
+    // Le glyphe est décoratif ; l'état est dit en toutes lettres aux lecteurs d'écran.
+    $done = fn(bool $ok) => html_writer::span(
+        $ok ? '✓' : '○',
+        $ok ? 'text-success mr-2' : 'text-muted mr-2',
+        ['aria-hidden' => 'true']
+    ) . html_writer::span(get_string($ok ? 'done' : 'todo', 'completion'), 'sr-only');
     // 1. La fiche.
     $text = $published
         ? get_string('publishedversion', 'mod_syllabus', (object) ['version' => $published->version,

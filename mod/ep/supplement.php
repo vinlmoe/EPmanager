@@ -56,6 +56,11 @@ if ($isself) {
     if (!$rights->viewall && !in_array((int) $userid, $rights->referentids, true)) {
         throw new moodle_exception('nopermissions', 'error', '', get_string('supplement', 'mod_ep'));
     }
+    // Seul le dossier d'un étudiant inscrit à l'activité se consulte ici : sinon n'importe quel
+    // compte du site (nom, numéro, date de naissance) serait lisible en parcourant les userid.
+    if (ep_count_enrolled_students($context, '', [(int) $userid]) !== 1) {
+        throw new moodle_exception('invaliduserid', 'error');
+    }
 }
 $student = $DB->get_record('user', ['id' => $userid, 'deleted' => 0], '*', MUST_EXIST);
 

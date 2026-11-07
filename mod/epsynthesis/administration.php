@@ -83,7 +83,8 @@ foreach ($available as $activity) {
         $activity->epcmid,
         $checked,
         '',
-        ['id' => 'epcmid_' . $activity->epcmid]
+        ['id' => 'epcmid_' . $activity->epcmid,
+            'aria-label' => format_string($activity->epname) . ' (' . format_string($activity->coursename) . ')']
     );
 
     $coursename = format_string($activity->coursename);

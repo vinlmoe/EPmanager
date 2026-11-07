@@ -27,7 +27,8 @@
     * hidden - Champs cachés : liste de {name, value}.
     * search - Recherche courante.
     * searchplaceholder - Texte d'aide du champ de recherche.
-    * selects - Listes déroulantes : liste de {name, options}, options étant une liste de {value, label, selected}.
+    * selects - Listes déroulantes : liste de {name, label, options}, label étant le nom lu par les lecteurs
+      d'écran et options une liste de {value, label, selected}.
     * submitlabel - Libellé du bouton.
     * resetlabel - Libellé du lien de réinitialisation.
     * reseturl - URL de la liste sans filtre.
@@ -39,7 +40,7 @@
         "search": "Martin",
         "searchplaceholder": "Student name",
         "selects": [
-            {"name": "status", "options": [
+            {"name": "status", "label": "All statuses", "options": [
                 {"value": "", "label": "All statuses", "selected": false},
                 {"value": "1", "label": "Pending", "selected": true}
             ]}
@@ -57,7 +58,7 @@
     <input type="text" name="search" id="ep-filters-search-{{uniqid}}" value="{{search}}"
            placeholder="{{searchplaceholder}}" class="form-control mr-2">
     {{#selects}}
-    <label class="sr-only" for="ep-filters-{{name}}-{{uniqid}}">{{name}}</label>
+    <label class="sr-only" for="ep-filters-{{name}}-{{uniqid}}">{{label}}</label>
     <select name="{{name}}" id="ep-filters-{{name}}-{{uniqid}}" class="custom-select form-control mr-2">
         {{#options}}
         <option value="{{value}}"{{#selected}} selected{{/selected}}>{{label}}</option>

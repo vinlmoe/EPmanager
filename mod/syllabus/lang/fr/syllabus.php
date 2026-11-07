@@ -305,3 +305,6 @@ $string['yearpast'] = '{$a}';
 $string['evolution'] = 'Évolution des moyennes d\'une année à l\'autre';
 $string['pastyearsn'] = '{$a} année(s) précédente(s)';
 $string['annualnotice'] = 'Les avis sont recueillis une fois par année universitaire (année en cours : {$a->year} ; années précédentes archivées : {$a->past}). Ouvrir le recueil dans une nouvelle année archive les résultats de l\'année précédente et repart de zéro ; vos questions sont gardées.';
+$string['windowlocked'] = 'Des avis ont déjà été donnés : seule la DEVE peut modifier la fenêtre du recueil.';
+$string['windowlockedform'] = 'Des avis ont déjà été donnés : seule la DEVE peut modifier ces dates.';
+$string['windowlockednotice'] = 'Fenêtre du recueil : du {$a->open} au {$a->close}. Des avis ont déjà été donnés : seule la DEVE peut modifier ces dates.';

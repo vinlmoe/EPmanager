@@ -103,6 +103,29 @@ final class security_test extends \advanced_testcase {
     }
 
     /**
+     * Changer le type d'une déclaration en attente fait suivre le circuit du nouveau type : un type
+     * validé par la seule DEVE ne peut plus être tranché par le référent.
+     */
+    public function test_type_change_follows_new_flow(): void {
+        global $DB;
+        $DB->set_field('ep_type', 'validationflow', 'referent', ['epid' => $this->ep->id, 'code' => EP_TYPE_SPORT]);
+        $DB->set_field('ep_type', 'validationflow', 'deve', ['epid' => $this->ep->id, 'code' => EP_TYPE_ENGAGEMENT]);
+        $sport = ep_get_type_by_code($this->ep->id, EP_TYPE_SPORT);
+        $engagement = ep_get_type_by_code($this->ep->id, EP_TYPE_ENGAGEMENT);
+        $creditid = ep_create_credit($this->ep, $this->student->id, $sport, ['name' => 'Club', 'claimedects' => 2,
+            'studyyear' => 3]);
+        $credit = $DB->get_record('ep_credit', ['id' => $creditid]);
+        $this->assertSame(EP_ROLE_REFERENT, $credit->pendingrole);
+
+        $credit->typeid = $engagement->id;
+        $this->assertTrue(ep_update_declaration($credit));
+        $credit = $DB->get_record('ep_credit', ['id' => $creditid]);
+        $this->assertSame(EP_ROLE_DEVE, $credit->pendingrole);
+        $this->assertFalse(ep_validate_credit($credit, $this->referent->id, 60, '', EP_ROLE_REFERENT));
+        $this->assertEquals(EP_STATUS_PENDING, $DB->get_field('ep_credit', 'status', ['id' => $creditid]));
+    }
+
+    /**
      * Un élément du supplément validé par le référent ne se modifie plus.
      */
     public function test_supplement_item_locked_after_first_step(): void {

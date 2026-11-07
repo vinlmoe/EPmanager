@@ -100,7 +100,7 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         ]);
         $suppissues = new backup_nested_element('suppissues');
         $suppissue = new backup_nested_element('suppissue', ['id'], [
-            'userid', 'number', 'lang', 'verifycode', 'filehash', 'issuedby', 'timeissued', 'replacedby',
+            'userid', 'number', 'lang', 'verifycode', 'filehash', 'seal', 'issuedby', 'timeissued', 'replacedby',
         ]);
         $yearvalidations = new backup_nested_element('yearvalidations');
         $yearvalidation = new backup_nested_element('yearvalidation', ['id'], [

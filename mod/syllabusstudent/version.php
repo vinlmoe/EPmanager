@@ -29,4 +29,5 @@ $plugin->version   = 2026112500;
 $plugin->requires  = 2023100900;
 $plugin->maturity  = MATURITY_STABLE;
 $plugin->release   = '1.5.0';
+$plugin->supported = [403, 405]; // Moodle 4.3 à 4.5, versions testées par la CI.
 $plugin->dependencies = ['mod_syllabus' => 2026112500];

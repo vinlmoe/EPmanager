@@ -57,7 +57,6 @@ $alltypes = ep_get_types($ep->id);
 // perdraient l'EP auquel ils se rattachent. Clore ou archiver l'EP est ce
 // qu'il faut faire dans ce cas.
 if ($action === 'delete' && $activityid) {
-    require_sesskey();
     $activity = $DB->get_record('ep_activity', ['id' => $activityid, 'epid' => $ep->id], '*', MUST_EXIST);
     if ($DB->record_exists('ep_credit', ['activityid' => $activity->id])) {
         redirect(
@@ -67,9 +66,26 @@ if ($action === 'delete' && $activityid) {
             \core\output\notification::NOTIFY_ERROR
         );
     }
-    $DB->delete_records('ep_activity_teacher', ['activityid' => $activity->id]);
-    $DB->delete_records('ep_activity', ['id' => $activity->id]);
-    redirect($baseurl, get_string('activitydeleted', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
+    if (optional_param('confirm', 0, PARAM_BOOL) && confirm_sesskey()) {
+        if (!ep_delete_activity($ep, $activity)) {
+            redirect($baseurl, get_string('erroractivityinuse', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+        }
+        redirect($baseurl, get_string('activitydeleted', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
+    }
+    // Suppression définitive : une page de confirmation, comme pour les types.
+    $confirmurl = new moodle_url($baseurl, [
+        'action' => 'delete', 'activityid' => $activity->id, 'confirm' => 1, 'sesskey' => sesskey(),
+    ]);
+    ep_set_secondary_page_header();
+    echo $OUTPUT->header();
+    echo $OUTPUT->heading(get_string('managecatalog', 'mod_ep'));
+    echo $OUTPUT->confirm(
+        get_string('confirmdeleteactivity', 'mod_ep', format_string($activity->name)),
+        new single_button($confirmurl, get_string('delete'), 'post', single_button::BUTTON_DANGER),
+        $baseurl
+    );
+    echo $OUTPUT->footer();
+    exit;
 }
 
 // Changement d'état rapide depuis la liste : publier, clore, archiver.
@@ -276,5 +292,5 @@ foreach ($activities as $activity) {
     ];
 }
 
-echo html_writer::table($table);
+echo html_writer::div(html_writer::table($table), 'table-responsive');
 echo $OUTPUT->footer();

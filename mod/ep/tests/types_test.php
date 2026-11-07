@@ -20,6 +20,7 @@ defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
 require_once($CFG->dirroot . '/mod/ep/locallib.php');
+require_once($CFG->dirroot . '/mod/stage/locallib.php');
 require_once($CFG->dirroot . '/mod/ep/db/upgrade.php');
 
 /**

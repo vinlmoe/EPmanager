@@ -50,8 +50,10 @@ class open_evaluations extends \core\task\scheduled_task {
                 continue;
             }
             syllabus_freeze_questions($syllabus);
-            $sent = syllabus_notify_evaluation_open($syllabus, $cm);
+            // Marqué avant l'envoi : une exécution interrompue ne renvoie pas les messages déjà
+            // partis (au pire, quelques étudiants ne sont pas prévenus ; le recueil reste ouvert).
             $DB->set_field('syllabus', 'evalnotified', $syllabus->evalopen, ['id' => $syllabus->id]);
+            $sent = syllabus_notify_evaluation_open($syllabus, $cm);
             mtrace("mod_syllabus : « {$syllabus->name} » (cm {$cm->id}), évaluation ouverte, $sent message(s).");
         }
         $rs->close();

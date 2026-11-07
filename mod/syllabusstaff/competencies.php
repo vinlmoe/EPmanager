@@ -96,18 +96,18 @@ foreach ($tree as $compid => $comp) {
 if ($download === 'csv' && $frameworkid) {
     $csv = new csv_export_writer('semicolon');
     $csv->set_filename('competences-' . clean_filename($frameworks[$frameworkid]->idnumber));
-    $csv->add_data(array_merge(
+    $csv->add_data(syllabus_csv_safe(array_merge(
         [get_string('code', 'mod_syllabusstaff'), get_string('competency', 'mod_syllabus')],
         array_map(fn($c) => $c->code, array_values($columns)),
         [get_string('coverage', 'mod_syllabusstaff')]
-    ));
+    )));
     foreach ($tree as $compid => $comp) {
         $line = [$comp->idnumber, str_repeat('  ', $comp->depth) . $comp->name];
         foreach ($columns as $column) {
             $line[] = $symbol($matrix[$column->courseid][$compid] ?? null);
         }
         $line[] = $coverage[$compid];
-        $csv->add_data($line);
+        $csv->add_data(syllabus_csv_safe($line));
     }
     $csv->download_file();
     exit;

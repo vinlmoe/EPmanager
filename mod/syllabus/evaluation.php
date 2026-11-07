@@ -47,18 +47,28 @@ $frozen = !empty($syllabus->evalfrozen);
 // Fenêtre.
 $windowform = new \mod_syllabus\form\window_form($baseurl);
 $windowform->set_data(['id' => $cm->id, 'evalopen' => $syllabus->evalopen, 'evalclose' => $syllabus->evalclose]);
+$windowlocked = syllabus_window_locked($syllabus, $context);
 if ($action === 'savewindow' && ($data = $windowform->get_data())) {
+    if ($windowlocked) {
+        throw new moodle_exception('windowlocked', 'mod_syllabus', $baseurl);
+    }
     syllabus_set_window($syllabus, (int) ($data->evalopen ?? 0), (int) ($data->evalclose ?? 0));
     redirect($baseurl, get_string('windowsaved', 'mod_syllabus'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
 // Questions de l'enseignant.
-if (in_array($action, ['delete', 'up', 'down'], true) && $questionid && confirm_sesskey()) {
-    if ($action === 'delete') {
-        syllabus_delete_question($questionid, (int) $syllabus->id);
-    } else {
-        syllabus_move_question($questionid, (int) $syllabus->id, $action === 'up' ? -1 : 1);
-    }
+if ($action === 'delete' && $questionid) {
+    $question = $DB->get_record('syllabus_question', ['id' => $questionid, 'syllabusid' => $syllabus->id], '*', MUST_EXIST);
+    syllabus_require_confirmation(
+        new moodle_url($baseurl, ['action' => 'delete', 'questionid' => $questionid]),
+        $baseurl,
+        get_string('confirmdeletequestion', 'mod_syllabus', format_string($question->text))
+    );
+    syllabus_delete_question($questionid, (int) $syllabus->id);
+    redirect($baseurl);
+}
+if (in_array($action, ['up', 'down'], true) && $questionid && confirm_sesskey()) {
+    syllabus_move_question($questionid, (int) $syllabus->id, $action === 'up' ? -1 : 1);
     redirect($baseurl);
 }
 $questionform = null;
@@ -101,7 +111,16 @@ echo html_writer::tag(
 );
 
 echo $OUTPUT->heading(get_string('evalwindowheading', 'mod_syllabus'), 4);
-$windowform->display();
+if ($windowlocked) {
+    // Des avis ont été donnés : les dates sont rappelées, seule la DEVE peut les changer.
+    $dates = (object) [
+        'open' => $syllabus->evalopen ? userdate($syllabus->evalopen) : '-',
+        'close' => $syllabus->evalclose ? userdate($syllabus->evalclose) : get_string('noclose', 'mod_syllabus'),
+    ];
+    echo $OUTPUT->notification(get_string('windowlockednotice', 'mod_syllabus', $dates), \core\output\notification::NOTIFY_INFO);
+} else {
+    $windowform->display();
+}
 
 if ($frozen) {
     // Le message suit l'état réel : ouverte, terminée, ou repoussée après une première ouverture.
@@ -133,12 +152,12 @@ if ($frozen) {
             $links[] = html_writer::link(new moodle_url($baseurl, ['action' => 'down', 'questionid' => $question->id,
                 'sesskey' => sesskey()]), get_string('movedown', 'mod_syllabus'));
         }
-        $links[] = $OUTPUT->action_link(new moodle_url($baseurl, ['action' => 'delete', 'questionid' => $question->id,
-            'sesskey' => sesskey()]), get_string('delete'), new confirm_action(get_string(
-                'confirmdeletequestion',
-                'mod_syllabus',
-                format_string($question->text)
-            )), ['class' => 'text-danger']);
+        // Confirmée par une page du serveur (voir syllabus_require_confirmation()).
+        $links[] = html_writer::link(
+            new moodle_url($baseurl, ['action' => 'delete', 'questionid' => $question->id]),
+            get_string('delete'),
+            ['class' => 'text-danger']
+        );
         return implode(' · ', $links);
     };
     echo syllabus_render_questions(syllabus_get_module_questions((int) $syllabus->id, 'teacher'), $actions);

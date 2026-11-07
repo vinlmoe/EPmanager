@@ -59,7 +59,9 @@ class mod_syllabus_mod_form extends moodleform_mod {
         $mform->setDefault('ects', 0);
         // Période : choisie parmi celles déjà utilisées sur le site (S1, S2...), ou saisie. Une même
         // période écrite de deux façons ferait deux colonnes dans la frise, le livret et la matrice.
-        $periods = $DB->get_fieldset_sql("SELECT DISTINCT semester FROM {syllabus} WHERE semester <> '' ORDER BY semester");
+        $periods = $DB->get_fieldset_sql("SELECT DISTINCT semester FROM {syllabus}
+                                            WHERE " . $DB->sql_isnotempty('syllabus', 'semester', false, false) . "
+                                         ORDER BY semester");
         natcasesort($periods);
         $mform->addElement(
             'autocomplete',
@@ -83,6 +85,14 @@ class mod_syllabus_mod_form extends moodleform_mod {
         $mform->addElement('date_time_selector', 'evalopen', get_string('evalopen', 'mod_syllabus'), ['optional' => true]);
         $mform->addHelpButton('evalopen', 'evalopen', 'mod_syllabus');
         $mform->addElement('date_time_selector', 'evalclose', get_string('evalclose', 'mod_syllabus'), ['optional' => true]);
+        // Des avis ont été donnés : la fenêtre n'est plus modifiable ici que par la DEVE.
+        if (!empty($this->current->instance) && $this->context instanceof context_module) {
+            $instance = $DB->get_record('syllabus', ['id' => $this->current->instance]);
+            if ($instance && syllabus_window_locked($instance, $this->context)) {
+                $mform->hardFreeze(['evalopen', 'evalclose']);
+                $mform->addElement('static', 'windowlocked', '', get_string('windowlockedform', 'mod_syllabus'));
+            }
+        }
 
         $this->standard_coursemodule_elements();
         $this->add_action_buttons();

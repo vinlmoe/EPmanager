@@ -40,6 +40,7 @@ require_once($CFG->dirroot . '/mod/ep/locallib.php');
  * @covers     ::ep_add_participants
  * @covers     ::ep_cancel_credit
  * @covers     ::ep_apply_participant_decisions
+ * @covers     ::ep_hold_notifications
  * @covers     ::ep_correct_grade
  * @covers     ::ep_close_activity
  * @covers     ::ep_rights_can_manage_participants
@@ -275,12 +276,17 @@ final class participants_test extends \advanced_testcase {
         $this->assertSame(1, $nothing->ignored);
         $this->assertSame(EP_STATUS_PENDING, (int) $this->credit($a)->status);
 
+        $sink = $this->redirectMessages();
         $result = ep_apply_participant_decisions($this->ep, $activity, [
             $a => ['grade' => 15, 'comment' => 'Bien'],
             $b => ['grade' => 9.5],
             $c => ['grade' => 25],
             $d => ['grade' => null, 'decision' => ''],
         ], $this->rights($this->owner));
+        // Les deux étudiants tranchés sont prévenus, une fois le lot enregistré et le verrou rendu.
+        $this->assertCount(2, $sink->get_messages());
+        $this->assertFalse(ep_hold_notifications(null));
+        $sink->close();
         $this->assertSame(1, $result->validated);
         $this->assertSame(1, $result->rejected);
         $this->assertSame(2, $result->ignored);

@@ -290,6 +290,6 @@ foreach ($activities as $activity) {
     ];
 }
 
-echo html_writer::table($table);
+echo html_writer::div(html_writer::table($table), 'table-responsive');
 echo ep_render_paging_bar($totalactivities, $page, $listurl);
 echo $OUTPUT->footer();

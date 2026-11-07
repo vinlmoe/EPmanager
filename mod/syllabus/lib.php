@@ -127,6 +127,11 @@ function syllabus_update_instance($data, $mform = null) {
     $data->timemodified = time();
     // Une ouverture dans une nouvelle année universitaire archive le recueil précédent.
     $current = $DB->get_record('syllabus', ['id' => $data->id], '*', MUST_EXIST);
+    // Des avis ont été donnés : seule la DEVE déplace la fenêtre (voir syllabus_window_locked()).
+    if (syllabus_window_locked($current, context_module::instance($data->coursemodule))) {
+        $data->evalopen = (int) $current->evalopen;
+        $data->evalclose = (int) $current->evalclose;
+    }
     $data->evalyear = syllabus_prepare_window($current, (int) $data->evalopen);
     $DB->update_record('syllabus', $data);
     return true;

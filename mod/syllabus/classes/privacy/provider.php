@@ -126,8 +126,8 @@ class provider implements
         }
         foreach (self::sources() as [$join, $field]) {
             $userlist->add_from_sql(
-                'uid',
-                "SELECT $field AS uid FROM {syllabus} s $join WHERE s.id = :id AND $field IS NOT NULL",
+                'userid',
+                "SELECT $field AS userid FROM {syllabus} s $join WHERE s.id = :id AND $field IS NOT NULL",
                 ['id' => $cm->instance]
             );
         }

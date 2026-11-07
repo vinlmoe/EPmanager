@@ -178,7 +178,7 @@ function syllabusstaff_render_modules(array $rows, bool $selectable = false, arr
         }
         $table->data[] = $tablerow;
     }
-    return html_writer::table($table);
+    return html_writer::div(html_writer::table($table), 'table-responsive');
 }
 
 /**

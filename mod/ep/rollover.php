@@ -55,7 +55,10 @@ $nextyear = min(6, (int) $ep->currentstudyyear + 1);
 if ($action === 'rollover' && $nextyear !== (int) $ep->currentstudyyear) {
     if ($confirm) {
         require_sesskey();
-        $year = ep_rollover($ep);
+        $year = ep_rollover($ep, required_param('from', PARAM_INT));
+        if ($year === false) {
+            redirect($baseurl, get_string('rolloverstale', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+        }
         redirect(
             $baseurl,
             get_string('rolloverdone', 'mod_ep', ep_studyyear_label($year)),
@@ -72,7 +75,8 @@ if ($action === 'rollover' && $nextyear !== (int) $ep->currentstudyyear) {
             'to' => ep_studyyear_label($nextyear),
         ]),
         new single_button(
-            new moodle_url($baseurl, ['action' => 'rollover', 'confirm' => 1, 'sesskey' => sesskey()]),
+            new moodle_url($baseurl, ['action' => 'rollover', 'confirm' => 1, 'from' => $ep->currentstudyyear,
+                'sesskey' => sesskey()]),
             get_string('rollover', 'mod_ep'),
             'post',
             single_button::BUTTON_PRIMARY
@@ -205,7 +209,8 @@ if (empty($targets)) {
         if (trim((string) $student->idnumber) !== '') {
             $label .= ' (' . $student->idnumber . ')';
         }
-        $students[$student->id] = $label;
+        // html_writer::select() n'échappe pas les libellés : idnumber est un texte libre.
+        $students[$student->id] = s($label);
     }
     echo html_writer::start_tag('form', ['method' => 'post', 'action' => $baseurl->out(false), 'class' => 'mt-2']);
     foreach (['sesskey' => sesskey(), 'action' => 'transfer'] as $name => $value) {

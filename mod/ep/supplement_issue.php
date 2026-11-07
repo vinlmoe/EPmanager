@@ -117,6 +117,7 @@ if ($action === 'issueall') {
         'issuerid' => (int) $USER->id,
         'lang' => array_key_exists($lang, $langoptions) ? $lang : 'fr',
         'force' => optional_param('force', 0, PARAM_BOOL) ? 1 : 0,
+        'queued' => time(),
     ]);
     $task->set_userid($USER->id);
     \core\task\manager::queue_adhoc_task($task);
@@ -160,7 +161,7 @@ if ($action === 'zip') {
     }
     $zippath = make_request_directory() . '/supplements.zip';
     if (!get_file_packer('application/zip')->archive_to_pathname($files, $zippath)) {
-        throw new moodle_exception('cannotcreatezip', 'error');
+        throw new moodle_exception('cannotsavezipfile', 'error');
     }
     $zipname = clean_filename(format_string($ep->name, true, ['context' => $context]) . ' - '
         . get_string('supplementissues', 'mod_ep') . '.zip');

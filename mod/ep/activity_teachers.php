@@ -89,7 +89,7 @@ foreach ($potential as $teacher) {
             $teacher->id,
             isset($assigned[$teacher->id]),
             '',
-            ['id' => 'teacherid_' . $teacher->id]
+            ['id' => 'teacherid_' . $teacher->id, 'aria-label' => fullname($teacher)]
         ),
         fullname($teacher),
         s($teacher->email),

@@ -25,10 +25,11 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_epsynthesis';
-$plugin->version   = 2026111600;
+$plugin->version   = 2026112600;
 $plugin->requires  = 2023100900; // Moodle 4.3+, comme mod_stage.
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.0.2';
+$plugin->release   = '1.0.3';
+$plugin->supported = [403, 405]; // Moodle 4.3 à 4.5, versions testées par la CI.
 $plugin->dependencies = [
     // Toute la synthèse est lue dans les activités mod_ep liées : cette activité n'a pas de
     // données de suivi propres.

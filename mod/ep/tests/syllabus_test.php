@@ -29,6 +29,7 @@ require_once($CFG->dirroot . '/mod/ep/locallib.php');
  * @copyright  2026 Sébastien Lefebvre
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers     ::ep_create_proposal
+ * @covers     ::ep_delete_activity
  * @covers     ::ep_start_syllabus_revision
  * @covers     ::ep_save_syllabus
  * @covers     ::ep_set_syllabus_sessions
@@ -92,6 +93,36 @@ final class syllabus_test extends \advanced_testcase {
         $activity = $DB->get_record('ep_activity', ['id' => $created->activityid], '*', MUST_EXIST);
         $syllabus = $DB->get_record('ep_syllabus', ['id' => $created->syllabusid], '*', MUST_EXIST);
         return [$activity, $syllabus];
+    }
+
+    /**
+     * Supprimer une proposition retire aussi ses versions de syllabus, leurs séances, ses
+     * responsables et les prérequis qui la citent ; un EP auquel un crédit se rattache reste.
+     */
+    public function test_delete_activity_leaves_no_orphans(): void {
+        global $DB;
+        [$activity, $syllabus] = $this->proposal();
+        ep_set_syllabus_sessions($syllabus->id, [['title' => 'Cours', 'kind' => 'lecture', 'duration' => 2]]);
+        [$other] = $this->proposal();
+        $DB->insert_record('ep_activity_prereq', (object) ['activityid' => $other->id, 'requiredid' => $activity->id,
+            'timecreated' => time()]);
+
+        $this->assertTrue(ep_delete_activity($this->ep, $activity));
+        $this->assertFalse($DB->record_exists('ep_activity', ['id' => $activity->id]));
+        $this->assertFalse($DB->record_exists('ep_syllabus', ['activityid' => $activity->id]));
+        $this->assertFalse($DB->record_exists('ep_session', ['syllabusid' => $syllabus->id]));
+        $this->assertFalse($DB->record_exists('ep_activity_teacher', ['activityid' => $activity->id]));
+        $this->assertFalse($DB->record_exists('ep_activity_prereq', ['requiredid' => $activity->id]));
+
+        $student = $this->getDataGenerator()->create_and_enrol(get_course($this->ep->course), 'student');
+        ep_create_credit(
+            $this->ep,
+            $student->id,
+            ep_get_type_by_code($this->ep->id, EP_TYPE_ACADEMIC),
+            ['activityid' => $other->id, 'name' => $other->name, 'claimedects' => 2]
+        );
+        $this->assertFalse(ep_delete_activity($this->ep, $other));
+        $this->assertTrue($DB->record_exists('ep_activity', ['id' => $other->id]));
     }
 
     /**

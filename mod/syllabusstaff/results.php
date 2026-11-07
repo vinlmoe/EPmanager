@@ -42,8 +42,12 @@ require_login($cm->course, true, $cm);
 );
 require_capability('mod/syllabusstaff:manageall', $context);
 
-// Années passées présentes dans les archives des modules du périmètre.
+// Années passées présentes dans les archives des modules du périmètre. Seuls comptent les
+// modules dont l'utilisateur gère les avis (mod/syllabus:manage), comme dans la liste des modules
+// et la relecture : le droit du suivi seul ne donne pas les résultats de tous les modules.
+$canmanage = fn($row) => has_capability('mod/syllabus:manage', context_module::instance($row->cmid));
 [$all] = syllabus_list_instances(['categoryid' => $instance->categoryid]);
+$all = array_filter($all, $canmanage);
 $pastyears = [];
 if ($all) {
     [$insql, $params] = $DB->get_in_or_equal(array_map('intval', array_keys($all)));
@@ -55,6 +59,7 @@ if ($year !== '' && !in_array($year, $pastyears, true)) {
 }
 if ($year === '') {
     [$rows] = syllabus_list_instances(['categoryid' => $instance->categoryid, 'evalstate' => $evalstate]);
+    $rows = array_filter($rows, $canmanage);
     $ids = array_map('intval', array_keys($rows));
     $means = syllabus_common_means($ids);
     $overview = syllabus_get_overview($ids);
@@ -92,9 +97,11 @@ foreach ($rows as $row) {
 if ($download === 'csv') {
     $csv = new csv_export_writer('semicolon');
     $csv->set_filename('avis-des-etudiants-' . ($year !== '' ? $year : syllabus_academic_year(time())));
-    $csv->add_data(array_merge(array_slice($head, 0, 2), array_map(fn($q) => $q->text, array_values($columns))));
+    $headrow = array_merge(array_slice($head, 0, 2), array_map(fn($q) => $q->text, array_values($columns)));
+    $csv->add_data(syllabus_csv_safe($headrow));
     foreach ($data as $line) {
-        $csv->add_data(array_map(fn($cell) => html_entity_decode(strip_tags((string) $cell), ENT_QUOTES, 'UTF-8'), $line));
+        $plain = array_map(fn($cell) => html_entity_decode(strip_tags((string) $cell), ENT_QUOTES, 'UTF-8'), $line);
+        $csv->add_data(syllabus_csv_safe($plain));
     }
     $csv->download_file();
     exit;
@@ -136,7 +143,7 @@ if ($data) {
     $table = new html_table();
     $table->head = $head;
     $table->data = $data;
-    echo html_writer::table($table);
+    echo html_writer::div(html_writer::table($table), 'table-responsive');
     echo html_writer::link(
         new moodle_url($PAGE->url, ['download' => 'csv']),
         get_string('downloadcsv', 'mod_syllabus'),

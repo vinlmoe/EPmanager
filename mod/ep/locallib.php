@@ -1111,6 +1111,45 @@ function ep_get_activity_lock($epid) {
 }
 
 /**
+ * Supprime un EP du catalogue et tout ce qui s'y rattache (responsables, prérequis dans les deux
+ * sens, versions du syllabus et leurs séances), sous le verrou de l'activité : refusé dès qu'un
+ * crédit s'y rattache, vérification faite sous ce verrou pour qu'une inscription simultanée ne
+ * se retrouve pas sans EP.
+ *
+ * @param stdClass $ep
+ * @param stdClass $activity
+ * @return bool False si un crédit s'y rattache.
+ */
+function ep_delete_activity(stdClass $ep, stdClass $activity) {
+    global $DB;
+
+    $lock = ep_get_activity_lock($ep->id);
+    try {
+        if ($DB->record_exists('ep_credit', ['activityid' => $activity->id])) {
+            return false;
+        }
+        $transaction = $DB->start_delegated_transaction();
+        $DB->delete_records('ep_activity_teacher', ['activityid' => $activity->id]);
+        $DB->delete_records_select(
+            'ep_activity_prereq',
+            'activityid = :a OR requiredid = :r',
+            ['a' => $activity->id, 'r' => $activity->id]
+        );
+        $syllabusids = $DB->get_fieldset_select('ep_syllabus', 'id', 'activityid = ?', [$activity->id]);
+        if ($syllabusids) {
+            [$insql, $params] = $DB->get_in_or_equal($syllabusids);
+            $DB->delete_records_select('ep_session', "syllabusid $insql", $params);
+        }
+        $DB->delete_records('ep_syllabus', ['activityid' => $activity->id]);
+        $DB->delete_records('ep_activity', ['id' => $activity->id, 'epid' => $ep->id]);
+        $transaction->allow_commit();
+        return true;
+    } finally {
+        $lock->release();
+    }
+}
+
+/**
  * Module de cours d'une instance, lu une fois par requête : les événements et les notifications
  * en ont besoin à chaque écriture, et une synchronisation en déclenche un par crédit.
  *
@@ -1240,17 +1279,23 @@ function ep_registration_problem(stdClass $activity, $type, $userid, $studyyear 
 
 /**
  * Enregistre les modifications apportées par l'étudiant à une déclaration encore en attente
- * (type, intitulé, description, année, ECTS demandés). Rien n'est écrit si la demande a été
- * tranchée entre-temps.
+ * (type, intitulé, description, année, ECTS demandés), l'étape en attente suivant le circuit du
+ * type. Rien n'est écrit si la demande a été tranchée entre-temps.
  *
  * @param stdClass $credit Crédit, avec les nouvelles valeurs.
  * @return bool False si la demande n'était plus en attente.
  */
 function ep_update_declaration(stdClass $credit) {
+    global $DB;
+
     $credit->timemodified = time();
+    // L'étape en attente suit le circuit du type choisi : la garder après un changement de type
+    // laisserait statuer le référent sur un type que seule la DEVE valide.
+    $flow = $DB->get_field('ep_type', 'validationflow', ['id' => $credit->typeid, 'epid' => $credit->epid], MUST_EXIST);
+    $credit->pendingrole = ep_flow_steps($flow)[0] ?? EP_ROLE_DEVE;
     $applied = ep_update_credit_if(
         $credit,
-        ['typeid', 'studyyear', 'name', 'description', 'claimedects', 'timemodified'],
+        ['typeid', 'studyyear', 'name', 'description', 'claimedects', 'pendingrole', 'timemodified'],
         // Modifiable seulement avant toute décision : une demande déjà validée à une première étape
         // (par le référent, avant la DEVE) ne doit plus changer sous les yeux de l'étape suivante.
         'status = :pending AND step = 0 AND source = :student AND activityid IS NULL',
@@ -1587,10 +1632,13 @@ function ep_get_student_referents(stdClass $ep, $studentid) {
     }
 
     [$insql, $inparams] = $DB->get_in_or_equal($stageids, SQL_PARAMS_NAMED, 'st');
-    $sql = "SELECT DISTINCT u.id, u.*
-              FROM {stage_entry_teacher} et
-              JOIN {user} u ON u.id = et.teacherid
-             WHERE et.stageid $insql AND et.studentid = :studentid
+    // Sous-requête plutôt que DISTINCT : la fiche utilisateur contient des champs texte (CLOB sous
+    // Oracle), qu'un DISTINCT ne peut pas comparer.
+    $sql = "SELECT u.*
+              FROM {user} u
+             WHERE u.id IN (SELECT et.teacherid
+                              FROM {stage_entry_teacher} et
+                             WHERE et.stageid $insql AND et.studentid = :studentid)
           ORDER BY u.lastname ASC, u.firstname ASC";
 
     return $DB->get_records_sql($sql, $inparams + ['studentid' => $studentid]);
@@ -2911,7 +2959,7 @@ function ep_print_student_dashboard(stdClass $ep, $userid, stdClass $cm, stdClas
  * @return stdClass {created, updated, deleted}
  */
 function ep_sync_stage_credits_locked(stdClass $ep) {
-    global $DB;
+    global $CFG, $DB;
 
     $result = (object) ['created' => 0, 'updated' => 0, 'deleted' => 0];
 
@@ -2944,15 +2992,18 @@ function ep_sync_stage_credits_locked(stdClass $ep) {
             continue;
         }
         $ects = round((float) $entry->retainedduration * (float) $type->ectsperday, 2);
-        $name = get_string('stagecreditname', 'mod_ep', (object) [
+        // Intitulé dans la langue du site, et non dans celle de la page qui déclenche la
+        // synchronisation (sinon chaque consultation dans une autre langue réécrirait tous les
+        // crédits), borné à la taille du champ : thème et structure peuvent faire 255 caractères.
+        $name = core_text::substr(get_string_manager()->get_string('stagecreditname', 'mod_ep', (object) [
             'theme' => $entry->themename !== null ? format_string($entry->themename) : '-',
             'structure' => $entry->structure !== null ? format_string($entry->structure) : '-',
-        ]);
-        $description = get_string('stagecreditdescription', 'mod_ep', (object) [
+        ], $CFG->lang), 0, 255);
+        $description = get_string_manager()->get_string('stagecreditdescription', 'mod_ep', (object) [
             'days' => $entry->retainedduration,
             'rate' => ep_format_ects($type->ectsperday),
             'activity' => format_string($entry->stagename),
-        ]);
+        ], $CFG->lang);
 
         $credit = $byref[(int) $entry->id] ?? null;
         if ($credit) {
@@ -4096,6 +4147,8 @@ function ep_apply_participant_decisions(stdClass $ep, stdClass $activity, array 
     $result = (object) ['validated' => 0, 'rejected' => 0, 'corrected' => 0, 'changed' => 0, 'ignored' => 0];
     $grading = ep_activity_grading($activity);
     $lock = ep_get_activity_lock($ep->id);
+    $committed = false;
+    ep_hold_notifications(true);
     try {
         $transaction = $DB->start_delegated_transaction();
         foreach ($entries as $creditid => $entry) {
@@ -4157,8 +4210,17 @@ function ep_apply_participant_decisions(stdClass $ep, stdClass $activity, array 
             }
         }
         $transaction->allow_commit();
+        $committed = true;
     } finally {
         $lock->release();
+        $messages = ep_hold_notifications(false);
+    }
+    // Décisions enregistrées et verrou rendu : les étudiants sont prévenus. Rien n'est envoyé si
+    // le lot a échoué (transaction annulée).
+    if ($committed) {
+        foreach ($messages as $message) {
+            message_send($message);
+        }
     }
     return $result;
 }
@@ -4790,6 +4852,31 @@ function ep_render_template($text, array $vars) {
 }
 
 /**
+ * Met de côté les messages du module au lieu de les envoyer, puis rend ceux mis de côté : un
+ * traitement en lot les envoie après avoir rendu le verrou de l'activité, plutôt que pendant
+ * (l'envoi des courriels peut prendre plusieurs secondes pour une promotion entière).
+ *
+ * @param bool|null $hold Vrai pour commencer à mettre de côté, faux pour arrêter ; null pour
+ *     seulement savoir si les messages sont mis de côté.
+ * @param \core\message\message|null $message Message à mettre de côté.
+ * @return array|bool Messages mis de côté (à l'arrêt), sinon vrai si les messages sont mis de côté.
+ */
+function ep_hold_notifications(?bool $hold, ?\core\message\message $message = null) {
+    static $held = null;
+
+    if ($message !== null) {
+        $held[] = $message;
+        return true;
+    }
+    if ($hold === null) {
+        return $held !== null;
+    }
+    $messages = $held ?? [];
+    $held = $hold ? [] : null;
+    return $messages;
+}
+
+/**
  * Envoie un courriel du module (messagerie Moodle : l'utilisateur choisit dans ses préférences
  * s'il le reçoit par courriel, en notification, ou les deux). Rien n'est envoyé si la DEVE a
  * désactivé ce courriel pour l'instance. Dans une transaction, Moodle diffère l'envoi après la
@@ -4825,6 +4912,9 @@ function ep_send_notification(stdClass $ep, $key, stdClass $touser, array $vars,
     $message->contexturl = $url->out(false);
     $message->contexturlname = format_string($ep->name);
     $message->courseid = $ep->course;
+    if (ep_hold_notifications(null)) {
+        return ep_hold_notifications(null, $message);
+    }
     return (bool) message_send($message);
 }
 
@@ -5141,14 +5231,26 @@ function ep_validate_years_in_bulk(stdClass $ep, $studyyear, array $userids, $by
  * crédits, décisions et suppléments restent en place.
  *
  * @param stdClass $ep
- * @return int Nouvelle année courante.
+ * @param int|null $from Année de départ confirmée par la DEVE (par défaut celle de $ep) : rien
+ *     n'est écrit si l'activité n'y est plus, ce qui empêche une double rentrée (deux onglets,
+ *     formulaire renvoyé).
+ * @return int|false Nouvelle année courante, false si l'année avait déjà changé.
  */
-function ep_rollover(stdClass $ep) {
-    global $DB;
-
-    $next = min(6, (int) $ep->currentstudyyear + 1);
-    $DB->set_field('ep', 'currentstudyyear', $next, ['id' => $ep->id]);
-    $DB->set_field('ep', 'timemodified', time(), ['id' => $ep->id]);
+function ep_rollover(stdClass $ep, ?int $from = null) {
+    $from = $from ?? (int) $ep->currentstudyyear;
+    $next = min(6, $from + 1);
+    $record = (object) ['id' => $ep->id, 'currentstudyyear' => $next, 'timemodified' => time()];
+    if (
+        !ep_update_record_if(
+            'ep',
+            $record,
+            ['currentstudyyear', 'timemodified'],
+            'currentstudyyear = :from',
+            ['from' => $from]
+        )
+    ) {
+        return false;
+    }
     $ep->currentstudyyear = $next;
     return $next;
 }
@@ -5944,9 +6046,15 @@ function ep_transfer_student(stdClass $source, stdClass $target, $userid) {
     $first = min((int) $source->id, (int) $target->id);
     $second = max((int) $source->id, (int) $target->id);
     $lock1 = ep_get_activity_lock($first);
-    $lock2 = ep_get_activity_lock($second);
+    $lock2 = null;
     try {
+        $lock2 = ep_get_activity_lock($second);
         $transaction = $DB->start_delegated_transaction();
+
+        // Crédits issus des stages : la cible les recalcule elle-même si elle lit les mêmes
+        // activités « Gestion des stages » ; sinon ils deviennent des crédits saisis par la DEVE,
+        // que sa synchronisation ne supprimera pas comme orphelins.
+        $samestages = array_keys(ep_get_linked_stage_instances($source)) == array_keys(ep_get_linked_stage_instances($target));
 
         $targettypes = [];
         foreach (ep_get_types($target->id) as $type) {
@@ -5977,6 +6085,13 @@ function ep_transfer_student(stdClass $source, stdClass $target, $userid) {
         }
 
         foreach ($DB->get_records('ep_credit', ['epid' => $source->id, 'userid' => $userid]) as $credit) {
+            if ($credit->source === EP_SOURCE_STAGE) {
+                if ($samestages) {
+                    continue;
+                }
+                $credit->source = EP_SOURCE_DEVE;
+                $credit->sourceref = 0;
+            }
             $credit->epid = $target->id;
             $credit->typeid = $typemap[(int) $credit->typeid] ?? $credit->typeid;
             $credit->activityid = $credit->activityid ? ($activitymap[(int) $credit->activityid] ?? null) : null;
@@ -6028,7 +6143,9 @@ function ep_transfer_student(stdClass $source, stdClass $target, $userid) {
 
         $transaction->allow_commit();
     } finally {
-        $lock2->release();
+        if ($lock2) {
+            $lock2->release();
+        }
         $lock1->release();
     }
     return $result;
@@ -6490,4 +6607,21 @@ function ep_get_import_log($epid, $limit = 50) {
     global $DB;
 
     return $DB->get_records('ep_import_log', ['epid' => $epid], 'timecreated DESC, id DESC', '*', 0, $limit);
+}
+
+/**
+ * Ligne d'export CSV sans formule : une cellule texte qui commence par = + - @ (ou une tabulation,
+ * un retour chariot) reçoit une apostrophe, pour qu'un tableur ne l'exécute pas à l'ouverture.
+ * Les versions récentes de Moodle le font aussi ; pas les plus anciennes que le module accepte.
+ *
+ * @param array $row
+ * @return array
+ */
+function ep_csv_safe(array $row): array {
+    foreach ($row as $key => $value) {
+        if (is_string($value) && !is_numeric($value) && preg_match('/^\s*[=+\-@\t\r]/', $value)) {
+            $row[$key] = "'" . $value;
+        }
+    }
+    return $row;
 }

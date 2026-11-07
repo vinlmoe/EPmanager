@@ -69,8 +69,8 @@ $yearlabel = $archive ? $archive->evalyear : ($syllabus->evalyear !== '' ? $syll
 if ($download === 'csv' && $results->shown) {
     $csv = new csv_export_writer('semicolon');
     $csv->set_filename(clean_filename(($syllabus->code !== '' ? $syllabus->code : $course->shortname) . '-avis-' . $yearlabel));
-    $csv->add_data([get_string('question', 'mod_syllabus'), get_string('questionkind', 'mod_syllabus'),
-        get_string('answers', 'mod_syllabus'), get_string('mean', 'mod_syllabus'), get_string('distribution', 'mod_syllabus')]);
+    $csv->add_data(syllabus_csv_safe([get_string('question', 'mod_syllabus'), get_string('questionkind', 'mod_syllabus'),
+        get_string('answers', 'mod_syllabus'), get_string('mean', 'mod_syllabus'), get_string('distribution', 'mod_syllabus')]));
     $kinds = syllabus_question_kinds();
     foreach ($results->questions as $entry) {
         $parts = [];
@@ -80,8 +80,8 @@ if ($download === 'csv' && $results->shown) {
         if ($entry->question->kind === 'text') {
             $parts = $entry->texts;
         }
-        $csv->add_data([$entry->question->text, $kinds[$entry->question->kind], $entry->count,
-            $entry->mean === null ? '' : syllabus_format_number($entry->mean), implode(' | ', $parts)]);
+        $csv->add_data(syllabus_csv_safe([$entry->question->text, $kinds[$entry->question->kind], $entry->count,
+            $entry->mean === null ? '' : syllabus_format_number($entry->mean), implode(' | ', $parts)]));
     }
     $csv->download_file();
     exit;
@@ -136,7 +136,7 @@ if ($archives) {
             ));
         }
         echo $OUTPUT->heading(get_string('evolution', 'mod_syllabus'), 4);
-        echo html_writer::table($table);
+        echo html_writer::div(html_writer::table($table), 'table-responsive');
     }
 }
 if (!$results->shown) {
@@ -164,7 +164,7 @@ foreach (array_values($results->questions) as $index => $entry) {
     }
 }
 if ($summary->data) {
-    echo html_writer::table($summary);
+    echo html_writer::div(html_writer::table($summary), 'table-responsive');
 }
 
 $number = 0;
@@ -194,7 +194,7 @@ foreach ($results->questions as $entry) {
             $label = $question->kind === 'scale' ? get_string('scale_' . $value, 'mod_syllabus') : $entry->labels[$value];
             $table->data[] = [s($label), $count, html_writer::div($bar, '', ['style' => 'width:12rem']) . $percent . ' %'];
         }
-        $html .= html_writer::table($table);
+        $html .= html_writer::div(html_writer::table($table), 'table-responsive');
     }
     echo $OUTPUT->box($html, 'generalbox mb-3');
 }

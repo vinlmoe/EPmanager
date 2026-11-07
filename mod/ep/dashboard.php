@@ -65,6 +65,9 @@ if ($studentid) {
     if ($restrictuserids !== null && !in_array($studentid, $restrictuserids, true)) {
         throw new moodle_exception('nopermissions', 'error', '', get_string('pilotage', 'mod_ep'));
     }
+    if (ep_count_enrolled_students($context, '', [$studentid]) !== 1) {
+        throw new moodle_exception('invaliduserid', 'error');
+    }
     $student = $DB->get_record('user', ['id' => $studentid], '*', MUST_EXIST);
     $PAGE->set_url(new moodle_url($baseurl, ['studentid' => $studentid]));
 

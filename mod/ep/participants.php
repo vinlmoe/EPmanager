@@ -82,7 +82,7 @@ if ($action === 'export') {
     // la virgule est le séparateur décimal des notes.
     $export = new csv_export_writer('semicolon', '"', 'application/download', true);
     $export->set_filename(clean_filename(format_string($activity->name) . '-participants'));
-    $export->add_data([
+    $export->add_data(ep_csv_safe([
         get_string('lastname'),
         get_string('firstname'),
         $emailheader,
@@ -93,7 +93,7 @@ if ($action === 'export') {
         get_string('retainedects', 'mod_ep'),
         get_string('decidedon', 'mod_ep'),
         get_string('validatorcomment', 'mod_ep'),
-    ]);
+    ]));
 
     $credits = ep_get_participants($activity, [EP_STATUS_PENDING, EP_STATUS_VALIDATED, EP_STATUS_REJECTED]);
     $students = ep_get_credit_users($credits);
@@ -109,7 +109,7 @@ if ($action === 'export') {
         } else {
             $result = '';
         }
-        $export->add_data([
+        $export->add_data(ep_csv_safe([
             $student ? $student->lastname : '',
             $student ? $student->firstname : '',
             $student ? $student->email : '',
@@ -121,7 +121,7 @@ if ($action === 'export') {
             $status !== EP_STATUS_PENDING && $credit->validatetime
                 ? userdate($credit->validatetime, get_string('strftimedatetimeshort')) : '',
             (string) $credit->validatorcomment,
-        ]);
+        ]));
     }
     $export->download_file();
     exit;
@@ -610,7 +610,8 @@ if (empty($pool) && $addsearch === '') {
         if (trim((string) $candidate->idnumber) !== '') {
             $label .= ' (' . $candidate->idnumber . ')';
         }
-        $options[$candidate->id] = $label;
+        // html_writer::select() n'échappe pas les libellés : idnumber est un texte libre.
+        $options[$candidate->id] = s($label);
     }
     echo html_writer::start_tag('form', ['method' => 'post', 'action' => $baseurl->out(false)]);
     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);

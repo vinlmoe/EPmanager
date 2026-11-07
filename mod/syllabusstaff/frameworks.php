@@ -49,17 +49,34 @@ $notify = fn($key, $a = null, $ok = true) => [get_string($key, 'mod_syllabusstaf
     ? \core\output\notification::NOTIFY_SUCCESS : \core\output\notification::NOTIFY_ERROR];
 
 // Suppressions et déplacements.
-if (in_array($action, ['deleteframework', 'deletecomp', 'up', 'down'], true) && confirm_sesskey()) {
-    if ($action === 'deleteframework') {
-        $done = syllabus_delete_framework(required_param('target', PARAM_INT));
-        [$message, $type] = $notify($done ? 'frameworkdeleted' : 'frameworkinuse', null, $done);
-        redirect($baseurl, $message, null, $type);
+// Les suppressions passent par une page de confirmation du serveur (voir
+// syllabus_require_confirmation()).
+if ($action === 'deleteframework') {
+    $target = required_param('target', PARAM_INT);
+    if (!isset($frameworks[$target])) {
+        throw new moodle_exception('invalidrecord', 'error');
     }
-    if ($action === 'deletecomp') {
-        $done = syllabus_delete_comp($compid);
-        [$message, $type] = $notify($done ? 'compdeleted' : 'compinuse', null, $done);
-        redirect($fwurl, $message, null, $type);
-    }
+    syllabus_require_confirmation(
+        new moodle_url($baseurl, ['action' => 'deleteframework', 'target' => $target]),
+        $baseurl,
+        get_string('confirmdeleteframework', 'mod_syllabusstaff', format_string($frameworks[$target]->name))
+    );
+    $done = syllabus_delete_framework($target);
+    [$message, $type] = $notify($done ? 'frameworkdeleted' : 'frameworkinuse', null, $done);
+    redirect($baseurl, $message, null, $type);
+}
+if ($action === 'deletecomp') {
+    $comp = $DB->get_record('syllabus_comp', ['id' => $compid], '*', MUST_EXIST);
+    syllabus_require_confirmation(
+        new moodle_url($fwurl, ['action' => 'deletecomp', 'compid' => $compid]),
+        $fwurl,
+        get_string('confirmdeletecomp', 'mod_syllabusstaff', format_string($comp->name))
+    );
+    $done = syllabus_delete_comp($compid);
+    [$message, $type] = $notify($done ? 'compdeleted' : 'compinuse', null, $done);
+    redirect($fwurl, $message, null, $type);
+}
+if (in_array($action, ['up', 'down'], true) && confirm_sesskey()) {
     syllabus_move_comp($compid, $action === 'up' ? -1 : 1);
     redirect($fwurl);
 }
@@ -162,12 +179,8 @@ if (!$frameworkid) {
                 html_writer::link(new moodle_url($baseurl, ['frameworkid' => $framework->id]), get_string(
                     'open',
                     'mod_syllabusstaff'
-                )) . ' · ' . $OUTPUT->action_link(new moodle_url($baseurl, ['action' => 'deleteframework',
-                    'target' => $framework->id, 'sesskey' => sesskey()]), get_string('delete'), new confirm_action(get_string(
-                        'confirmdeleteframework',
-                        'mod_syllabusstaff',
-                        format_string($framework->name)
-                    )), ['class' => 'text-danger']),
+                )) . ' · ' . html_writer::link(new moodle_url($baseurl, ['action' => 'deleteframework',
+                    'target' => $framework->id]), get_string('delete'), ['class' => 'text-danger']),
             ];
         }
         echo html_writer::table($table);
@@ -206,10 +219,9 @@ if ($tree) {
             )),
             $rank > 0 ? $act('up', get_string('moveup', 'syllabusstaff')) : '',
             $rank < count($siblings[(int) $comp->parentid]) - 1 ? $act('down', get_string('movedown', 'syllabusstaff')) : '',
-            $OUTPUT->action_link(
-                new moodle_url($fwurl, ['action' => 'deletecomp', 'compid' => $comp->id, 'sesskey' => sesskey()]),
+            html_writer::link(
+                new moodle_url($fwurl, ['action' => 'deletecomp', 'compid' => $comp->id]),
                 get_string('delete'),
-                new confirm_action(get_string('confirmdeletecomp', 'mod_syllabusstaff', format_string($comp->name))),
                 ['class' => 'text-danger']
             ),
         ]);

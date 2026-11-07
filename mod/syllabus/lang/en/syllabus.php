@@ -305,3 +305,6 @@ $string['yearpast'] = '{$a}';
 $string['evolution'] = 'Change in means from one year to the next';
 $string['pastyearsn'] = '{$a} previous year(s)';
 $string['annualnotice'] = 'Feedback is collected once per academic year (current year: {$a->year}; archived previous years: {$a->past}). Opening feedback in a new academic year archives the previous year\'s results and starts afresh; your questions are kept.';
+$string['windowlocked'] = 'Feedback has already been given: only the academic office can change the feedback window.';
+$string['windowlockedform'] = 'Feedback has already been given: only the academic office can change these dates.';
+$string['windowlockednotice'] = 'Feedback window: from {$a->open} to {$a->close}. Feedback has already been given, so only the academic office can change these dates.';

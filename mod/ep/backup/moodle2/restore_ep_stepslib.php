@@ -278,14 +278,23 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
         if (!$userid) {
             return;
         }
+        // Le sceau d'origine n'est reconnu que s'il a été produit par ce site pour cet
+        // enregistrement : il est vérifié avec les identifiants d'avant la restauration.
+        $original = clone $data;
+        $original->epid = $this->get_old_parentid('ep');
+        $authentic = $this->task->is_samesite() && !empty($data->seal)
+            && hash_equals(ep_supplement_seal($original), (string) $data->seal);
         $data->epid = $this->get_new_parentid('ep');
         $data->userid = $userid;
         $data->issuedby = empty($data->issuedby) ? null : ($this->get_mappingid('user', $data->issuedby) ?: null);
         $this->replacedby[$oldid] = (int) ($data->replacedby ?? 0);
         $data->replacedby = null;
-        // Copie d'un document émis ailleurs : conservée, mais non reconnue par la vérification
-        // (voir ep_supplement_seal()).
-        $data->seal = null;
+        // Activité ou cours supprimé puis restauré sur le même site : le document remis à
+        // l'étudiant n'existe plus ailleurs (son numéro est libre) et reste vérifiable, scellé
+        // avec les nouveaux identifiants. Toute autre copie (cours dupliqué, autre site) est
+        // conservée mais non reconnue par la vérification (voir ep_supplement_seal()).
+        $keep = $authentic && !$DB->record_exists('ep_supplement_issue', ['number' => $data->number]);
+        $data->seal = $keep ? ep_supplement_seal($data) : null;
         $number = $data->number;
         $suffix = 1;
         while ($DB->record_exists('ep_supplement_issue', ['number' => $data->number])) {
@@ -407,7 +416,8 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
         $userid = $this->get_mappingid('user', $data->userid);
         $typeid = $this->get_mappingid('ep_type', $data->typeid);
         if (!$userid || !$typeid) {
-            return;
+            // Ses décisions ne doivent pas être rattachées au crédit restauré juste avant.
+            return self::SKIP_ALL_CHILDREN;
         }
 
         $data->epid = $this->get_new_parentid('ep');

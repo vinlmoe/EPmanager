@@ -54,8 +54,18 @@ if ($action === 'savetype' && confirm_sesskey()) {
     }
     redirect($baseurl);
 }
-if ($action === 'deletetype' && confirm_sesskey()) {
-    $deleted = syllabus_delete_type(required_param('typeid', PARAM_INT));
+if ($action === 'deletetype') {
+    $typeid = required_param('typeid', PARAM_INT);
+    $type = syllabus_get_types()[$typeid] ?? null;
+    if (!$type) {
+        throw new moodle_exception('invalidrecord', 'error');
+    }
+    syllabus_require_confirmation(
+        new moodle_url($baseurl, ['action' => 'deletetype', 'typeid' => $typeid]),
+        $baseurl,
+        get_string('confirmdeletetype', 'mod_syllabusstaff', format_string($type->name))
+    );
+    $deleted = syllabus_delete_type($typeid);
     redirect(
         $baseurl,
         get_string($deleted ? 'typedeleted' : 'typeinuse', 'mod_syllabusstaff'),
@@ -65,12 +75,18 @@ if ($action === 'deletetype' && confirm_sesskey()) {
 }
 
 // Questions communes.
-if (in_array($action, ['delete', 'up', 'down'], true) && $questionid && confirm_sesskey()) {
-    if ($action === 'delete') {
-        syllabus_delete_question($questionid, 0);
-    } else {
-        syllabus_move_question($questionid, 0, $action === 'up' ? -1 : 1);
-    }
+if ($action === 'delete' && $questionid) {
+    $question = $DB->get_record('syllabus_question', ['id' => $questionid, 'syllabusid' => 0], '*', MUST_EXIST);
+    syllabus_require_confirmation(
+        new moodle_url($baseurl, ['action' => 'delete', 'questionid' => $questionid]),
+        $baseurl,
+        get_string('confirmdeletequestion', 'mod_syllabus', format_string($question->text))
+    );
+    syllabus_delete_question($questionid, 0);
+    redirect($baseurl);
+}
+if (in_array($action, ['up', 'down'], true) && $questionid && confirm_sesskey()) {
+    syllabus_move_question($questionid, 0, $action === 'up' ? -1 : 1);
     redirect($baseurl);
 }
 $types = array_map(fn($type) => format_string($type->name), syllabus_get_types());
@@ -158,12 +174,12 @@ foreach (syllabus_get_types() as $type) {
         . html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('rename', 'syllabusstaff'),
             'class' => 'btn btn-secondary'])
         . html_writer::end_tag('form');
-    $delete = $OUTPUT->action_link(new moodle_url($baseurl, ['action' => 'deletetype', 'typeid' => $type->id,
-        'sesskey' => sesskey()]), get_string('delete'), new confirm_action(get_string(
-            'confirmdeletetype',
-            'mod_syllabusstaff',
-            format_string($type->name)
-        )), ['class' => 'text-danger']);
+    // Confirmée par une page du serveur (voir syllabus_require_confirmation()).
+    $delete = html_writer::link(
+        new moodle_url($baseurl, ['action' => 'deletetype', 'typeid' => $type->id]),
+        get_string('delete'),
+        ['class' => 'text-danger']
+    );
     $table->data[] = [$rename, $DB->count_records('syllabus', ['typeid' => $type->id]), $delete];
 }
 $html .= $table->data ? html_writer::table($table) : '';
@@ -182,7 +198,7 @@ $groups = [];
 foreach ($common as $question) {
     $groups[$question->origin . '-' . $question->typeid][] = (int) $question->id;
 }
-$actions = function ($question, $index, $count) use ($baseurl, $groups, $OUTPUT) {
+$actions = function ($question, $index, $count) use ($baseurl, $groups) {
     $siblings = $groups[$question->origin . '-' . $question->typeid];
     $position = array_search((int) $question->id, $siblings, true);
     $links = [html_writer::link(
@@ -195,12 +211,11 @@ $actions = function ($question, $index, $count) use ($baseurl, $groups, $OUTPUT)
                 'sesskey' => sesskey()]), get_string($label, 'syllabusstaff'));
         }
     }
-    $links[] = $OUTPUT->action_link(new moodle_url($baseurl, ['action' => 'delete', 'questionid' => $question->id,
-        'sesskey' => sesskey()]), get_string('delete'), new confirm_action(get_string(
-            'confirmdeletequestion',
-            'mod_syllabus',
-            format_string($question->text)
-        )), ['class' => 'text-danger']);
+    $links[] = html_writer::link(
+        new moodle_url($baseurl, ['action' => 'delete', 'questionid' => $question->id]),
+        get_string('delete'),
+        ['class' => 'text-danger']
+    );
     return implode(' · ', $links);
 };
 echo $OUTPUT->box_start('generalbox mb-3');

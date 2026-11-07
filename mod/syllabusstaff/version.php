@@ -25,8 +25,9 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_syllabusstaff';
-$plugin->version   = 2026112500;
+$plugin->version   = 2026112600;
 $plugin->requires  = 2023100900;
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.5.0';
-$plugin->dependencies = ['mod_syllabus' => 2026112500];
+$plugin->release   = '1.5.1';
+$plugin->supported = [403, 405]; // Moodle 4.3 à 4.5, versions testées par la CI.
+$plugin->dependencies = ['mod_syllabus' => 2026112600];

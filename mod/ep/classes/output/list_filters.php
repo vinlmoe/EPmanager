@@ -86,7 +86,10 @@ class list_filters implements renderable, templatable {
                     'selected' => (string) $value === (string) $select['selected'],
                 ];
             }
-            $data->selects[] = ['name' => $name, 'options' => $options];
+            // Nom lu par les lecteurs d'écran : le libellé fourni, sinon celui de la première option
+            // (« Tous les statuts »...), plutôt que le nom technique du paramètre.
+            $data->selects[] = ['name' => $name, 'options' => $options,
+                'label' => $select['label'] ?? ($options[0]['label'] ?? $name)];
         }
         $data->submitlabel = get_string('search');
         $data->resetlabel = get_string('resetfilters', 'mod_ep');

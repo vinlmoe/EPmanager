@@ -106,23 +106,24 @@ $linklabel = function (stdClass $link) use ($tree, $comp, $levels): string {
 if ($download === 'csv' && $comp) {
     $csv = new csv_export_writer('semicolon');
     $csv->set_filename('progression-' . clean_filename($comp->idnumber));
-    $csv->add_data([get_string('semester', 'mod_syllabus'), get_string('code', 'mod_syllabus'),
+    $csv->add_data(syllabus_csv_safe([get_string('semester', 'mod_syllabus'), get_string('code', 'mod_syllabus'),
         get_string('module', 'mod_syllabus'), get_string('competency', 'mod_syllabus'), get_string('level', 'mod_syllabus'),
-        get_string('fiche', 'mod_syllabus')]);
+        get_string('fiche', 'mod_syllabus')]));
     foreach ($periods as $period) {
         foreach ($period->modules as $module) {
             foreach ($module->links as $link) {
-                $csv->add_data([$period->label, $module->code !== '' ? $module->code : $module->courseshortname,
+                $csv->add_data(syllabus_csv_safe([$period->label, $module->code !== '' ? $module->code : $module->courseshortname,
                     $module->name, $tree[$link->compid]->idnumber ?? '', $levels[(int) $link->level] ?? '',
                     $module->published ? get_string('versionshort', 'mod_syllabus', $module->published->version)
-                        : get_string('notpublishedshort', 'mod_syllabus')]);
+                        : get_string('notpublishedshort', 'mod_syllabus')]));
             }
         }
     }
     foreach ($coursewide as $courseid => $links) {
         foreach ($links as $link) {
-            $csv->add_data([get_string('coursewithoutmodule', 'mod_syllabusstaff'), $courses[$courseid]->shortname,
-                $courses[$courseid]->fullname, $tree[$link->compid]->idnumber ?? '', $levels[(int) $link->level] ?? '', '']);
+            $csv->add_data(syllabus_csv_safe([get_string('coursewithoutmodule', 'mod_syllabusstaff'),
+                $courses[$courseid]->shortname, $courses[$courseid]->fullname, $tree[$link->compid]->idnumber ?? '',
+                $levels[(int) $link->level] ?? '', '']));
         }
     }
     $csv->download_file();
@@ -155,7 +156,7 @@ if (count($frameworks) > 1) {
 }
 $choices = [];
 foreach ($tree as $node) {
-    $choices[$node->id] = str_repeat("\u{2003}", $node->depth) . $node->idnumber . ' ' . format_string($node->name);
+    $choices[$node->id] = str_repeat("\u{2003}", $node->depth) . s($node->idnumber) . ' ' . format_string($node->name);
 }
 echo html_writer::start_tag('form', ['method' => 'get', 'action' => $url->out_omit_querystring(), 'class' => 'form-inline mb-3']);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);

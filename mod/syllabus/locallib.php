@@ -1073,7 +1073,10 @@ function syllabus_submit_response(stdClass $syllabus, context_module $context, i
     } finally {
         $lock->release();
     }
-    \mod_syllabus\event\evaluation_submitted::create(['objectid' => $syllabus->id, 'context' => $context])->trigger();
+    // Événement anonyme : le journal ne le montre qu'aux détenteurs de moodle/site:viewanonymousevents.
+    // Sans cela, l'heure de l'avis, rapprochée de l'évolution des résultats, désignerait son auteur.
+    \mod_syllabus\event\evaluation_submitted::create(['objectid' => $syllabus->id, 'context' => $context,
+        'anonymous' => 1])->trigger();
     return [];
 }
 
@@ -1229,13 +1232,17 @@ function syllabus_notify_reviewed(stdClass $syllabus, $cm, stdClass $version, st
  * @return int Nombre de messages envoyés.
  */
 function syllabus_notify_evaluation_open(stdClass $syllabus, $cm): int {
+    global $DB;
+
     $context = context_module::instance($cm->id);
     $url = new moodle_url('/mod/syllabus/evaluate.php', ['id' => $cm->id]);
     $a = (object) ['module' => format_string($syllabus->name), 'url' => $url->out(false),
         'close' => $syllabus->evalclose ? userdate($syllabus->evalclose) : get_string('noclose', 'mod_syllabus')];
     $count = 0;
+    // Ceux qui ont déjà répondu, lus en une fois plutôt qu'une requête par étudiant.
+    $responded = array_flip($DB->get_fieldset_select('syllabus_participant', 'userid', 'syllabusid = ?', [$syllabus->id]));
     foreach (get_enrolled_users($context, 'mod/syllabus:evaluate', 0, 'u.*', null, 0, 0, true) as $student) {
-        if (syllabus_has_responded((int) $syllabus->id, (int) $student->id)) {
+        if (isset($responded[(int) $student->id])) {
             continue;
         }
         syllabus_send_message(
@@ -1466,6 +1473,20 @@ function syllabus_eval_window_label(stdClass $syllabus): string {
     $a = (object) ['open' => userdate($syllabus->evalopen, $format),
         'close' => $syllabus->evalclose ? userdate($syllabus->evalclose, $format) : get_string('noclose', 'mod_syllabus')];
     return get_string('evalwindow', 'mod_syllabus', $a);
+}
+
+/**
+ * Fenêtre du recueil réservée à la DEVE : dès qu'un avis a été donné, un responsable ne peut plus
+ * la déplacer. Il pourrait sinon la fermer pour lire les résultats puis la rouvrir, ou ouvrir le
+ * recueil dans une autre année pour archiver en cours de route celui qui a commencé.
+ *
+ * @param stdClass $syllabus
+ * @param context $context Contexte du module.
+ * @return bool
+ */
+function syllabus_window_locked(stdClass $syllabus, context $context): bool {
+    return !has_capability('mod/syllabus:manage', $context) && !empty($syllabus->id)
+        && syllabus_count_responses((int) $syllabus->id) > 0;
 }
 
 /**
@@ -1749,7 +1770,7 @@ function syllabus_common_means(array $syllabusids): array {
     }
     [$insql, $params] = $DB->get_in_or_equal($shown, SQL_PARAMS_NAMED);
     $rs = $DB->get_recordset_sql(
-        "SELECT q.syllabusid, q.sourceid, AVG(a.value) AS mean
+        "SELECT q.syllabusid, q.sourceid, AVG(1.0 * a.value) AS mean
            FROM {syllabus_question} q
            JOIN {syllabus_answer} a ON a.questionid = q.id
           WHERE q.syllabusid $insql AND q.sourceid > 0 AND q.kind = 'scale'
@@ -2343,7 +2364,7 @@ function syllabus_period_selections(array $modules): array {
         }
         $semester = trim((string) $module->semester);
         if ($semester !== '') {
-            $semesters['s' . $semester] = $semester;
+            $semesters['s' . $semester] = s($semester);
         }
     }
     $options = [[get_string('wholecursus', 'mod_syllabus') => ['all' => get_string('wholecursus', 'mod_syllabus')]]];
@@ -2452,4 +2473,52 @@ function syllabus_progression_summary(array $steps): stdClass {
     }
     ksort($result->first);
     return $result;
+}
+
+/**
+ * Ligne d'export CSV sans formule : une cellule texte qui commence par = + - @ (ou une tabulation,
+ * un retour chariot) reçoit une apostrophe, pour qu'un tableur ne l'exécute pas à l'ouverture.
+ * Les versions récentes de Moodle le font aussi ; pas les plus anciennes que le module accepte.
+ *
+ * @param array $row
+ * @return array
+ */
+function syllabus_csv_safe(array $row): array {
+    foreach ($row as $key => $value) {
+        if (is_string($value) && !is_numeric($value) && preg_match('/^\s*[=+\-@\t\r]/', $value)) {
+            $row[$key] = "'" . $value;
+        }
+    }
+    return $row;
+}
+
+/**
+ * Suppression confirmée côté serveur : sans « confirm » et clé de session, la page de
+ * confirmation est affichée et le script s'arrête ; sinon la suppression peut avoir lieu. Une
+ * confirmation en JavaScript seule laisserait supprimer d'un clic sans JavaScript.
+ *
+ * @param moodle_url $actionurl Adresse de l'action (sans confirm ni sesskey).
+ * @param moodle_url $cancelurl Retour en cas d'annulation.
+ * @param string $message Question posée.
+ * @return void
+ */
+function syllabus_require_confirmation(moodle_url $actionurl, moodle_url $cancelurl, string $message): void {
+    global $OUTPUT;
+
+    if (optional_param('confirm', 0, PARAM_BOOL) && confirm_sesskey()) {
+        return;
+    }
+    echo $OUTPUT->header();
+    echo $OUTPUT->confirm(
+        $message,
+        new single_button(
+            new moodle_url($actionurl, ['confirm' => 1, 'sesskey' => sesskey()]),
+            get_string('delete'),
+            'post',
+            single_button::BUTTON_DANGER
+        ),
+        $cancelurl
+    );
+    echo $OUTPUT->footer();
+    exit;
 }

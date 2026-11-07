@@ -67,12 +67,17 @@ class restore_syllabus_activity_structure_step extends restore_activity_structur
         if (!empty($data->typeid) && !$DB->record_exists('syllabus_type', ['id' => $data->typeid])) {
             $data->typeid = 0;
         }
-        // Sans les réponses, l'évaluation restaurée repart de zéro.
+        // Sans les réponses (copie du cours pour une autre année, import), le recueil repart de
+        // zéro, sans fenêtre : sinon les étudiants du nouveau cours seraient prévenus d'un recueil
+        // aux dates de l'ancien. La DEVE ou le responsable fixe la nouvelle fenêtre.
         if (!$this->get_setting_value('userinfo')) {
             $data->evalnotified = 0;
+            $data->evalopen = 0;
+            $data->evalclose = 0;
+            $data->evalyear = '';
         }
         // Sauvegarde antérieure aux avis annuels : l'année se déduit de l'ouverture.
-        if (!isset($data->evalyear)) {
+        if (!isset($data->evalyear) || ($data->evalyear === '' && !empty($data->evalopen))) {
             global $CFG;
             require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
             $data->evalyear = !empty($data->evalopen) ? syllabus_academic_year((int) $data->evalopen) : '';

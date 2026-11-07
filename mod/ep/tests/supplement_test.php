@@ -20,6 +20,7 @@ defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
 require_once($CFG->dirroot . '/mod/ep/locallib.php');
+require_once($CFG->dirroot . '/mod/stage/locallib.php');
 
 /**
  * Supplément au diplôme, validation d'année, rentrée et transfert d'un étudiant.
@@ -42,6 +43,7 @@ require_once($CFG->dirroot . '/mod/ep/locallib.php');
  * @covers     ::ep_get_student_birthdate
  * @covers     ::ep_set_supplement_text
  * @covers     ::ep_issue_supplement
+ * @covers     \mod_ep\task\issue_supplements
  * @covers     ::ep_verify_supplement
  * @covers     ::ep_transfer_student
  * @covers     \mod_ep\pdf\supplement_pdf
@@ -91,6 +93,7 @@ final class supplement_test extends \advanced_testcase {
      * en lot, seules les années atteintes sont validées, sauf demande contraire.
      */
     public function test_year_validation(): void {
+        global $DB;
         $other = $this->getDataGenerator()->create_and_enrol(get_course($this->ep->course), 'student');
         $this->gen->create_validated_credit($this->ep, $this->student->id, EP_TYPE_SPORT, 5, 3);
 
@@ -108,7 +111,11 @@ final class supplement_test extends \advanced_testcase {
         $this->assertSame(1, (int) $validations[$other->id][3]->decision);
         $this->assertSame('Dérogation du jury', $validations[$other->id][3]->comment);
 
-        $this->assertSame(4, ep_rollover($this->ep));
+        $this->assertSame(4, ep_rollover($this->ep, 3));
+        // Confirmation renvoyée (deuxième onglet, double envoi) : l'année n'avance pas deux fois.
+        $this->assertFalse(ep_rollover($this->ep, 3));
+        $this->assertEquals(4, $DB->get_field('ep', 'currentstudyyear', ['id' => $this->ep->id]));
+        $DB->set_field('ep', 'currentstudyyear', 6, ['id' => $this->ep->id]);
         $this->assertSame(6, ep_rollover((object) ['id' => $this->ep->id, 'currentstudyyear' => 6]));
     }
 
@@ -261,6 +268,25 @@ final class supplement_test extends \advanced_testcase {
     }
 
     /**
+     * Émission groupée exécutée deux fois (reprise après échec, double demande) : chaque étudiant
+     * n'a qu'un supplément émis depuis la demande.
+     */
+    public function test_issue_task_is_resumable(): void {
+        global $DB;
+        $this->gen->create_validated_credit($this->ep, $this->student->id, EP_TYPE_SPORT, 2, 3);
+        $task = new \mod_ep\task\issue_supplements();
+        $task->set_custom_data((object) ['epid' => $this->ep->id, 'userids' => [$this->student->id],
+            'issuerid' => get_admin()->id, 'lang' => 'fr', 'force' => 1, 'queued' => time()]);
+        $sink = $this->redirectMessages();
+        ob_start();
+        $task->execute();
+        $task->execute();
+        ob_end_clean();
+        $sink->close();
+        $this->assertSame(1, $DB->count_records('ep_supplement_issue', ['epid' => $this->ep->id]));
+    }
+
+    /**
      * Transfert : crédits, justificatifs, éléments et décisions d'année passent à l'activité de
      * destination ; types et EP rapprochés par leur code, créés au besoin.
      */
@@ -286,9 +312,22 @@ final class supplement_test extends \advanced_testcase {
         $category = reset($categories);
         ep_create_supplement_item($this->ep, $this->student->id, $category, (object) ['title' => 'BDE']);
 
+        // Un crédit issu d'un stage de la source : la cible ne lit pas les mêmes stages, il y
+        // devient un crédit saisi par la DEVE, que sa synchronisation ne supprimera pas.
+        $fromstage = ep_create_credit(
+            $this->ep,
+            $this->student->id,
+            ep_get_type_by_code($this->ep->id, EP_TYPE_STAGE),
+            ['name' => 'Stage complémentaire', 'claimedects' => 2, 'source' => EP_SOURCE_STAGE, 'sourceref' => 99]
+        );
+
         $result = ep_transfer_student($this->ep, $target, $this->student->id);
-        $this->assertSame([2, 1, 1], [$result->credits, $result->items, $result->years]);
+        $this->assertSame([3, 1, 1], [$result->credits, $result->items, $result->years]);
         $this->assertSame(0, $DB->count_records('ep_credit', ['epid' => $this->ep->id]));
+        $converted = $DB->get_record('ep_credit', ['id' => $fromstage]);
+        $this->assertSame([EP_SOURCE_DEVE, 0], [$converted->source, (int) $converted->sourceref]);
+        ep_sync_stage_credits_if_due($DB->get_record('ep', ['id' => $target->id]), true);
+        $this->assertTrue($DB->record_exists('ep_credit', ['id' => $fromstage]));
 
         $moved = $DB->get_record('ep_credit', ['id' => $registration]);
         $this->assertEquals($target->id, $moved->epid);

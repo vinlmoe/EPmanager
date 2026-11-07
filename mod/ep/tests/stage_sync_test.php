@@ -212,6 +212,22 @@ final class stage_sync_test extends \advanced_testcase {
     }
 
     /**
+     * Une structure d'accueil au nom très long ne fait pas échouer la synchronisation : l'intitulé
+     * du crédit est borné à la taille du champ, et une nouvelle synchronisation n'y voit aucun
+     * changement.
+     */
+    public function test_long_structure_name_is_truncated(): void {
+        global $DB;
+
+        $entry = $this->create_stage_entry('complementaire', true, 8);
+        $DB->set_field('stage_entry', 'structure', str_repeat('Clinique vétérinaire & ', 11), ['id' => $entry->id]);
+        $this->assertSame(1, ep_sync_stage_credits($this->ep)->created);
+        $name = $DB->get_field('ep_credit', 'name', ['epid' => $this->ep->id, 'sourceref' => $entry->id]);
+        $this->assertSame(255, \core_text::strlen($name));
+        $this->assertSame(0, ep_sync_stage_credits($this->ep)->updated);
+    }
+
+    /**
      * Un stage obligatoire relève du cursus, pas de l'enseignement personnalisé : il ne donne
      * aucun ECTS d'EP, même validé.
      */

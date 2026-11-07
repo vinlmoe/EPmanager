@@ -52,14 +52,45 @@ class issue_supplements extends \core\task\adhoc_task {
         $context = \context_module::instance($cm->id);
         $issued = 0;
         $skipped = 0;
+        $failed = 0;
+        // Reprise après un échec, ou seconde demande (double clic) : un étudiant dont le supplément
+        // a déjà été émis depuis la demande n'en reçoit pas un nouveau numéro.
+        $done = [];
+        if (!empty($data->queued)) {
+            $done = array_flip($DB->get_fieldset_select(
+                'ep_supplement_issue',
+                'userid',
+                'epid = :epid AND lang = :lang AND timeissued >= :queued',
+                ['epid' => $ep->id, 'lang' => $data->lang, 'queued' => (int) $data->queued]
+            ));
+        }
         foreach ($data->userids as $userid) {
-            $result = ep_issue_supplement($ep, $context, (int) $userid, (int) $data->issuerid, $data->lang, !empty($data->force));
+            if (isset($done[(int) $userid])) {
+                $issued++;
+                continue;
+            }
+            // Un étudiant en échec (verrou occupé, document illisible) n'arrête pas les autres.
+            try {
+                $result = ep_issue_supplement(
+                    $ep,
+                    $context,
+                    (int) $userid,
+                    (int) $data->issuerid,
+                    $data->lang,
+                    !empty($data->force)
+                );
+            } catch (\moodle_exception $e) {
+                mtrace("mod_ep: supplément de l'utilisateur {$userid} non émis : " . $e->getMessage());
+                $failed++;
+                continue;
+            }
             if ($result->issue) {
                 $issued++;
             } else {
                 $skipped++;
             }
         }
+        $skipped += $failed;
         mtrace("mod_ep: instance {$ep->id} — {$issued} supplément(s) émis, {$skipped} non émis.");
 
         $issuer = $DB->get_record('user', ['id' => $data->issuerid]);

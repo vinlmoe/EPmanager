@@ -756,6 +756,7 @@ $string['rollover_help'] = "La rentrée fait passer l'année d'étude courante d
 $string['rolloverconfirm'] = 'Passer l\'année courante de {$a->from} à {$a->to} ?';
 $string['rolloverdone'] = 'Année courante : {$a}.';
 $string['rolloverpending'] = '{$a} étudiant(s) sans décision ou avec une année non validée.';
+$string['rolloverstale'] = 'L\'année d\'étude avait déjà changé (autre onglet ou envoi répété) : rien n\'a été modifié.';
 $string['transferstudent'] = 'Transférer un étudiant';
 $string['transferstudent_help'] = "Déplace le dossier d'un étudiant vers une autre activité « Enseignement personnalisé » du site (redoublement, changement de promotion) : ses EP, leurs décisions et justificatifs, ses éléments de supplément et ses décisions d'année. Les types sont rapprochés par leur code, les EP du catalogue par leur code ou leur intitulé. Les suppléments déjà émis restent dans l'activité d'origine.";
 $string['transfertarget'] = 'Activité de destination';

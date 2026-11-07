@@ -45,9 +45,10 @@ final class backup_restore_test extends \advanced_testcase {
      *
      * @param \stdClass $course
      * @param bool $users Inclure les données utilisateur (false : paramétrage seul).
+     * @param callable|null $beforerestore Appelée entre la sauvegarde et la restauration.
      * @return \stdClass Le cours restauré.
      */
-    protected function backup_and_restore(\stdClass $course, bool $users = true): \stdClass {
+    protected function backup_and_restore(\stdClass $course, bool $users = true, ?callable $beforerestore = null): \stdClass {
         global $CFG, $USER;
 
         // En mode général, le plan compresse la sauvegarde en .mbz puis efface son dossier de
@@ -76,6 +77,9 @@ final class backup_restore_test extends \advanced_testcase {
             throw $e;
         } finally {
             $bc->destroy();
+        }
+        if ($beforerestore) {
+            $beforerestore();
         }
 
         $newcourseid = \restore_dbops::create_new_course(
@@ -307,6 +311,9 @@ final class backup_restore_test extends \advanced_testcase {
         // Le numéro est unique sur le site : la copie en reçoit un dérivé, le code de vérification est conservé.
         $this->assertNotSame($issue->number, $newissue->number);
         $this->assertSame($issue->verifycode, $newissue->verifycode);
+        // Copie d'un document qui existe toujours : conservée mais pas reconnue par la vérification.
+        $this->assertNull($newissue->seal);
+        $this->assertNull(ep_verify_supplement($newissue->number, substr($newissue->verifycode, 0, 16)));
         $newcontext = \context_module::instance(get_coursemodule_from_instance('ep', $newep->id)->id);
         $this->assertNotNull(ep_get_supplement_issue_file($newcontext, $newissue->id));
         $template = ep_get_notification_template($newep->id, 'creditdecided');
@@ -354,6 +361,37 @@ final class backup_restore_test extends \advanced_testcase {
         // L'original n'est pas touché.
         $this->assertEquals(2, $DB->count_records('ep_credit', ['epid' => $ep->id]));
         $this->assertCount(1, ep_get_evidence_files($context, $declaredid));
+    }
+
+    /**
+     * Activité supprimée puis restaurée sur le même site (corbeille, sauvegarde du cours) : les
+     * suppléments déjà remis aux étudiants gardent leur numéro et restent vérifiables.
+     */
+    public function test_issued_supplement_stays_verifiable_after_restore(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $student = $generator->create_and_enrol($course, 'student');
+        $generator->create_module('stage', ['course' => $course->id]);
+        $ep = $generator->create_module('ep', ['course' => $course->id, 'currentstudyyear' => 3]);
+        $generator->get_plugin_generator('mod_ep')->create_validated_credit($ep, $student->id, EP_TYPE_SPORT, 2, 3);
+        $ep = $DB->get_record('ep', ['id' => $ep->id]);
+        $context = \context_module::instance(get_coursemodule_from_instance('ep', $ep->id)->id);
+        $issue = ep_issue_supplement($ep, $context, $student->id, get_admin()->id, 'fr', true)->issue;
+
+        // L'original disparaît avant la restauration : son numéro est libre.
+        $newcourse = $this->backup_and_restore($course, true, function () use ($DB, $ep) {
+            $DB->delete_records('ep_supplement_issue', ['epid' => $ep->id]);
+        });
+        $newep = $DB->get_record('ep', ['id' => $this->single_instance($newcourse->id, 'ep')->instance]);
+        $issues = ep_get_supplement_issues($newep->id);
+        $restored = reset($issues);
+        $this->assertSame($issue->number, $restored->number);
+        $this->assertNotNull($restored->seal);
+        $this->assertEquals($restored->id, ep_verify_supplement($issue->number, substr($issue->verifycode, 0, 16))->id);
     }
 
     /**

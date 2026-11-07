@@ -756,6 +756,7 @@ $string['rollover_help'] = 'Moving to the new year sets the activity\'s current 
 $string['rolloverconfirm'] = 'Move the current year from {$a->from} to {$a->to}?';
 $string['rolloverdone'] = 'Current year: {$a}.';
 $string['rolloverpending'] = '{$a} student(s) without decision or with a year not validated.';
+$string['rolloverstale'] = 'The study year had already been changed (another tab or a repeated submission): nothing was changed.';
 $string['transferstudent'] = 'Transfer a student';
 $string['transferstudent_help'] = 'Moves a student\'s record to another personalised learning activity on the site (repeating a year, change of cohort): their units, decisions and evidence, supplement items and year decisions. Types are matched by code, catalogue units by code or title. Supplements already issued stay in the original activity.';
 $string['transfertarget'] = 'Destination activity';

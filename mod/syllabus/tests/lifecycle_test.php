@@ -35,6 +35,7 @@ require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
  * @covers    ::syllabus_delete_instance
  * @covers    \mod_syllabus\observer
  * @covers    \mod_syllabus\event\evaluation_submitted
+ * @covers    ::syllabus_window_locked
  */
 final class lifecycle_test extends \advanced_testcase {
     /** @var \stdClass */
@@ -116,6 +117,32 @@ final class lifecycle_test extends \advanced_testcase {
         $this->assertEquals($this->syllabus->id, $submitted[0]->objectid);
         $this->assertEquals($this->context->id, $submitted[0]->contextid);
         $this->assertEmpty($submitted[0]->other);
+        // Anonyme : le journal ne relie pas l'avis à son auteur.
+        $this->assertSame(1, (int) $submitted[0]->anonymous);
+    }
+
+    /**
+     * Fenêtre du recueil : libre tant qu'aucun avis n'a été donné, ensuite réservée à la DEVE,
+     * par la page du recueil comme par les paramètres de l'activité.
+     */
+    public function test_window_locked_after_first_response(): void {
+        global $DB;
+        $this->assertFalse(syllabus_window_locked($this->syllabus, $this->context));
+        syllabus_save_question((object) ['syllabusid' => $this->syllabus->id, 'kind' => 'scale', 'text' => 'Utile ?']);
+        syllabus_set_window($this->syllabus, time() - 60, 0);
+        $this->setUser($this->users['s1']);
+        $question = current(syllabus_get_module_questions((int) $this->syllabus->id));
+        syllabus_submit_response($this->syllabus, $this->context, (int) $this->users['s1']->id, [$question->id => 4]);
+
+        $this->setUser($this->users['leader']);
+        $this->assertTrue(syllabus_window_locked($this->syllabus, $this->context));
+        $data = (object) ['instance' => $this->syllabus->id, 'coursemodule' => $this->cm->id, 'name' => $this->syllabus->name,
+            'evalopen' => time() - 7200, 'evalclose' => time() - 3600];
+        syllabus_update_instance($data);
+        $this->assertEquals(0, $DB->get_field('syllabus', 'evalclose', ['id' => $this->syllabus->id]));
+
+        $this->setUser($this->users['deve']);
+        $this->assertFalse(syllabus_window_locked($this->syllabus, $this->context));
     }
 
     /**

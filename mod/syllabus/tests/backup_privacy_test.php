@@ -62,12 +62,14 @@ final class backup_privacy_test extends \core_privacy\tests\provider_testcase {
     }
 
     /**
-     * Copie du cours avec les données des utilisateurs : fiche, séances, questions, réponses.
+     * Copie un cours dans un nouveau cours, avec ou sans les données des utilisateurs.
+     *
+     * @param \stdClass $course
+     * @param bool $users
+     * @return \stdClass Instance restaurée.
      */
-    public function test_backup_restore(): void {
+    private function copy_course(\stdClass $course, bool $users): \stdClass {
         global $DB, $USER;
-        $this->resetAfterTest();
-        [$course] = $this->fixture();
         $this->setAdminUser();
         $bc = new \backup_controller(
             \backup::TYPE_1COURSE,
@@ -78,7 +80,7 @@ final class backup_privacy_test extends \core_privacy\tests\provider_testcase {
             $USER->id
         );
         $bc->get_plan()->get_setting('users')->set_status(\backup_setting::NOT_LOCKED);
-        $bc->get_plan()->get_setting('users')->set_value(true);
+        $bc->get_plan()->get_setting('users')->set_value($users);
         $bc->execute_plan();
         $backupid = $bc->get_backupid();
         $bc->destroy();
@@ -92,17 +94,39 @@ final class backup_privacy_test extends \core_privacy\tests\provider_testcase {
             \backup::TARGET_EXISTING_ADDING
         );
         $rc->get_plan()->get_setting('users')->set_status(\backup_setting::NOT_LOCKED);
-        $rc->get_plan()->get_setting('users')->set_value(true);
+        $rc->get_plan()->get_setting('users')->set_value($users);
         $rc->execute_precheck();
         $rc->execute_plan();
         $rc->destroy();
+        return $DB->get_record('syllabus', ['course' => $newcourse->id], '*', MUST_EXIST);
+    }
 
-        $restored = $DB->get_record('syllabus', ['course' => $newcourse->id], '*', MUST_EXIST);
+    /**
+     * Copie du cours avec les données des utilisateurs : fiche, séances, questions, réponses.
+     */
+    public function test_backup_restore(): void {
+        $this->resetAfterTest();
+        [$course, $syllabus] = $this->fixture();
+        $restored = $this->copy_course($course, true);
         $published = syllabus_get_published((int) $restored->id);
         $this->assertSame('Savoir', $published->objectives);
         $this->assertCount(1, syllabus_get_sessions((int) $published->id));
         $this->assertCount(1, syllabus_get_module_questions((int) $restored->id));
         $this->assertSame(1, (int) $restored->evalfrozen);
+        $this->assertEquals($syllabus->evalopen, $restored->evalopen);
+    }
+
+    /**
+     * Copie sans les données des utilisateurs (cours de l'année suivante) : le recueil repart sans
+     * fenêtre, les étudiants du nouveau cours ne sont pas prévenus d'un recueil aux anciennes dates.
+     */
+    public function test_copy_without_users_starts_without_window(): void {
+        $this->resetAfterTest();
+        [$course] = $this->fixture();
+        $restored = $this->copy_course($course, false);
+        $this->assertSame([0, 0, 0, ''], [(int) $restored->evalopen, (int) $restored->evalclose,
+            (int) $restored->evalnotified, (string) $restored->evalyear]);
+        $this->assertSame('Savoir', syllabus_get_published((int) $restored->id)->objectives);
     }
 
     /**
