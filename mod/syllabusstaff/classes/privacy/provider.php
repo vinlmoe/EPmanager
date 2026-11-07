@@ -17,7 +17,10 @@
 namespace mod_syllabusstaff\privacy;
 
 /**
- * Le suivi ne stocke aucune donnée personnelle : il montre celles de mod_syllabus.
+ * Le suivi ne stocke aucune donnée personnelle : il montre celles de mod_syllabus. Les livrets PDF
+ * qu'il garde (zone « booklet ») ne sont qu'une copie des fiches publiées, que voient tous les
+ * inscrits : les noms des responsables y figurent comme sur ces fiches, et chaque livret est
+ * refait dès qu'une fiche, un responsable ou une compétence change.
  *
  * @package   mod_syllabusstaff
  * @copyright 2026 Sébastien Lefebvre
