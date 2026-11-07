@@ -123,17 +123,10 @@ final class stage_sync_test extends \advanced_testcase {
 
         $entry = $this->create_stage_entry('complementaire', true, 8);
         ep_sync_stage_credits_if_due($this->ep);
-        $entry->retainedduration = 12;
-        stage_update_entry_details(
-            $entry,
-            $entry->themeid,
-            $entry->structure,
-            $entry->datestart,
-            $entry->dateend,
-            $entry->declaredduration,
-            $entry->studyyear,
-            $entry->abroad
-        );
+        // Correction écrite directement, sans passer par une fonction de mod_stage : depuis que
+        // mod_stage n'enregistre plus que les champs de chaque étape, la modification des détails
+        // ne touche plus la durée retenue.
+        $DB->update_record('stage_entry', (object) ['id' => $entry->id, 'retainedduration' => 12]);
 
         $this->assertTrue(ep_sync_stage_credits_if_due($this->ep));
         $this->assertEquals(3, $DB->get_field('ep_credit', 'retainedects', ['sourceref' => $entry->id]));
