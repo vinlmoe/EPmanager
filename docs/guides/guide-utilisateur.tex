@@ -5,9 +5,9 @@
 
 % Version du guide : à mettre à jour à chaque modification, avec une ligne dans l'historique.
 \newcommand{\titreguide}{Guide utilisateur}
-\newcommand{\versionguide}{1.3}
+\newcommand{\versionguide}{1.4}
 \newcommand{\dateguide}{novembre 2026}
-\newcommand{\versionep}{1.0.6}
+\newcommand{\versionep}{1.1.0}
 \newcommand{\versionsynthese}{1.0.3}
 
 \usepackage{guide-commun}
@@ -39,6 +39,7 @@ syllabus. \\
 1.2 & novembre 2026 & EP de stage recalculés dès qu'un stage change (EP Manager 1.0.5). \\
 1.3 & novembre 2026 & Captures des documents PDF : fiche d'un EP, aperçu du supplément au diplôme,
 feuille d'émargement, livret des EP. \\
+1.4 & novembre 2026 & Fiche de chaque EP tenue par une activité « Syllabus du module » (proposition en deux temps, relecture sous la fiche) ; catalogue allégé (descriptions résumées, année d'inscription choisie une fois) ; menu d'actions dans la gestion du catalogue ; émission des suppléments en un formulaire. \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -199,7 +200,7 @@ Les messages partent par les canaux choisis par chacun dans ses préférences Mo
 \textbf{Message} & \textbf{Destinataire} \\
 \midrule
 Décision finale sur une demande d'EP & L'étudiant \\
-Proposition d'EP (ou mise à jour de syllabus) à examiner & La DEVE \\
+Fiche d'EP (proposition ou mise à jour) à relire (module des fiches) & La DEVE \\
 Décision sur une proposition & L'enseignant auteur \\
 Relance hebdomadaire (le lundi) : demandes en attente depuis plus d'une semaine & Chaque
 validateur concerné \\
@@ -275,9 +276,12 @@ d'inscription.
 
 \capture{gu-etu-catalogue}{Catalogue des EP : recherche, places, inscription directe.}
 
-Le lien \bouton{Syllabus} ouvre la fiche de l'EP : objectifs, acquis d'apprentissage,
-prérequis, contenu, méthodes, conditions d'examen et de seconde session, bibliographie,
-programme des séances avec leurs intervenants, volume horaire. Elle se télécharge en PDF.
+La description est résumée en deux lignes ; le lien \bouton{Syllabus} ouvre la fiche de l'EP :
+objectifs, acquis d'apprentissage, prérequis, contenu, méthodes, conditions d'examen et de
+seconde session, bibliographie, programme des séances avec leurs intervenants, volume horaire.
+C'est la même fiche que celle des modules d'enseignement (activité « Syllabus du module »,
+voir le guide des modules syllabus) ; elle se télécharge en PDF, et le lien \og L'EP au
+catalogue\fg{} y ramène.
 
 \capture{gu-etu-syllabus}{Fiche (syllabus) d'un EP du catalogue.}
 
@@ -288,9 +292,9 @@ programme des séances avec leurs intervenants, volume horaire. Elle se téléch
 \subsection{S'inscrire}
 
 \begin{etapes}
-  \item Sur la ligne de l'EP, choisissez l'\textbf{année d'étude} au titre de laquelle il
-    comptera (votre année courante est proposée).
-  \item Cliquez sur \bouton{S'inscrire}.
+  \item En tête du catalogue, vérifiez l'\textbf{année d'étude} au titre de laquelle vos
+    inscriptions compteront (votre année courante est proposée) ; elle vaut pour toute la page.
+  \item Sur la ligne de l'EP, cliquez sur \bouton{S'inscrire}.
 \end{etapes}
 
 L'inscription est enregistrée aussitôt, \statut{En attente} de la décision du responsable de
@@ -569,35 +573,41 @@ plus d'une semaine.
 
 \subsection{Proposer un nouvel EP}
 
+La fiche d'un EP est une activité \og Syllabus du module\fg{} (module \texttt{mod\_syllabus}),
+créée avec l'EP dans la section \og Fiches des EP\fg{} du cours : la même fiche, la même
+relecture et le même PDF que pour les modules d'enseignement. L'EP en garde ses responsables et
+son état au catalogue.
+
 \begin{etapes}
-  \item \chemin{Propositions et syllabus > Proposer un nouvel EP} : l'EP est créé à l'état de
-    brouillon, et vous en devenez responsable.
-  \item Renseignez ses caractéristiques : intitulé, type, ECTS, places, années concernées.
-  \item Rédigez son \textbf{syllabus}, au modèle de la fiche ECTS : objectifs, acquis
-    d'apprentissage, prérequis, contenu, méthodes, conditions d'examen et de seconde session,
-    bibliographie, langue, travail personnel.
+  \item \chemin{Propositions et syllabus > Proposer un nouvel EP} : renseignez ses
+    caractéristiques (intitulé, type, ECTS, places, années concernées), puis \bouton{Continuer
+    vers la fiche}. L'EP est créé à l'état de brouillon, et vous en devenez responsable.
+  \item Vous arrivez sur la rédaction de sa fiche, au modèle de la fiche ECTS : objectifs,
+    acquis d'apprentissage, prérequis, contenu, méthodes, conditions d'examen et de seconde
+    session, bibliographie, langue, travail personnel.
   \item Décrivez son \textbf{programme} : les séances, avec leur nature (cours, TD, TP,
     clinique\dots), leur durée et leur intervenant (un enseignant du site, ou un intervenant
-    extérieur par son nom). Les séances ne sont pas datées : le syllabus décrit l'EP, pas le
-    calendrier d'une session. Le volume horaire est calculé.
-  \item \bouton{Enregistrer le brouillon} autant de fois que nécessaire, puis
-    \bouton{Soumettre à la DEVE}.
+    extérieur par son nom). Les séances ne sont pas datées. Le volume horaire est calculé.
+  \item \bouton{Enregistrer le brouillon} autant de fois que nécessaire, puis soumettez la fiche
+    à la DEVE : l'EP passe à l'état \og proposé\fg{}.
 \end{etapes}
 
-\capture{gu-ens-proposer}{Proposition d'un nouvel EP : caractéristiques et syllabus.}
+\capture{gu-ens-proposer}{Proposition d'un nouvel EP : ses caractéristiques, avant la fiche.}
 
 \capture{gu-ens-seances}{Programme des séances : intitulé, nature, durée, intervenant (compte du
 site ou nom d'un intervenant extérieur).}
 
-La DEVE publie la proposition (l'EP entre au catalogue), vous la renvoie avec un commentaire
-(corrigez, puis soumettez de nouveau) ou la refuse. Vous êtes prévenu de sa décision, et la
-proposition renvoyée apparaît dans l'onglet \og À traiter\fg{} du suivi.
+La DEVE publie la fiche (l'EP entre au catalogue), vous la renvoie avec un commentaire
+(l'EP redevient un brouillon : corrigez, puis soumettez de nouveau) ou la refuse (l'EP est
+archivé). Vous êtes prévenu de sa décision, et la proposition renvoyée apparaît dans l'onglet
+\og À traiter\fg{} du suivi.
 
 \capture{gu-ens-propositions}{Propositions et syllabus : l'état de chaque version.}
 
 \subsection{Mettre à jour un EP publié}
 
-\bouton{Proposer une mise à jour} ouvre une \textbf{nouvelle version} du syllabus, préremplie :
+\bouton{Proposer une mise à jour} ouvre la rédaction de la fiche, dans une \textbf{nouvelle
+version} préremplie :
 la version en vigueur reste au catalogue tant que la nouvelle n'est pas publiée. Selon le
 choix de la DEVE, la mise à jour est publiée aussitôt ou passe par sa revue. Les versions
 précédentes restent consultables.
@@ -607,18 +617,20 @@ programme des séances.}
 
 \subsection{Qui valide un syllabus}\label{sec:qui-valide-syllabus}
 
-C'est la \textbf{DEVE} (capacité \texttt{mod/ep:manage}) qui valide les syllabus, depuis
-\chemin{Propositions et syllabus} : elle publie la version soumise, la renvoie à son auteur avec
-un commentaire, ou la refuse (section~\ref{sec:propositions}). Ni le référent ni un autre
-enseignant n'interviennent.
+C'est la \textbf{DEVE} qui valide les fiches : depuis \chemin{Propositions et syllabus}, le
+bouton \bouton{Relire} ouvre la version soumise dans la fiche, où elle la publie, la renvoie à
+son auteur avec un commentaire, ou la refuse (section~\ref{sec:propositions}). Elle le fait
+avec le droit \texttt{mod/syllabus:manage} des fiches (rôle gestionnaire dans le cours). Ni le
+référent ni un autre enseignant n'interviennent.
 \begin{center}
 \begin{tabularx}{\linewidth}{@{}X l@{}}
 \toprule
 \textbf{Cas} & \textbf{Qui valide} \\
 \midrule
 Proposition d'un nouvel EP & Toujours la DEVE \\
-Mise à jour du syllabus d'un EP publié, par son responsable & La DEVE ; ou personne, publiée
-aussitôt, si la DEVE a coché la \og publication directe des mises à jour\fg{} \\
+Mise à jour de la fiche d'un EP publié, par son responsable & La DEVE ; ou personne, publiée
+aussitôt, si la DEVE a coché la \og publication directe des mises à jour\fg{} ou si la
+relecture n'est pas exigée dans le référentiel commun des fiches \\
 Syllabus ou séances importés par la DEVE (CSV, paramétrage JSON) & Publiés directement \\
 \bottomrule
 \end{tabularx}
@@ -712,8 +724,9 @@ cursus. Les tableaux de bord, le pilotage et la validation des années s'y réf�
 \subsection{Gérer les EP}
 
 \chemin{Administration > Catalogue des EP internes} liste les EP : type, ECTS, années, places
-restantes, inscrits, responsables, état ; avec, pour chacun, \bouton{Modifier},
-\bouton{Responsables}, \bouton{Participants} et les changements d'état.
+restantes, inscrits, responsables, état ; avec, pour chacun, \bouton{Modifier} et les
+changements d'état, les autres actions (participants, responsables, fiche, suppression) étant
+rangées dans le menu de la ligne (les trois points).
 
 \capture{gu-deve-catalogue}{Catalogue des EP vu par la DEVE.}
 
@@ -757,10 +770,13 @@ décrites dans le document \emph{Formats des imports et des exports}.
 
 \subsection{Examiner les propositions des enseignants}\label{sec:propositions}
 
-\chemin{Propositions et syllabus} liste les versions soumises par les enseignants. Pour
-chacune, après lecture de la fiche (et, pour une mise à jour, la comparaison avec la version
-en vigueur) : \bouton{Publier}, \bouton{Renvoyer à l'auteur} avec un commentaire, ou
-\bouton{Refuser}. L'auteur est prévenu.
+\chemin{Propositions et syllabus} liste les fiches soumises par les enseignants.
+\bouton{Relire} ouvre la version soumise dans la fiche de l'EP (activité \og Syllabus du
+module\fg{}), avec, pour une mise à jour, les rubriques modifiées signalées ; la décision est
+sous la fiche : \bouton{Publier}, \bouton{Renvoyer à l'auteur} avec un commentaire, ou
+\bouton{Refuser}. L'auteur est prévenu, et l'EP suit la décision (publié au catalogue, de
+nouveau brouillon, ou archivé). Les fiches d'EP soumises figurent aussi dans \og Fiches à
+relire\fg{} du suivi des modules.
 
 \capture{gu-deve-propositions}{Propositions et mises à jour à examiner.}
 
@@ -770,8 +786,9 @@ en vigueur) : \bouton{Publier}, \bouton{Renvoyer à l'auteur} avec un commentair
 
 \chemin{Éditions PDF et propositions} règle l'en-tête, le pied de page et le logo des fiches,
 du livret, des feuilles d'émargement et du supplément, et permet aux responsables de publier
-directement les mises à jour de leurs syllabus (une proposition de nouvel EP passe toujours par
-la DEVE).
+directement les mises à jour de leurs fiches (une proposition de nouvel EP passe toujours par
+la DEVE). Les messages sur les fiches (soumise à la DEVE, décision) sont ceux du module des
+fiches.
 
 \chemin{Courriels} règle le sujet et le texte de chaque message (section~\ref{sec:messages}),
 et l'active ou non. Les variables entre accolades (\texttt{\{student\}}, \texttt{\{ep\}},
@@ -879,8 +896,9 @@ en vigueur.
 \capture{gu-deve-emission}{Émission des suppléments au diplôme.}
 
 \begin{itemize}
-  \item Pour un étudiant : \bouton{Aperçu}, puis \bouton{Émettre le supplément}, en français
-    ou en anglais ; \bouton{Émettre malgré les informations manquantes} si besoin.
+  \item En tête du tableau, choisissez une fois la langue (français ou anglais) et, si besoin,
+    \bouton{Émettre malgré les informations manquantes} : ces choix valent pour toute la page.
+  \item Pour un étudiant : \bouton{Aperçu}, puis \bouton{Émettre le supplément} sur sa ligne.
   \item Pour toute la promotion : \bouton{Émettre pour toute la promotion}. L'émission tourne
     en tâche de fond ; un message vous prévient à la fin, avec le nombre de suppléments émis et
     non émis. Sur le banc, les 1\,000 suppléments d'une promotion sont émis en quelques

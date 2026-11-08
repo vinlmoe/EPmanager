@@ -968,3 +968,4 @@ $string['proposalcontinue'] = 'Continuer vers la fiche';
 $string['proposalcreated'] = 'EP proposé. Rédigez maintenant sa fiche, puis soumettez-la à la DEVE.';
 $string['proposalsteps'] = 'Deux étapes : décrivez ici l\'EP (intitulé, type, ECTS, places, années), puis rédigez sa fiche (objectifs, programme...) et soumettez-la à la DEVE, qui la publie au catalogue.';
 $string['taskmigratesyllabi'] = 'Reprise des fiches d\'EP dans l\'activité syllabus';
+$string['registeryear'] = 'Année d\'étude de vos inscriptions';

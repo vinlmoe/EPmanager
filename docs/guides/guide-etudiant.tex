@@ -4,9 +4,9 @@
 
 % Version du guide : à mettre à jour à chaque modification, avec une ligne dans l'historique.
 \newcommand{\titreguide}{Guide étudiant}
-\newcommand{\versionguide}{1.1}
+\newcommand{\versionguide}{1.2}
 \newcommand{\dateguide}{novembre 2026}
-\newcommand{\versionep}{1.0.6}
+\newcommand{\versionep}{1.1.0}
 \newcommand{\versionsynthese}{1.0.3}
 
 \usepackage{guide-commun}
@@ -28,6 +28,7 @@ supplément au diplôme}{etu-tableau-de-bord}
 \midrule
 1.0 & novembre 2026 & Première version, pour EP Manager 1.0. \\
 1.1 & novembre 2026 & Inscription directe depuis le catalogue (EP Manager 1.0.2). \\
+1.2 & novembre 2026 & Catalogue allégé : descriptions résumées, année d'inscription choisie une fois en tête ; fiche d'un EP au format des modules. \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -69,8 +70,8 @@ au décompte si le plafond était relevé.
 \subsection{Choisir un EP}
 
 Le \chemin{Catalogue des EP} liste les EP proposés à votre promotion : intitulé, type, ECTS,
-années concernées, places restantes, responsables, période d'inscription. Le lien
-\bouton{Syllabus} ouvre la fiche de l'EP : objectifs, acquis d'apprentissage, contenu, méthodes,
+années concernées, places restantes, responsables, période d'inscription, et une description
+résumée. Le lien \bouton{Syllabus} ouvre la fiche de l'EP : objectifs, acquis d'apprentissage, contenu, méthodes,
 conditions d'examen, programme des séances avec leurs intervenants, volume horaire. La fiche
 se télécharge aussi en PDF.
 
@@ -78,7 +79,9 @@ se télécharge aussi en PDF.
 
 \capture{etu-syllabus}{Fiche du syllabus d'un EP.}
 
-Le bouton \bouton{S'inscrire} n'apparaît que si l'inscription vous est possible. Sinon, la
+L'année d'étude au titre de laquelle vos inscriptions compteront se choisit une fois, en tête
+du catalogue (votre année courante est proposée). Le bouton \bouton{S'inscrire} n'apparaît que
+si l'inscription vous est possible. Sinon, la
 colonne indique pourquoi :
 \begin{itemize}
   \item \statut{Inscriptions fermées} : hors de la période d'inscription, ou EP clos ;

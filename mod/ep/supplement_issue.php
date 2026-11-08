@@ -77,9 +77,15 @@ function ep_supplement_issue_all_userids(context $context): array {
     return array_map('intval', $DB->get_fieldset_sql("SELECT u.id $sql ORDER BY u.id", $params));
 }
 
+// Bouton « Émettre » d'une ligne : la langue et la case « malgré les informations manquantes »
+// choisies en haut du tableau valent pour toutes les lignes.
+$issueuser = optional_param('issueuser', 0, PARAM_INT);
+if ($issueuser) {
+    $action = 'issue';
+}
 if ($action === 'issue') {
     require_sesskey();
-    $userid = required_param('userid', PARAM_INT);
+    $userid = $issueuser ?: required_param('userid', PARAM_INT);
     $lang = optional_param('lang', 'fr', PARAM_ALPHA);
     $force = optional_param('force', 0, PARAM_BOOL);
     // Seul un étudiant inscrit à l'activité peut recevoir un supplément de cette activité.
@@ -214,18 +220,10 @@ function ep_supplement_issue_form(moodle_url $url, array $hidden, $submitlabel, 
     return $html;
 }
 
-// Actions sur toute la promotion.
-echo html_writer::start_div('d-flex flex-wrap align-items-start mt-3 mb-3');
-echo ep_supplement_issue_form(
-    $listurl,
-    ['action' => 'issueall'],
-    get_string('supplementissueall', 'mod_ep'),
-    $langoptions,
-    'form-inline mr-4 mb-2'
+echo html_writer::div(
+    ep_supplement_issue_form($listurl, ['action' => 'zip'], get_string('supplementzip', 'mod_ep'), null, 'form-inline'),
+    'mt-3 mb-3'
 );
-echo ep_supplement_issue_form($listurl, ['action' => 'zip'], get_string('supplementzip', 'mod_ep'), null, 'form-inline mb-2');
-echo html_writer::end_div();
-
 echo $OUTPUT->render(new \mod_ep\output\list_filters($listurl, ['search', 'page'], $search));
 
 $total = ep_count_enrolled_students($context, $search);
@@ -295,17 +293,28 @@ foreach ($students as $student) {
         get_string('supplementpreview', 'mod_ep') => new moodle_url('/mod/ep/supplement.php', [
             'id' => $cm->id, 'userid' => $userid,
         ]),
-    ]) . ep_supplement_issue_form(
-        $listurl,
-        ['action' => 'issue', 'userid' => $userid],
-        get_string('supplementissue', 'mod_ep'),
-        $langoptions,
-        'form-inline mt-1'
-    );
+    ]) . html_writer::tag('button', get_string('supplementissue', 'mod_ep'), [
+        'type' => 'submit', 'name' => 'issueuser', 'value' => $userid, 'class' => 'btn btn-sm btn-primary mb-1',
+    ]);
 
     $rows[] = [fullname($student), $missingcell, $issuecell, $actions];
 }
 
+// Un seul formulaire pour la page : la langue et la case « malgré les informations manquantes »,
+// choisies une fois, valent pour l'émission d'une ligne comme pour toute la promotion.
+echo html_writer::start_tag('form', ['method' => 'post', 'action' => $listurl->out(false)]);
+echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+echo html_writer::start_div('form-inline mb-2');
+echo html_writer::label(get_string('supplementlanguage', 'mod_ep'), 'ep-supplement-lang', false, ['class' => 'mr-2']);
+echo html_writer::select($langoptions, 'lang', 'fr', false, ['id' => 'ep-supplement-lang', 'class' => 'custom-select mr-3']);
+echo html_writer::div(html_writer::checkbox('force', 1, false, get_string('supplementissueforce', 'mod_ep'), [
+    'id' => 'ep-supplement-force', 'class' => 'mr-1',
+]), 'mr-3');
+echo html_writer::tag('button', get_string('supplementissueall', 'mod_ep'), [
+    'type' => 'submit', 'name' => 'action', 'value' => 'issueall', 'class' => 'btn btn-primary',
+]);
+echo html_writer::end_div();
 echo ep_render_paged_table($head, $rows, ep_render_paging_bar($total, $page, new moodle_url($baseurl, ['search' => $search])));
+echo html_writer::end_tag('form');
 
 echo $OUTPUT->footer();

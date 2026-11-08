@@ -196,7 +196,8 @@ if ($rights->canedit || $rights->canmanage) {
     if (!(int) $syllabus->studyyear) {
         $missing[] = get_string('studyyear', 'mod_syllabus');
     }
-    if ($missing && has_capability('moodle/course:manageactivities', $context)) {
+    // Fiche d'un EP : ses caractéristiques sont celles de l'EP, tenues dans son catalogue.
+    if ($missing && empty($syllabus->component) && has_capability('moodle/course:manageactivities', $context)) {
         $steps[] = $done(false) . get_string('missingcharacteristics', 'mod_syllabus', implode(', ', $missing))
             . html_writer::link(new moodle_url('/course/modedit.php', ['update' => $cm->id]), get_string(
                 'settings'

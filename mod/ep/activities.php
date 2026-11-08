@@ -268,14 +268,19 @@ foreach ($activities as $activity) {
         $teacherscell .= ' ' . html_writer::span(get_string('noteacherwarning', 'mod_ep'), 'badge badge-warning');
     }
 
-    $deleteurl = new moodle_url($baseurl, ['action' => 'delete', 'activityid' => $activity->id]);
-    $actions = ep_render_actions([
+    // Une action principale ; les autres dans le menu de la ligne.
+    $actions = ep_render_action_menu([
         get_string('edit') => new moodle_url($baseurl, ['action' => 'edit', 'activityid' => $activity->id]),
-        get_string('activityteachers', 'mod_ep') => $teachersurl,
+    ], [
         get_string('participants', 'mod_ep') => new moodle_url('/mod/ep/participants.php', [
             'id' => $cm->id, 'activityid' => $activity->id,
         ]),
-    ]) . ep_render_actions([get_string('delete') => $deleteurl], 'btn btn-sm btn-outline-danger mr-1 mb-1', '');
+        get_string('activityteachers', 'mod_ep') => $teachersurl,
+        get_string('syllabus', 'mod_ep') => new moodle_url('/mod/ep/syllabus.php', [
+            'id' => $cm->id, 'activityid' => $activity->id,
+        ]),
+        get_string('delete') => new moodle_url($baseurl, ['action' => 'delete', 'activityid' => $activity->id]),
+    ], [get_string('delete')]);
 
     $table->data[] = [
         format_string($activity->name),

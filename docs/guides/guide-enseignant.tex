@@ -4,9 +4,9 @@
 
 % Version du guide : à mettre à jour à chaque modification, avec une ligne dans l'historique.
 \newcommand{\titreguide}{Guide enseignant}
-\newcommand{\versionguide}{1.1}
+\newcommand{\versionguide}{1.2}
 \newcommand{\dateguide}{novembre 2026}
-\newcommand{\versionep}{1.0.6}
+\newcommand{\versionep}{1.1.0}
 \newcommand{\versionsynthese}{1.0.3}
 
 \usepackage{guide-commun}
@@ -27,6 +27,7 @@
 \midrule
 1.0 & novembre 2026 & Première version, pour EP Manager 1.0. \\
 1.1 & novembre 2026 & Séances du programme sans date (EP Manager 1.0.4). \\
+1.2 & novembre 2026 & La fiche d'un EP est une activité « Syllabus du module » : proposition en deux temps, rédaction et relecture dans la fiche. \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -125,36 +126,41 @@ transmis.
 
 \subsection{Proposer un nouvel EP}
 
-\chemin{Propositions et syllabus} \textgreater{} \bouton{Proposer un nouvel EP} crée l'EP à l'état de
-brouillon, dont vous devenez responsable. Renseignez :
+La fiche d'un EP est une activité \og Syllabus du module\fg{} du cours, la même que celle des
+modules d'enseignement : même formulaire, même relecture par la DEVE, même PDF.
+
+\chemin{Propositions et syllabus} \textgreater{} \bouton{Proposer un nouvel EP} : renseignez ses
+caractéristiques (intitulé, type, ECTS, places, années concernées), puis \bouton{Continuer vers
+la fiche}. L'EP est créé à l'état de brouillon, dont vous devenez responsable, et vous arrivez
+sur la rédaction de sa fiche :
 \begin{itemize}
-  \item ses caractéristiques : intitulé, type, ECTS, places, années concernées ;
-  \item son \textbf{syllabus}, au modèle de la fiche ECTS : objectifs, acquis d'apprentissage,
-    prérequis, contenu, méthodes d'enseignement, conditions d'examen, seconde session,
-    bibliographie, langue, travail personnel ;
+  \item au modèle de la fiche ECTS : objectifs, acquis d'apprentissage, prérequis, contenu,
+    méthodes d'enseignement, conditions d'examen, seconde session, bibliographie, langue,
+    travail personnel ;
   \item son \textbf{programme} : les séances, avec leur nature (cours, TD, TP, clinique\dots),
     leur durée et leur intervenant (un enseignant du site, ou un intervenant extérieur par son
-    nom). Les séances ne sont pas datées : le syllabus décrit l'EP, pas le calendrier d'une
-    session. Le volume horaire total et par nature est calculé.
+    nom). Les séances ne sont pas datées. Le volume horaire total et par nature est calculé.
 \end{itemize}
 
-\capture{ens-syllabus-edit}{Rédaction du syllabus et du programme des séances.}
+\capture{ens-syllabus-edit}{Rédaction de la fiche et du programme des séances.}
 
 \capture{gu-ens-seances}{Programme des séances, sans date.}
 
-Le bouton \bouton{Soumettre à la DEVE} transmet la proposition. La DEVE la publie (l'EP entre
-au catalogue), vous la renvoie avec un commentaire (corrigez puis resoumettez) ou la refuse. Vous
-êtes prévenu de sa décision.
+Soumise à la DEVE, la fiche fait passer l'EP à l'état \og proposé\fg{}. La DEVE la publie (l'EP
+entre au catalogue), vous la renvoie avec un commentaire (corrigez puis resoumettez) ou la
+refuse. Vous êtes prévenu de sa décision.
 
 \subsection{Mettre à jour un EP publié}
 
-Depuis la même page, \bouton{Proposer une mise à jour} ouvre une \textbf{nouvelle version} du syllabus :
-la version publiée reste au catalogue tant que la nouvelle n'est pas publiée. Selon le choix de
-la DEVE, votre mise à jour est publiée directement ou passe par sa revue. Les versions
-précédentes restent dans l'historique.
+Depuis \chemin{Propositions et syllabus}, \bouton{Proposer une mise à jour} ouvre une
+\textbf{nouvelle version} de la fiche : la version publiée reste au catalogue tant que la
+nouvelle n'est pas publiée. Selon le choix de la DEVE, votre mise à jour est publiée
+directement ou passe par sa relecture. Les versions précédentes restent dans l'historique.
 
-\capture{ens-propositions}{Propositions et syllabus : état de chaque version.}
+\capture{ens-propositions}{Propositions et syllabus : vos propositions et vos EP.}
 
-La fiche de l'EP se télécharge en PDF depuis sa page \bouton{Syllabus}.
+La fiche se télécharge en PDF depuis sa page ; le lien \og L'EP au catalogue\fg{} ramène au
+catalogue. Comme pour un module, vous y liez l'EP aux compétences du référentiel, et ses
+inscrits (eux seuls) y donnent leur avis si la DEVE ouvre un recueil.
 
 \end{document}

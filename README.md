@@ -14,8 +14,8 @@ StageCompagnon :
 | [`mod/epsynthesis`](mod/epsynthesis) | Enseignants, dans un cours d'équipe | Vue unique de ce qu'ils ont à valider, à noter et à reprendre, toutes promotions confondues | [`mod/epsynthesis/INSTALL.md`](mod/epsynthesis/INSTALL.md) |
 
 Le dépôt porte aussi trois modules pour les **modules d'enseignement** du cursus : leur fiche
-(syllabus) et leur évaluation par les étudiants. Ils sont indépendants de `mod_ep` et de
-`mod_stage`.
+(syllabus) et les avis des étudiants. Ils ne dépendent ni de `mod_ep` ni de `mod_stage` ;
+`mod_ep` s'en sert pour la fiche de chaque EP (une activité « Syllabus du module »).
 
 | Module | Pour qui | Rôle | Documentation |
 | --- | --- | --- | --- |

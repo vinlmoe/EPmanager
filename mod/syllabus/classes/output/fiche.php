@@ -92,6 +92,11 @@ class fiche {
             get_string('studyyear', 'mod_syllabus') => syllabus_studyyear_label($syllabus->studyyear),
             get_string('teachers', 'mod_syllabus') => $teachers ? s(implode(', ', array_map('fullname', $teachers))) : '-',
         ];
+        // Fiche d'un EP : ni type de module ni période ; son code est celui de l'EP, pas le cours.
+        if (!empty($syllabus->component)) {
+            unset($rows[get_string('moduletype', 'mod_syllabus')], $rows[get_string('semester', 'mod_syllabus')]);
+            $rows[get_string('code', 'mod_syllabus')] = $syllabus->code !== '' ? s($syllabus->code) : '-';
+        }
         if (!$withname) {
             unset($rows[get_string('module', 'mod_syllabus')]);
         }

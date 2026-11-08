@@ -14,6 +14,11 @@ pour chaque enseignant ce qu'il a à traiter, toutes promotions confondues.
 - **Prérequis** : `mod_stage` installé (dépendance déclarée dans `version.php`). Les EP de type
   stage et l'identification des enseignants référents sont lus dans ses tables ; rien n'y est
   écrit.
+- **Prérequis** (depuis la 1.1) : `mod_syllabus` installé. La fiche de chaque EP est une
+  activité « Syllabus du module » du cours, créée avec l'EP dans une section « Fiches des EP » ;
+  la mise à jour vers la 1.1 y reprend les fiches existantes (tâche `migrate_syllabi`, lancée
+  par la mise à jour). Pour que ces fiches n'encombrent pas la page du cours, autoriser les
+  activités furtives (réglage du site `allowstealth`) : elles ne s'y affichent alors plus.
 
 ## Installation et mise à niveau
 

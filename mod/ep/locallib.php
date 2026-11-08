@@ -2242,52 +2242,6 @@ function ep_get_credits_awaiting($ep, stdClass $rights, $sort = 'timecreated', $
 // Rendu commun aux vues.
 
 /**
- * Formulaire d'inscription directe à un EP depuis la liste du catalogue : année d'étude (liste si
- * plusieurs sont possibles) et bouton, envoyés en POST avec la clé de session à
- * catalog.php?action=register, qui revérifie tout sous le verrou de l'activité.
- *
- * @param moodle_url $baseurl Adresse de la liste du catalogue.
- * @param stdClass $activity
- * @param array $yearoptions Années proposées (voir ep_studyyear_selectable_options()).
- * @param int $defaultyear
- * @param int $page Page de la liste, pour y revenir.
- * @param string $search Recherche de la liste, pour y revenir.
- * @return string HTML
- */
-function ep_render_register_form(
-    moodle_url $baseurl,
-    stdClass $activity,
-    array $yearoptions,
-    $defaultyear,
-    $page,
-    $search
-) {
-    $url = new moodle_url($baseurl, ['action' => 'register', 'activityid' => $activity->id]);
-    $html = html_writer::start_tag('form', ['method' => 'post', 'action' => $url->out(false), 'class' => 'form-inline']);
-    foreach (['sesskey' => sesskey(), 'fromlist' => 1, 'page' => (int) $page, 'search' => $search] as $name => $value) {
-        $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => $name, 'value' => $value]);
-    }
-    if (count($yearoptions) > 1) {
-        $id = 'ep-register-year-' . $activity->id;
-        $html .= html_writer::label(get_string('studyyear', 'mod_ep'), $id, false, ['class' => 'sr-only']);
-        $selected = array_key_exists($defaultyear, $yearoptions) ? $defaultyear : array_key_first($yearoptions);
-        $html .= html_writer::select(
-            $yearoptions,
-            'studyyear',
-            $selected,
-            false,
-            ['id' => $id, 'class' => 'custom-select custom-select-sm mr-1 mb-1']
-        );
-    } else {
-        $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'studyyear',
-            'value' => (int) array_key_first($yearoptions)]);
-    }
-    $html .= html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('register', 'mod_ep'),
-        'class' => 'btn btn-sm btn-primary mb-1']);
-    return $html . html_writer::end_tag('form');
-}
-
-/**
  * Rend une série d'actions en petits boutons (gabarit mod_ep/actions). Une entrée dont l'URL est
  * nulle est ignorée, ce qui permet aux appelants de décrire toutes les actions possibles et de
  * laisser la condition d'affichage à l'endroit où elle se lit.
@@ -2308,6 +2262,38 @@ function ep_render_actions(array $links, $class = 'btn btn-sm btn-secondary mr-1
         $actions[] = ['label' => $label, 'url' => $url instanceof moodle_url ? $url->out(false) : (string) $url, 'class' => $class];
     }
     return $OUTPUT->render_from_template('mod_ep/actions', ['actions' => $actions, 'empty' => $empty]);
+}
+
+/**
+ * Actions d'une ligne de tableau, allégées : l'action principale en bouton, les autres dans un
+ * menu (les trois points de Moodle), pour qu'une liste de plusieurs dizaines de lignes ne soit
+ * pas une colonne de boutons.
+ *
+ * @param array $primary Libellé => moodle_url (null pour l'omettre), affichés en boutons.
+ * @param array $secondary Libellé => moodle_url (null pour l'omettre), dans le menu.
+ * @param string[] $danger Libellés du menu à afficher en rouge (suppression).
+ * @return string HTML
+ */
+function ep_render_action_menu(array $primary, array $secondary, array $danger = []) {
+    global $OUTPUT;
+
+    $html = ep_render_actions($primary, 'btn btn-sm btn-secondary mr-1 mb-1', '');
+    $secondary = array_filter($secondary, fn($url) => $url !== null);
+    if ($secondary) {
+        $menu = new action_menu();
+        $menu->set_kebab_trigger(get_string('actions'));
+        $menu->set_additional_classes('d-inline-block');
+        foreach ($secondary as $label => $url) {
+            $menu->add(new action_menu_link_secondary(
+                $url,
+                null,
+                $label,
+                in_array($label, $danger, true) ? ['class' => 'text-danger'] : []
+            ));
+        }
+        $html .= $OUTPUT->render($menu);
+    }
+    return $html !== '' ? $html : '-';
 }
 
 /**

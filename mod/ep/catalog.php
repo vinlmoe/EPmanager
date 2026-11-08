@@ -201,8 +201,11 @@ foreach ($activities as $activity) {
     if ($activity->state !== EP_ACTIVITY_PUBLISHED) {
         $name .= ' ' . html_writer::span(ep_activity_state_options()[$activity->state] ?? '', 'badge badge-secondary');
     }
-    if (trim((string) $activity->description) !== '') {
-        $name .= html_writer::div(format_text($activity->description, FORMAT_PLAIN), 'text-muted small');
+    // Description résumée : le catalogue se parcourt d'un coup d'œil, le détail est dans la fiche.
+    $description = trim((string) $activity->description);
+    if ($description !== '') {
+        $short = shorten_text($description, 100, true);
+        $name .= html_writer::div(s($short), 'text-muted small', $short !== $description ? ['title' => $description] : []);
     }
     if (isset($withsyllabus[$activity->id])) {
         $name .= html_writer::div(html_writer::link(
@@ -251,17 +254,13 @@ foreach ($activities as $activity) {
         } else if ($activity->prereqblocking && !empty($missingall[$activity->id])) {
             $actioncell = html_writer::span(get_string('errorprerequisites', 'mod_ep'), 'text-muted');
         } else {
-            // Inscription directe depuis la liste (année d'étude choisie sur la ligne) : une page
-            // de moins par inscription, ce qui compte quand toute une promotion s'inscrit à
-            // l'ouverture des inscriptions.
-            $actioncell = ep_render_register_form(
-                $baseurl,
-                $activity,
-                $yearoptions,
-                (int) $ep->currentstudyyear,
-                $page,
-                $search
-            );
+            // Inscription directe depuis la liste, un bouton par EP (l'année d'étude est choisie
+            // une fois, en tête du catalogue) : une page de moins par inscription, ce qui compte
+            // quand toute une promotion s'inscrit à l'ouverture des inscriptions.
+            $actioncell = html_writer::tag('button', get_string('register', 'mod_ep'), [
+                'type' => 'submit', 'name' => 'activityid', 'value' => $activity->id, 'class' => 'btn btn-sm btn-primary mb-1',
+            ]);
+            $registerable = true;
         }
     } else {
         // Ceux qui gèrent le catalogue ou les participants de cet EP y accèdent d'ici.
@@ -289,6 +288,37 @@ foreach ($activities as $activity) {
     $table->data[] = $row;
 }
 
+if (!empty($registerable)) {
+    // Un seul formulaire d'inscription pour la page : l'année d'étude, choisie une fois, vaut
+    // pour le bouton « S'inscrire » de chaque ligne.
+    echo html_writer::start_tag('form', ['method' => 'post', 'action' => $baseurl->out(false)]);
+    foreach (
+        ['sesskey' => sesskey(), 'action' => 'register', 'fromlist' => 1, 'page' => (int) $page,
+            'search' => $search] as $field => $value
+    ) {
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => $field, 'value' => $value]);
+    }
+    if (count($yearoptions) > 1) {
+        echo html_writer::div(
+            html_writer::label(get_string('registeryear', 'mod_ep'), 'ep-register-year', false, ['class' => 'mr-2'])
+            . html_writer::select(
+                $yearoptions,
+                'studyyear',
+                array_key_exists((int) $ep->currentstudyyear, $yearoptions)
+                ? (int) $ep->currentstudyyear : array_key_first($yearoptions),
+                false,
+                ['id' => 'ep-register-year', 'class' => 'custom-select']
+            ),
+            'form-inline mb-2'
+        );
+    } else {
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'studyyear',
+            'value' => (int) array_key_first($yearoptions)]);
+    }
+}
 echo html_writer::div(html_writer::table($table), 'table-responsive');
+if (!empty($registerable)) {
+    echo html_writer::end_tag('form');
+}
 echo ep_render_paging_bar($totalactivities, $page, $listurl);
 echo $OUTPUT->footer();

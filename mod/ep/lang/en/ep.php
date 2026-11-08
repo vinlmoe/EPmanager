@@ -968,3 +968,4 @@ $string['proposalcontinue'] = 'Continue to the syllabus';
 $string['proposalcreated'] = 'Unit proposed. Now write its syllabus, then submit it to the academic office.';
 $string['proposalsteps'] = 'Two steps: describe the unit here (title, type, ECTS, places, years), then write its syllabus (objectives, programme...) and submit it to the academic office, which publishes it in the catalogue.';
 $string['taskmigratesyllabi'] = 'Move unit syllabi to the syllabus activity';
+$string['registeryear'] = 'Year of study for your registrations';

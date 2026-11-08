@@ -231,9 +231,12 @@ def student_journey(k):
     page = random.randint(0, 1)
     r = u.get(f'/mod/ep/catalog.php?id={CM}&page={page}', 'catalogue')
     registered = 0
-    forms = [f for f in forms_of(r.text) if 'action=register' in f['action']]
-    for f in random.sample(forms, min(3, len(forms))):
-        r = u.submit(f, {'studyyear': '3'}, 'inscription directe')
+    # Un seul formulaire d'inscription par page, un bouton « S'inscrire » (activityid) par EP.
+    ids = re.findall(r'<button[^>]*name="activityid" value="(\d+)"', r.text)
+    for activityid in random.sample(ids, min(3, len(ids))):
+        r = u.post(f'/mod/ep/catalog.php?id={CM}', {'sesskey': u.sesskey, 'action': 'register', 'activityid': activityid,
+                                                    'studyyear': '3', 'fromlist': 1, 'page': page, 'search': ''},
+                   'inscription directe')
         registered += 'alert-success' in r.text
     # Déclaration avec justificatif.
     r = u.get(f'/mod/ep/declare.php?id={CM}', 'formulaire de déclaration')

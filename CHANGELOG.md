@@ -5,6 +5,36 @@ numéros de `version.php` (AAAAMMJJ) : fixés à l'avance pendant le développem
 correspondent pas toujours au jour du commit. À tenir à jour à chaque modification de
 `version.php`.
 
+## EP 1.1.0 et modules syllabus 1.6.0 — mod_ep, mod_syllabus, mod_syllabusstaff, mod_syllabusstudent 2026112700
+
+La fiche de chaque EP est une activité « Syllabus du module » ; interface allégée.
+
+- **Fiche des EP** : mod_ep n'a plus sa propre fiche. Celle de chaque EP est une activité
+  mod_syllabus du cours, gérée par l'EP (`syllabus.component` = `mod_ep`, `itemid` = l'EP),
+  créée à la demande dans une section « Fiches des EP » : même rédaction, relecture, versions,
+  PDF, compétences et avis des étudiants que les modules d'enseignement. Proposition d'un EP en
+  deux temps (caractéristiques, puis fiche) ; la DEVE relit sous la fiche (« Relire » depuis
+  les propositions) et sa décision fait avancer l'EP (proposé, publié, brouillon, archivé) ;
+  un nouvel EP passe toujours par elle ; la publication directe des mises à jour reste un
+  réglage de l'activité. Responsables et caractéristiques de l'EP reportés sur sa fiche ; fiche
+  supprimée avec l'EP, rattachée à la restauration du cours. Seuls les inscrits de l'EP donnent
+  leur avis et voient sa fiche dans « Mes modules ».
+- **Reprise** : la mise à jour lance la tâche `migrate_syllabi`, qui reprend les fiches
+  existantes (banc : 1 862 EP, 1 865 versions, 14 906 séances en 51 s). Les tables `ep_syllabus`
+  et `ep_session` sont vidées au fil de la reprise ; elles seront supprimées dans une version
+  ultérieure.
+- **mod_syllabus** : fiche gérée par un autre module, événements `version_submitted` et
+  `version_reviewed`, fonctions de rappel du module gestionnaire (public des avis, relecture
+  imposée ou dispensée, adresse de retour) ; code, type et période sans objet masqués sur la
+  fiche d'un EP.
+- **Interface allégée** (mesures sur le banc) : gestion du catalogue avec « Modifier » et un
+  menu d'actions par ligne (301 boutons visibles → 184) ; catalogue étudiant avec descriptions
+  résumées et année d'inscription choisie une fois (23 champs → 2) ; émission des suppléments en
+  un seul formulaire, langue et option choisies une fois (83 champs → 3) ; proposition d'un EP
+  réduite à ses caractéristiques (32 champs → 7).
+- Tests : 192 tests unitaires (fiches d'EP réécrites sur le nouveau circuit, avis limités aux
+  inscrits, reprise des anciennes fiches) ; banc : `ep_fiche_parcours.py` (10/10).
+
 ## Audit complet — mod_ep 1.0.6, mod_epsynthesis 1.0.3, mod_syllabus et mod_syllabusstaff 1.5.1 (2026112600)
 
 Corrections issues de l'audit complet de la branche (`docs/audit/audit-complet.pdf`) : six

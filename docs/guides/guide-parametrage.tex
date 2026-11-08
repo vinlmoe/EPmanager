@@ -4,9 +4,9 @@
 
 % Version du guide : à mettre à jour à chaque modification, avec une ligne dans l'historique.
 \newcommand{\titreguide}{Guide de paramétrage}
-\newcommand{\versionguide}{1.1}
+\newcommand{\versionguide}{1.2}
 \newcommand{\dateguide}{novembre 2026}
-\newcommand{\versionep}{1.0.6}
+\newcommand{\versionep}{1.1.0}
 \newcommand{\versionsynthese}{1.0.3}
 
 \usepackage{guide-commun}
@@ -28,6 +28,7 @@ diplôme}{deve-administration}
 \midrule
 1.0 & novembre 2026 & Première version, pour EP Manager 1.0. \\
 1.1 & novembre 2026 & Captures refaites ; séances du programme sans date (EP Manager 1.0.4). \\
+1.2 & novembre 2026 & Fiches des EP tenues par le module des fiches ; relecture sous la fiche ; activités furtives recommandées. \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -143,10 +144,17 @@ Le catalogue peut aussi être \textbf{importé} d'un fichier CSV, avec les sylla
 
 \subsection{Propositions des enseignants}
 
-Les enseignants proposent de nouveaux EP et mettent à jour le syllabus des leurs.
-\chemin{Propositions et syllabus} liste ce qui attend votre examen. Pour chaque version soumise :
+Les enseignants proposent de nouveaux EP et mettent à jour la fiche des leurs. La fiche d'un EP
+est une activité \og Syllabus du module\fg{} (module des fiches), créée avec l'EP dans la
+section \og Fiches des EP\fg{} du cours. \chemin{Propositions et syllabus} liste ce qui attend
+votre examen ; \bouton{Relire} ouvre la version soumise, et la décision se prend sous la fiche :
 \bouton{Publier} (l'EP entre au catalogue, ou la nouvelle version remplace l'ancienne),
 \bouton{Renvoyer à l'auteur} avec un commentaire, ou \bouton{Refuser}. L'auteur est prévenu.
+Il faut, pour cela, le rôle gestionnaire dans le cours (droit \texttt{mod/syllabus:manage}).
+
+Pour que ces fiches n'encombrent pas la page du cours, l'administrateur du site peut autoriser
+les activités furtives (réglage \texttt{allowstealth}) : elles ne s'y affichent alors plus, et
+restent ouvertes depuis le catalogue.
 
 \capture{gu-deve-comparer}{Examen d'une version soumise : publier, renvoyer à l'auteur ou refuser.}
 
@@ -164,9 +172,9 @@ et le logo des PDF (fiches de syllabus, livret du catalogue, supplément).
   \item \chemin{Tableau de pilotage} : l'avancement de chaque étudiant face aux minimums, avec sa
     situation détaillée.
   \item \chemin{Export CSV} : l'avancement par étudiant ou la liste détaillée de tous les EP.
-  \item \chemin{Courriels} : texte des messages envoyés (décision, proposition à examiner,
-    décision sur une proposition, relance hebdomadaire des validateurs, émission des
-    suppléments), avec leurs variables.
+  \item \chemin{Courriels} : texte des messages envoyés (décision, relance hebdomadaire des
+    validateurs, émission des suppléments), avec leurs variables ; les messages sur les fiches
+    (soumise, décision) sont ceux du module des fiches.
 \end{itemize}
 
 \capture{deve-pilotage}{Tableau de pilotage de la promotion.}

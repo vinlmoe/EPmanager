@@ -62,11 +62,7 @@ const plan = [
   ['ens-participants', resp, `/mod/ep/participants.php?id=${CM}&activityid=${respact}`],
   ['ens-supplement-items', ens, `/mod/ep/supplement_items.php?id=${CM}`],
   ['ens-propositions', auteur, `/mod/ep/proposals.php?id=${CM}`],
-  ['ens-syllabus-edit', auteur, async (page) => {
-    await page.goto(`${BASE}/mod/ep/proposals.php?id=${CM}`);
-    const link = page.locator('a[href*="syllabus_edit.php"]').first();
-    await page.goto(await link.getAttribute('href'));
-  }],
+  ['ens-syllabus-edit', auteur, `/mod/ep/syllabus_edit.php?id=${CM}&activityid=${process.env.AUTEUR_EP || 0}`],
   ['deve-administration', deve, `/mod/ep/administration.php?id=${CM}`],
   ['deve-types', deve, `/mod/ep/types.php?id=${CM}`],
   ['deve-type-edit', deve, async (page) => {
@@ -102,7 +98,7 @@ const plan = [
   ['gu-ens-syllabus-edit', auteur, `/mod/ep/syllabus_edit.php?id=${CM}&activityid=${process.env.AUTEUR_EP || 0}`],
   ['gu-ens-seances', auteur, `/mod/ep/syllabus_edit.php?id=${CM}&activityid=${process.env.AUTEUR_EP || 0}`,
     '#id_sessionshdr'],
-  ['gu-etu-seances', etu, `/mod/ep/syllabus.php?id=${CM}&activityid=${site.activities[4]}`, 'table.ep-syllabus-sessions'],
+  ['gu-etu-seances', etu, `/mod/ep/syllabus.php?id=${CM}&activityid=${site.activities[4]}`, 'table.syllabus-sessions'],
   // Documents PDF.
   ['gu-pdf-syllabus', etu, `/mod/ep/syllabus_pdf.php?id=${CM}&activityid=${site.activities[4]}`, { pdf: [1, 2] }],
   ['gu-pdf-livret', deve, `/mod/ep/booklet.php?id=${CM}`, { pdf: [1, 2, 4] }],
@@ -111,7 +107,7 @@ const plan = [
   ['gu-pdf-emargement', deve, `/mod/ep/participants.php?id=${CM}&activityid=${process.env.EMARGEMENT || respact}&action=sheet`,
     { pdf: [1] }],
   ['gu-deve-propositions', deve, `/mod/ep/proposals.php?id=${CM}`],
-  ['gu-deve-comparer', deve, `/mod/ep/syllabus.php?id=${CM}&activityid=${process.env.REVUE_EP || 0}`],
+  ['gu-deve-comparer', deve, `/mod/ep/syllabus.php?id=${CM}&activityid=${process.env.REVUE_EP || 0}&review=1`],
   ['gu-ens-participants', resp, `/mod/ep/participants.php?id=${CM}&activityid=${respact}`],
   ['gu-ens-import-notes', resp, `/mod/ep/grades_import.php?id=${CM}&activityid=${respact}`],
   ['gu-deve-administration', deve, `/mod/ep/administration.php?id=${CM}`],

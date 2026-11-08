@@ -49,9 +49,11 @@ def run(s):
     page = random.randint(0, 4)
     r = s.get(BASE + f'/mod/ep/catalog.php?id={CM}&page={page}', timeout=600)
     requests_done += 1
-    forms = re.findall(r'action="([^"]*action=register[^"]*)"', r.text)
+    # Un bouton « S'inscrire » (activityid) par EP, dans le formulaire unique de la page.
+    forms = [BASE + f'/mod/ep/catalog.php?id={CM}&action=register&activityid={a}'
+             for a in re.findall(r'<button[^>]*name="activityid" value="(\d+)"', r.text)]
     if forms:
-        url = random.choice(forms).replace('&amp;', '&')
+        url = random.choice(forms)
         if MODE == 'ancien':
             r = s.get(url, timeout=600)
             requests_done += 1
