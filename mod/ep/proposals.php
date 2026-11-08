@@ -50,13 +50,12 @@ $PAGE->set_context($context);
 $states = ep_activity_state_options();
 
 /**
- * Tableau d'une liste de propositions : l'EP, son état, la version de travail et son état, son
- * auteur, sa date de soumission et les actions possibles.
+ * Tableau des propositions et fiches en cours.
  *
- * @param array $rows Lignes {activity, syllabus} de ep_get_proposals().
+ * @param array $rows Lignes de ep_get_proposals().
  * @param stdClass $cm
  * @param context $context
- * @param array $authors userid => stdClass user
+ * @param array $authors userid => stdClass
  * @return string HTML
  */
 function ep_proposals_table(array $rows, stdClass $cm, context $context, array $authors): string {
@@ -75,10 +74,11 @@ function ep_proposals_table(array $rows, stdClass $cm, context $context, array $
         $activity = $row->activity;
         $syllabus = $row->syllabus;
         $params = ['id' => $cm->id, 'activityid' => $activity->id];
-        $syllabusurl = new moodle_url('/mod/ep/syllabus.php', $params);
-        $editable = in_array($syllabus->status, ['draft', 'returned'], true) && ep_can_edit_syllabus($activity, $context);
-
-        $name = html_writer::link($syllabusurl, format_string($activity->name));
+        $status = $syllabus->status ?? 'draft';
+        $editable = in_array($status, ['draft', 'returned'], true) && ep_can_edit_syllabus($activity, $context);
+        // La DEVE tranche sous la fiche elle-même ; les autres la lisent ou la rédigent.
+        $open = new moodle_url('/mod/ep/syllabus.php', $params + ($status === 'submitted' ? ['review' => 1] : []));
+        $name = html_writer::link($open, format_string($activity->name));
         if (trim((string) $activity->code) !== '') {
             $name .= ' ' . html_writer::span(s($activity->code), 'text-muted small');
         }
@@ -87,16 +87,17 @@ function ep_proposals_table(array $rows, stdClass $cm, context $context, array $
         $cells[] = [
             $name,
             $states[$activity->state] ?? s($activity->state),
-            (int) $syllabus->version,
+            $syllabus ? (int) $syllabus->version : '-',
             html_writer::span(
-                get_string('syllabusstatus_' . $syllabus->status, 'mod_ep'),
-                $syllabus->status === 'submitted' ? 'badge badge-warning'
-                    : ($syllabus->status === 'returned' ? 'badge badge-danger' : 'badge badge-secondary')
+                $syllabus ? get_string('syllabusstatus_' . $status, 'mod_ep') : get_string('nosyllabusyet', 'mod_ep'),
+                $status === 'submitted' ? 'badge badge-warning'
+                    : ($status === 'returned' ? 'badge badge-danger' : 'badge badge-secondary')
             ),
             s($author),
             !empty($syllabus->timesubmitted) ? userdate($syllabus->timesubmitted, get_string('strftimedatetimeshort')) : '-',
             ep_render_actions([
-                get_string('syllabus', 'mod_ep') => $syllabusurl,
+                ($status === 'submitted' && has_capability('mod/ep:manage', $context)
+                    ? get_string('review', 'mod_ep') : get_string('syllabus', 'mod_ep')) => $open,
                 get_string('editsyllabus', 'mod_ep') => $editable ? new moodle_url('/mod/ep/syllabus_edit.php', $params) : null,
             ]),
         ];
@@ -105,13 +106,10 @@ function ep_proposals_table(array $rows, stdClass $cm, context $context, array $
 }
 
 $rows = ep_get_proposals($ep, $context, $USER->id);
-// La DEVE voit à part ce qui lui est soumis ; tout le reste (ses propres brouillons, ou pour un
-// enseignant toutes ses propositions et révisions) va dans « mes propositions ».
-$toreview = $canmanage ? array_values(array_filter($rows, fn($row) => $row->syllabus->status === 'submitted')) : [];
+$toreview = $canmanage ? array_values(array_filter($rows, fn($row) => ($row->syllabus->status ?? '') === 'submitted')) : [];
 $mine = array_values(array_filter($rows, fn($row) => !in_array($row, $toreview, true)));
 
-// Auteurs des versions, lus en une requête.
-$authorids = array_unique(array_filter(array_map(fn($row) => (int) $row->syllabus->authorid, $rows)));
+$authorids = array_unique(array_filter(array_map(fn($row) => (int) ($row->syllabus->authorid ?? 0), $rows)));
 $authors = $authorids ? $DB->get_records_list('user', 'id', $authorids) : [];
 
 ep_set_secondary_page_header();
@@ -139,31 +137,10 @@ if ($mine) {
     echo $OUTPUT->notification(get_string('noproposals', 'mod_ep'), 'info');
 }
 
-// EP dont l'utilisateur est responsable : accès à leur fiche, et proposition d'une mise à jour
-// quand aucune révision n'est en cours (sinon, elle figure déjà dans la liste ci-dessus).
 $responsible = $canpropose ? ep_get_responsible_activities($ep->id, $USER->id) : [];
 if ($responsible) {
     echo $OUTPUT->heading(get_string('myresponsibleactivities', 'mod_ep'), 3);
-
-    // Versions publiées et de travail de ces EP, en une requête.
-    [$insql, $params] = $DB->get_in_or_equal(array_keys($responsible), SQL_PARAMS_NAMED, 'act');
-    $versions = $DB->get_records_select(
-        'ep_syllabus',
-        "activityid $insql AND status IN ('draft', 'submitted', 'returned', 'published')",
-        $params,
-        'version ASC',
-        'id, activityid, status, version'
-    );
-    $publishedversion = [];
-    $hasworking = [];
-    foreach ($versions as $version) {
-        if ($version->status === 'published') {
-            $publishedversion[$version->activityid] = (int) $version->version;
-        } else {
-            $hasworking[$version->activityid] = true;
-        }
-    }
-
+    $published = ep_get_published_syllabi(array_keys($responsible));
     $head = [
         get_string('catalogactivity', 'mod_ep'),
         get_string('activitystate', 'mod_ep'),
@@ -173,17 +150,15 @@ if ($responsible) {
     $cells = [];
     foreach ($responsible as $activity) {
         $params = ['id' => $cm->id, 'activityid' => $activity->id];
-        $canupdate = empty($hasworking[$activity->id]) && $activity->state !== EP_ACTIVITY_ARCHIVED
-            && ep_can_edit_syllabus($activity, $context);
-        $updatelabel = isset($publishedversion[$activity->id])
+        $canupdate = $activity->state !== EP_ACTIVITY_ARCHIVED && ep_can_edit_syllabus($activity, $context);
+        $updatelabel = isset($published[$activity->id])
             ? get_string('proposeupdate', 'mod_ep') : get_string('editsyllabus', 'mod_ep');
         $cells[] = [
             html_writer::link(new moodle_url('/mod/ep/syllabus.php', $params), format_string($activity->name)),
             $states[$activity->state] ?? s($activity->state),
-            isset($publishedversion[$activity->id])
-                ? get_string('syllabusversion', 'mod_ep', $publishedversion[$activity->id]) : '-',
+            isset($published[$activity->id])
+                ? get_string('syllabusversion', 'mod_ep', (int) $published[$activity->id]->version) : '-',
             ep_render_actions([
-                get_string('syllabus', 'mod_ep') => new moodle_url('/mod/ep/syllabus.php', $params),
                 $updatelabel => $canupdate ? new moodle_url('/mod/ep/syllabus_edit.php', $params) : null,
             ]),
         ];

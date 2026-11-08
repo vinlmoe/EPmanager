@@ -420,5 +420,19 @@ function xmldb_ep_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026111900, 'ep');
     }
 
+    if ($oldversion < 2026112700) {
+        // La fiche d'un EP est désormais une activité « Syllabus du module » (mod_syllabus) du
+        // cours ; ses versions sont reprises par une tâche, qui crée ces activités.
+        $table = new xmldb_table('ep_activity');
+        $field = new xmldb_field('syllabuscmid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'sortorder');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        if ($DB->record_exists('ep_syllabus', [])) {
+            \core\task\manager::queue_adhoc_task(new \mod_ep\task\migrate_syllabi(), true);
+        }
+        upgrade_mod_savepoint(true, 2026112700, 'ep');
+    }
+
     return true;
 }

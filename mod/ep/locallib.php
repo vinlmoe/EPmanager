@@ -533,6 +533,9 @@ function ep_save_activity(stdClass $ep, stdClass $data) {
     if (property_exists($data, 'prerequisites')) {
         ep_set_activity_prerequisites($record, (array) $data->prerequisites);
     }
+    if ($existing) {
+        ep_sync_syllabus_details($record);
+    }
     return (int) $record->id;
 }
 
@@ -579,6 +582,8 @@ function ep_set_activity_teachers($activityid, array $teacherids) {
             'timecreated' => time(),
         ]);
     }
+    // Les responsables de l'EP sont ceux de sa fiche.
+    ep_sync_syllabus_teachers((object) ['id' => $activityid]);
 }
 
 /**
@@ -1112,7 +1117,7 @@ function ep_get_activity_lock($epid) {
 
 /**
  * Supprime un EP du catalogue et tout ce qui s'y rattache (responsables, prérequis dans les deux
- * sens, versions du syllabus et leurs séances), sous le verrou de l'activité : refusé dès qu'un
+ * sens, sa fiche), sous le verrou de l'activité : refusé dès qu'un
  * crédit s'y rattache, vérification faite sous ce verrou pour qu'une inscription simultanée ne
  * se retrouve pas sans EP.
  *
@@ -1143,6 +1148,13 @@ function ep_delete_activity(stdClass $ep, stdClass $activity) {
         $DB->delete_records('ep_syllabus', ['activityid' => $activity->id]);
         $DB->delete_records('ep_activity', ['id' => $activity->id, 'epid' => $ep->id]);
         $transaction->allow_commit();
+        // Sa fiche (activité « Syllabus du module ») part avec lui.
+        $syllabus = ep_activity_syllabus_record($activity->id);
+        if ($syllabus) {
+            global $CFG;
+            require_once($CFG->dirroot . '/course/lib.php');
+            course_delete_module($syllabus->cmid);
+        }
         return true;
     } finally {
         $lock->release();
@@ -4270,7 +4282,7 @@ function ep_close_activity(stdClass $ep, stdClass $activity, stdClass $rights, $
 /**
  * Champs texte d'un syllabus, dans l'ordre de la fiche ECTS (guide d'utilisation ECTS 2015) :
  * objectifs, acquis d'apprentissage, prérequis, contenu, méthodes, conditions d'examen,
- * seconde session, bibliographie.
+ * seconde session, bibliographie. Ce sont ceux de la fiche de mod_syllabus.
  *
  * @return string[]
  */
@@ -4291,8 +4303,215 @@ function ep_session_kind_options() {
     return $options;
 }
 
+// Fiche d'un EP : une activité « Syllabus du module » (mod_syllabus) du cours, gérée par l'EP
+// (syllabus.component = mod_ep, syllabus.itemid = identifiant de l'EP). Rédaction, relecture par
+// la DEVE, versions, PDF, compétences et avis des étudiants sont ceux de mod_syllabus ; l'EP en
+// garde le lien (ep_activity.syllabuscmid), ses responsables et son état au catalogue.
+
 /**
- * Dernière version d'un syllabus dans l'un des statuts donnés.
+ * Instance de mod_syllabus qui porte la fiche d'un EP, avec son module de cours (cmid), ou null.
+ *
+ * @param int $activityid
+ * @return stdClass|null
+ */
+function ep_activity_syllabus_record($activityid) {
+    global $DB;
+
+    $record = $DB->get_record_sql(
+        "SELECT s.*, cm.id AS cmid
+           FROM {syllabus} s
+           JOIN {modules} m ON m.name = 'syllabus'
+           JOIN {course_modules} cm ON cm.module = m.id AND cm.instance = s.id AND cm.deletioninprogress = 0
+          WHERE s.component = 'mod_ep' AND s.itemid = :itemid",
+        ['itemid' => $activityid],
+        IGNORE_MULTIPLE
+    );
+    return $record ?: null;
+}
+
+/**
+ * Fiche d'un EP (instance de mod_syllabus avec son cmid), créée au besoin : une activité
+ * « Syllabus du module » dans la section des fiches d'EP du cours, ses responsables étant ceux
+ * de l'EP. Les versions d'une fiche rédigée avant ce fonctionnement (tables ep_syllabus et
+ * ep_session) y sont reprises.
+ *
+ * @param stdClass $ep
+ * @param stdClass $activity
+ * @return stdClass
+ */
+function ep_ensure_activity_syllabus(stdClass $ep, stdClass $activity) {
+    global $CFG, $DB;
+
+    $existing = ep_activity_syllabus_record($activity->id);
+    if ($existing) {
+        return $existing;
+    }
+    require_once($CFG->dirroot . '/course/lib.php');
+    require_once($CFG->dirroot . '/course/modlib.php');
+    require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
+
+    // Deux pages ouvertes en même temps ne créent pas deux fiches.
+    $lock = \core\lock\lock_config::get_lock_factory('mod_ep_syllabus')->get_lock('activity-' . (int) $activity->id, 30);
+    if (!$lock) {
+        throw new moodle_exception('erroractivitybusy', 'mod_ep');
+    }
+    try {
+        $existing = ep_activity_syllabus_record($activity->id);
+        if ($existing) {
+            return $existing;
+        }
+        $course = get_course($ep->course);
+        $moduleinfo = (object) [
+            'modulename' => 'syllabus',
+            'course' => $course->id,
+            'section' => ep_syllabus_section($course),
+            'visible' => 1,
+            'name' => $activity->name,
+            'introeditor' => ['text' => '', 'format' => FORMAT_HTML, 'itemid' => 0],
+            'code' => $activity->code,
+            'ects' => $activity->ects,
+            'semester' => '',
+            'studyyear' => (int) $activity->minstudyyear,
+            'typeid' => 0,
+            'evalopen' => 0,
+            'evalclose' => 0,
+            'component' => 'mod_ep',
+            'itemid' => (int) $activity->id,
+        ];
+        // Les fiches restent hors de la page du cours quand le site le permet : on les lit
+        // depuis le catalogue des EP.
+        if (!empty($CFG->allowstealth)) {
+            $moduleinfo->visibleoncoursepage = 0;
+        }
+        // Création au nom de l'EP, sans le droit de gérer les activités du cours qu'exige
+        // create_module() : un enseignant qui propose un EP n'a pas à l'avoir.
+        $moduleinfo->module = (int) $DB->get_field('modules', 'id', ['name' => 'syllabus'], MUST_EXIST);
+        $moduleinfo = add_moduleinfo($moduleinfo, $course, null);
+        $DB->set_field('ep_activity', 'syllabuscmid', $moduleinfo->coursemodule, ['id' => $activity->id]);
+        $activity->syllabuscmid = (int) $moduleinfo->coursemodule;
+        $syllabus = ep_activity_syllabus_record($activity->id);
+        ep_migrate_legacy_syllabus($activity, $syllabus);
+        ep_sync_syllabus_teachers($activity);
+        return $syllabus;
+    } finally {
+        $lock->release();
+    }
+}
+
+/**
+ * Numéro de la section du cours qui reçoit les fiches d'EP : celle d'une fiche déjà créée, sinon
+ * une nouvelle section en fin de cours, nommée « Fiches des EP ».
+ *
+ * @param stdClass $course
+ * @return int
+ */
+function ep_syllabus_section(stdClass $course) {
+    global $DB;
+
+    $section = $DB->get_field_sql(
+        "SELECT cs.section
+           FROM {syllabus} s
+           JOIN {modules} m ON m.name = 'syllabus'
+           JOIN {course_modules} cm ON cm.module = m.id AND cm.instance = s.id AND cm.deletioninprogress = 0
+           JOIN {course_sections} cs ON cs.id = cm.section
+          WHERE s.component = 'mod_ep' AND s.course = :course",
+        ['course' => $course->id],
+        IGNORE_MULTIPLE
+    );
+    if ($section !== false) {
+        return (int) $section;
+    }
+    $created = course_create_section($course);
+    course_update_section($course, $created, ['name' => get_string('syllabussection', 'mod_ep')]);
+    return (int) $created->section;
+}
+
+/**
+ * Reprend dans la fiche mod_syllabus d'un EP les versions de sa fiche d'avant (tables ep_syllabus
+ * et ep_session), avec leur statut, leurs auteurs, leurs dates et leurs séances, puis les retire
+ * de ces tables.
+ *
+ * @param stdClass $activity
+ * @param stdClass $syllabus Instance de mod_syllabus de l'EP.
+ * @return int Nombre de versions reprises.
+ */
+function ep_migrate_legacy_syllabus(stdClass $activity, stdClass $syllabus) {
+    global $DB;
+
+    $manager = $DB->get_manager();
+    if (!$manager->table_exists('ep_syllabus')) {
+        return 0;
+    }
+    $legacy = $DB->get_records('ep_syllabus', ['activityid' => $activity->id], 'version ASC, id ASC');
+    if (!$legacy) {
+        return 0;
+    }
+    $transaction = $DB->start_delegated_transaction();
+    foreach ($legacy as $old) {
+        $version = clone $old;
+        unset($version->id, $version->activityid);
+        $version->syllabusid = $syllabus->id;
+        $version->language = (string) $version->language;
+        $newid = $DB->insert_record('syllabus_version', $version);
+        foreach ($DB->get_records('ep_session', ['syllabusid' => $old->id], 'sortorder ASC, id ASC') as $session) {
+            unset($session->id);
+            $session->versionid = $newid;
+            unset($session->syllabusid);
+            $DB->insert_record('syllabus_session', $session);
+        }
+        $DB->delete_records('ep_session', ['syllabusid' => $old->id]);
+    }
+    $DB->delete_records('ep_syllabus', ['activityid' => $activity->id]);
+    $transaction->allow_commit();
+    return count($legacy);
+}
+
+/**
+ * Reporte sur la fiche d'un EP ses responsables (ceux qui peuvent l'être dans le cours).
+ *
+ * @param stdClass $activity
+ * @return void
+ */
+function ep_sync_syllabus_teachers(stdClass $activity) {
+    global $CFG;
+
+    $syllabus = ep_activity_syllabus_record($activity->id);
+    if (!$syllabus) {
+        return;
+    }
+    require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
+    $teachers = array_keys(ep_get_activity_teachers($activity->id));
+    syllabus_set_teachers($syllabus, context_module::instance($syllabus->cmid), $teachers);
+}
+
+/**
+ * Reporte sur la fiche d'un EP ses caractéristiques (intitulé, code, ECTS, année minimale).
+ *
+ * @param stdClass $activity
+ * @return void
+ */
+function ep_sync_syllabus_details(stdClass $activity) {
+    global $DB;
+
+    $syllabus = ep_activity_syllabus_record($activity->id);
+    if (!$syllabus) {
+        return;
+    }
+    $update = ['name' => core_text::substr((string) $activity->name, 0, 255), 'code' => (string) $activity->code,
+        'ects' => round((float) $activity->ects, 2), 'studyyear' => max(0, min(6, (int) $activity->minstudyyear))];
+    $changed = array_filter($update, fn($value, $field) => (string) $syllabus->$field !== (string) $value, ARRAY_FILTER_USE_BOTH);
+    if (!$changed) {
+        return;
+    }
+    $DB->update_record('syllabus', (object) (['id' => $syllabus->id, 'timemodified' => time()] + $changed));
+    if (isset($changed['name'])) {
+        rebuild_course_cache($syllabus->course, true);
+    }
+}
+
+/**
+ * Dernière version de la fiche d'un EP dans l'un des statuts donnés, avec activityid (EP) en
+ * plus des champs de syllabus_version.
  *
  * @param int $activityid
  * @param string[] $statuses
@@ -4301,22 +4520,31 @@ function ep_session_kind_options() {
 function ep_get_syllabus($activityid, array $statuses = ['published']) {
     global $DB;
 
+    $syllabus = ep_activity_syllabus_record($activityid);
+    if (!$syllabus) {
+        return null;
+    }
     [$insql, $params] = $DB->get_in_or_equal($statuses, SQL_PARAMS_NAMED, 'st');
     $records = $DB->get_records_select(
-        'ep_syllabus',
-        "activityid = :activityid AND status $insql",
-        $params + ['activityid' => $activityid],
+        'syllabus_version',
+        "syllabusid = :syllabusid AND status $insql",
+        $params + ['syllabusid' => $syllabus->id],
         'version DESC, id DESC',
         '*',
         0,
         1
     );
-    return $records ? reset($records) : null;
+    if (!$records) {
+        return null;
+    }
+    $version = reset($records);
+    $version->activityid = (int) $activityid;
+    $version->cmid = (int) $syllabus->cmid;
+    return $version;
 }
 
 /**
- * Version de travail d'un syllabus : celle en rédaction, soumise ou renvoyée à son auteur, s'il y
- * en a une.
+ * Version de travail de la fiche d'un EP : en rédaction, soumise ou renvoyée à son auteur.
  *
  * @param int $activityid
  * @return stdClass|null
@@ -4326,15 +4554,45 @@ function ep_get_working_syllabus($activityid) {
 }
 
 /**
- * Séances d'une version de syllabus, dans l'ordre du programme.
+ * Versions publiées des fiches de plusieurs EP, en une requête.
  *
- * @param int $syllabusid
- * @return array id => stdClass
+ * @param int[] $activityids
+ * @return array activityid => version (avec activityid et cmid)
  */
-function ep_get_syllabus_sessions($syllabusid) {
+function ep_get_published_syllabi(array $activityids) {
     global $DB;
 
-    return $DB->get_records('ep_session', ['syllabusid' => $syllabusid], 'sortorder ASC, id ASC');
+    if (!$activityids) {
+        return [];
+    }
+    [$insql, $params] = $DB->get_in_or_equal(array_values(array_map('intval', $activityids)), SQL_PARAMS_NAMED, 'act');
+    $rows = $DB->get_records_sql(
+        "SELECT v.*, s.itemid AS activityid, cm.id AS cmid
+           FROM {syllabus} s
+           JOIN {modules} m ON m.name = 'syllabus'
+           JOIN {course_modules} cm ON cm.module = m.id AND cm.instance = s.id AND cm.deletioninprogress = 0
+           JOIN {syllabus_version} v ON v.syllabusid = s.id AND v.status = :published
+          WHERE s.component = 'mod_ep' AND s.itemid $insql
+       ORDER BY v.version ASC",
+        $params + ['published' => 'published']
+    );
+    $result = [];
+    foreach ($rows as $row) {
+        $result[(int) $row->activityid] = $row;
+    }
+    return $result;
+}
+
+/**
+ * Séances d'une version de fiche, dans l'ordre du programme.
+ *
+ * @param int $versionid
+ * @return array id => stdClass
+ */
+function ep_get_syllabus_sessions($versionid) {
+    global $DB;
+
+    return $DB->get_records('syllabus_session', ['versionid' => $versionid], 'sortorder ASC, id ASC');
 }
 
 /**
@@ -4361,7 +4619,7 @@ function ep_syllabus_hours(array $sessions, $personalhours = 0.0) {
 }
 
 /**
- * Indique si un utilisateur peut rédiger le syllabus d'un EP : la DEVE (gestion du catalogue),
+ * Indique si un utilisateur peut rédiger la fiche d'un EP : la DEVE (gestion du catalogue),
  * un responsable de l'EP, ou l'auteur d'une proposition encore à l'état de brouillon ou proposée.
  *
  * @param stdClass $activity
@@ -4387,133 +4645,15 @@ function ep_can_edit_syllabus(stdClass $activity, context $context, $userid = nu
 }
 
 /**
- * Enregistre les séances d'une version de syllabus, en remplaçant les précédentes : une séance
- * sans intitulé est ignorée, une durée négative ramenée à zéro, un intervenant désigné par son
- * compte l'emporte sur un nom libre.
- *
- * @param int $syllabusid
- * @param array $sessions Liste de tableaux {title, kind, duration, teacherid, teachername}.
- * @return int Nombre de séances enregistrées.
- */
-function ep_set_syllabus_sessions($syllabusid, array $sessions) {
-    global $DB;
-
-    $DB->delete_records('ep_session', ['syllabusid' => $syllabusid]);
-    $kinds = ep_session_kind_options();
-    $order = 0;
-    foreach ($sessions as $session) {
-        $session = (array) $session;
-        $title = trim((string) ($session['title'] ?? ''));
-        if ($title === '') {
-            continue;
-        }
-        $teacherid = !empty($session['teacherid']) ? (int) $session['teacherid'] : null;
-        $order += 10;
-        $DB->insert_record('ep_session', (object) [
-            'syllabusid' => $syllabusid,
-            'sortorder' => $order,
-            'title' => core_text::substr($title, 0, 255),
-            'kind' => isset($kinds[$session['kind'] ?? '']) ? $session['kind'] : 'other',
-            'duration' => max(0, round((float) ($session['duration'] ?? 0), 2)),
-            'teacherid' => $teacherid,
-            'teachername' => $teacherid ? '' : core_text::substr(trim((string) ($session['teachername'] ?? '')), 0, 255),
-            'timecreated' => time(),
-        ]);
-    }
-    return $order / 10;
-}
-
-/**
- * Crée une nouvelle version de syllabus à l'état de brouillon, reprise de la version publiée si
- * elle existe (avec ses séances), ou vide. Si une version de travail existe déjà, c'est elle qui
- * est renvoyée : il n'y a qu'une révision en cours à la fois.
- *
- * @param stdClass $activity
- * @param int $authorid
- * @return stdClass La version de travail.
- */
-function ep_start_syllabus_revision(stdClass $activity, $authorid) {
-    global $DB;
-
-    $working = ep_get_working_syllabus($activity->id);
-    if ($working) {
-        return $working;
-    }
-    $published = ep_get_syllabus($activity->id);
-    $version = 1 + (int) $DB->get_field('ep_syllabus', 'MAX(version)', ['activityid' => $activity->id]);
-    $now = time();
-    $record = (object) [
-        'activityid' => $activity->id,
-        'version' => $version,
-        'status' => 'draft',
-        'language' => $published->language ?? '',
-        'personalhours' => $published->personalhours ?? 0,
-        'authorid' => $authorid,
-        'reviewerid' => null,
-        'reviewcomment' => null,
-        'timesubmitted' => 0,
-        'timereviewed' => 0,
-        'timecreated' => $now,
-        'timemodified' => $now,
-    ];
-    foreach (ep_syllabus_text_fields() as $field) {
-        $record->$field = $published->$field ?? '';
-    }
-    $record->id = $DB->insert_record('ep_syllabus', $record);
-    if ($published) {
-        ep_set_syllabus_sessions($record->id, array_values(ep_get_syllabus_sessions($published->id)));
-    }
-    return $record;
-}
-
-/**
- * Enregistre le texte et les séances d'une version de syllabus encore modifiable (brouillon ou
- * renvoyée) ; une version soumise ou tranchée ne se modifie plus.
- *
- * @param stdClass $syllabus
- * @param stdClass $data Champs texte, language, personalhours.
- * @param array|null $sessions Séances (voir ep_set_syllabus_sessions()), ou null pour les laisser.
- * @return bool False si la version n'était plus modifiable.
- */
-function ep_save_syllabus(stdClass $syllabus, stdClass $data, ?array $sessions = null) {
-    global $DB;
-
-    $update = (object) ['id' => $syllabus->id, 'timemodified' => time()];
-    foreach (ep_syllabus_text_fields() as $field) {
-        if (property_exists($data, $field)) {
-            $update->$field = (string) $data->$field;
-        }
-    }
-    if (property_exists($data, 'language')) {
-        $update->language = core_text::substr(trim((string) $data->language), 0, 50);
-    }
-    if (property_exists($data, 'personalhours')) {
-        $update->personalhours = max(0, round((float) $data->personalhours, 2));
-    }
-
-    $transaction = $DB->start_delegated_transaction();
-    $DB->execute('UPDATE {ep_syllabus} SET timemodified = timemodified WHERE id = ?', [$syllabus->id]);
-    [$insql, $params] = $DB->get_in_or_equal(['draft', 'returned'], SQL_PARAMS_NAMED, 'st');
-    $editable = $DB->record_exists_select('ep_syllabus', "id = :id AND status $insql", $params + ['id' => $syllabus->id]);
-    if ($editable) {
-        $DB->update_record('ep_syllabus', $update);
-        if ($sessions !== null) {
-            ep_set_syllabus_sessions($syllabus->id, $sessions);
-        }
-    }
-    $transaction->allow_commit();
-    return $editable;
-}
-
-/**
  * Crée la proposition d'un nouvel EP par un enseignant : un EP du catalogue à l'état de
- * brouillon, dont l'auteur devient responsable, et la première version de son syllabus.
+ * brouillon, dont l'auteur devient responsable, et sa fiche (activité « Syllabus du module »),
+ * que l'auteur rédige ensuite et soumet à la DEVE.
  *
  * @param stdClass $ep
  * @param stdClass $data Champs de l'EP (name, typeid, ects, capacity, minstudyyear, maxstudyyear,
  *                       description), au moins name et typeid.
  * @param int $authorid
- * @return stdClass {activityid, syllabusid}
+ * @return stdClass {activityid, syllabuscmid}
  */
 function ep_create_proposal(stdClass $ep, stdClass $data, $authorid) {
     global $DB;
@@ -4530,11 +4670,11 @@ function ep_create_proposal(stdClass $ep, stdClass $data, $authorid) {
     $DB->set_field('ep_activity', 'proposedby', $authorid, ['id' => $activityid]);
     $current = array_keys(ep_get_activity_teachers($activityid));
     ep_set_activity_teachers($activityid, array_merge($current, [$authorid]));
-    $activity = $DB->get_record('ep_activity', ['id' => $activityid], '*', MUST_EXIST);
-    $syllabus = ep_start_syllabus_revision($activity, $authorid);
     $transaction->allow_commit();
 
-    return (object) ['activityid' => (int) $activityid, 'syllabusid' => (int) $syllabus->id];
+    $activity = $DB->get_record('ep_activity', ['id' => $activityid], '*', MUST_EXIST);
+    $syllabus = ep_ensure_activity_syllabus($ep, $activity);
+    return (object) ['activityid' => (int) $activityid, 'syllabuscmid' => (int) $syllabus->cmid];
 }
 
 /**
@@ -4566,193 +4706,64 @@ function ep_update_proposal_activity(stdClass $ep, stdClass $activity, stdClass 
 }
 
 /**
- * Soumet une version de syllabus à la DEVE. Pour un nouvel EP, il passe de l'état de brouillon à
- * l'état proposé. Si la DEVE a choisi la publication directe des mises à jour par les
- * responsables, la mise à jour d'un EP déjà publié est publiée aussitôt.
+ * Suite d'une version soumise ou tranchée dans la fiche d'un EP (événements de mod_syllabus) :
+ * une proposition soumise passe à l'état « proposé » ; publiée, elle entre au catalogue ;
+ * renvoyée, elle redevient un brouillon ; refusée, elle est archivée. Un EP déjà publié garde son
+ * état : seule sa fiche change.
  *
- * @param stdClass $ep
- * @param stdClass $activity
- * @param stdClass $syllabus
- * @param int $userid
- * @return string|null 'submitted', 'published', ou null si la version n'était plus soumettable.
+ * @param int $activityid
+ * @param string $decision submit, publish, return ou reject.
+ * @return string|null Nouvel état, ou null s'il ne change pas.
  */
-function ep_submit_syllabus(stdClass $ep, stdClass $activity, stdClass $syllabus, $userid) {
+function ep_apply_syllabus_decision($activityid, $decision) {
     global $DB;
 
-    $transaction = $DB->start_delegated_transaction();
-    $DB->execute('UPDATE {ep_syllabus} SET timemodified = timemodified WHERE id = ?', [$syllabus->id]);
-    [$insql, $params] = $DB->get_in_or_equal(['draft', 'returned'], SQL_PARAMS_NAMED, 'st');
-    $ok = $DB->record_exists_select('ep_syllabus', "id = :id AND status $insql", $params + ['id' => $syllabus->id]);
-    if (!$ok) {
-        $transaction->allow_commit();
+    $activity = $DB->get_record('ep_activity', ['id' => $activityid]);
+    if (!$activity || !in_array($activity->state, [EP_ACTIVITY_DRAFT, EP_ACTIVITY_PROPOSED], true)) {
         return null;
     }
-    $now = time();
-    $DB->update_record('ep_syllabus', (object) [
-        'id' => $syllabus->id, 'status' => 'submitted', 'timesubmitted' => $now, 'timemodified' => $now,
-    ]);
-    if ($activity->state === EP_ACTIVITY_DRAFT) {
-        $DB->set_field('ep_activity', 'state', EP_ACTIVITY_PROPOSED, ['id' => $activity->id]);
-        $activity->state = EP_ACTIVITY_PROPOSED;
+    $states = ['submit' => EP_ACTIVITY_PROPOSED, 'publish' => EP_ACTIVITY_PUBLISHED, 'return' => EP_ACTIVITY_DRAFT,
+        'reject' => EP_ACTIVITY_ARCHIVED];
+    $state = $states[$decision] ?? null;
+    if ($state === null || $state === $activity->state) {
+        return null;
     }
-    $transaction->allow_commit();
-    ep_trigger_syllabus_event(\mod_ep\event\syllabus_submitted::class, $activity, $syllabus->id, $userid);
-
-    // Publication directe d'une mise à jour, si la DEVE l'a choisie : seulement pour un EP déjà
-    // publié, un nouvel EP passant toujours par la DEVE.
-    $published = !in_array($activity->state, [EP_ACTIVITY_DRAFT, EP_ACTIVITY_PROPOSED], true);
-    if ($published && !empty($ep->proposalsdirectpublish)) {
-        $syllabus = $DB->get_record('ep_syllabus', ['id' => $syllabus->id], '*', MUST_EXIST);
-        ep_review_syllabus($ep, $activity, $syllabus, $userid, 'publish', '', false);
-        return 'published';
+    $update = (object) ['id' => $activity->id, 'state' => $state, 'timemodified' => time()];
+    if ($state === EP_ACTIVITY_PUBLISHED) {
+        $update->timepublished = time();
     }
-
-    ep_notify_proposal_submitted($ep, $activity, $syllabus, $userid);
-    return 'submitted';
+    $DB->update_record('ep_activity', $update);
+    return $state;
 }
 
 /**
- * Décision de la DEVE sur une version soumise : la publier (elle remplace la version en vigueur
- * et, pour un nouvel EP, le publie au catalogue), la renvoyer à son auteur avec un commentaire
- * (pour un nouvel EP, il repasse en brouillon), ou la refuser (un nouvel EP est alors archivé).
- *
- * @param stdClass $ep
- * @param stdClass $activity
- * @param stdClass $syllabus
- * @param int $reviewerid
- * @param string $decision 'publish', 'return' ou 'reject'.
- * @param string $comment
- * @param bool $notify Prévenir l'auteur.
- * @return bool False si la version n'était plus soumise (décision prise entre-temps).
- */
-function ep_review_syllabus(
-    stdClass $ep,
-    stdClass $activity,
-    stdClass $syllabus,
-    $reviewerid,
-    $decision,
-    $comment = '',
-    $notify = true
-) {
-    global $DB;
-
-    $statuses = ['publish' => 'published', 'return' => 'returned', 'reject' => 'rejected'];
-    if (!isset($statuses[$decision])) {
-        throw new coding_exception('Décision inconnue : ' . $decision);
-    }
-    $transaction = $DB->start_delegated_transaction();
-    $DB->execute('UPDATE {ep_syllabus} SET timemodified = timemodified WHERE id = ?', [$syllabus->id]);
-    if (!$DB->record_exists('ep_syllabus', ['id' => $syllabus->id, 'status' => 'submitted'])) {
-        $transaction->allow_commit();
-        return false;
-    }
-    $now = time();
-    $isnew = in_array($activity->state, [EP_ACTIVITY_DRAFT, EP_ACTIVITY_PROPOSED], true);
-    if ($decision === 'publish') {
-        $DB->set_field_select(
-            'ep_syllabus',
-            'status',
-            'superseded',
-            'activityid = :activityid AND status = :published',
-            ['activityid' => $activity->id, 'published' => 'published']
-        );
-    }
-    $DB->update_record('ep_syllabus', (object) [
-        'id' => $syllabus->id,
-        'status' => $statuses[$decision],
-        'reviewerid' => $reviewerid,
-        'reviewcomment' => $comment,
-        'timereviewed' => $now,
-        'timemodified' => $now,
-    ]);
-    $state = null;
-    if ($decision === 'publish' && $isnew) {
-        $state = EP_ACTIVITY_PUBLISHED;
-        $DB->set_field('ep_activity', 'timepublished', $now, ['id' => $activity->id]);
-    } else if ($decision === 'return' && $isnew) {
-        $state = EP_ACTIVITY_DRAFT;
-    } else if ($decision === 'reject' && $isnew) {
-        $state = EP_ACTIVITY_ARCHIVED;
-    }
-    if ($state !== null) {
-        $DB->set_field('ep_activity', 'state', $state, ['id' => $activity->id]);
-        $activity->state = $state;
-    }
-    $DB->set_field('ep_activity', 'timemodified', $now, ['id' => $activity->id]);
-    $transaction->allow_commit();
-
-    ep_trigger_syllabus_event(\mod_ep\event\syllabus_reviewed::class, $activity, $syllabus->id, $reviewerid, [
-        'decision' => $decision,
-    ]);
-    if ($notify) {
-        $syllabus = $DB->get_record('ep_syllabus', ['id' => $syllabus->id], '*', MUST_EXIST);
-        ep_notify_proposal_reviewed($ep, $activity, $syllabus, $decision, $comment);
-    }
-    return true;
-}
-
-/**
- * Déclenche un événement du circuit d'un syllabus (soumission, décision de la DEVE).
- *
- * @param string $eventclass
- * @param stdClass $activity
- * @param int $syllabusid
- * @param int $userid Auteur de l'action.
- * @param array $other
- * @return void
- */
-function ep_trigger_syllabus_event($eventclass, stdClass $activity, $syllabusid, $userid, array $other = []) {
-    $cm = ep_get_cm_of_instance($activity->epid);
-    if (!$cm) {
-        return;
-    }
-    $eventclass::create([
-        'objectid' => $syllabusid,
-        'context' => context_module::instance($cm->id),
-        'userid' => $userid,
-        'other' => $other + ['activityid' => (int) $activity->id, 'state' => (string) $activity->state],
-    ])->trigger();
-}
-
-/**
- * EP proposés ou en cours de révision qui concernent un utilisateur : pour la DEVE, toutes les
- * versions soumises ; pour un enseignant, ses propositions et les EP dont il est responsable qui
- * ont une version de travail.
+ * EP proposés ou dont la fiche est en cours de révision, qui concernent un utilisateur : pour la
+ * DEVE, ceux dont une version lui est soumise ; pour un enseignant, ses propositions et les EP
+ * dont il est responsable qui ont une version de travail.
  *
  * @param stdClass $ep
  * @param context $context
  * @param int $userid
- * @return array Liste de {activity, syllabus} : l'EP et sa version de travail.
+ * @return array Liste de {activity, syllabus} : l'EP et sa version de travail (ou null).
  */
 function ep_get_proposals(stdClass $ep, context $context, $userid) {
-    global $DB;
-
     $ismanager = has_capability('mod/ep:manage', $context, $userid);
-    $sql = "SELECT s.*, a.id AS a_id
-              FROM {ep_syllabus} s
-              JOIN {ep_activity} a ON a.id = s.activityid
-             WHERE a.epid = :epid AND s.status IN ('draft', 'submitted', 'returned')";
-    $params = ['epid' => $ep->id];
-    if (!$ismanager) {
-        $sql .= " AND (a.proposedby = :proposer
-                       OR EXISTS (SELECT 1 FROM {ep_activity_teacher} t WHERE t.activityid = a.id AND t.teacherid = :teacher))";
-        $params += ['proposer' => $userid, 'teacher' => $userid];
-    }
-    $sql .= " ORDER BY s.timesubmitted DESC, s.timemodified DESC";
     $rows = [];
-    $activities = ep_get_activities($ep->id);
-    foreach ($DB->get_records_sql($sql, $params) as $syllabus) {
-        $activityid = (int) $syllabus->a_id;
-        unset($syllabus->a_id);
-        // La DEVE n'a à voir que ce qui lui est soumis ; les brouillons restent à leurs auteurs.
-        if (
-            $ismanager && $syllabus->status !== 'submitted' && !ep_is_activity_teacher($activityid, $userid)
-                && (int) ($activities[$activityid]->proposedby ?? 0) !== (int) $userid
-        ) {
+    foreach (ep_get_activities($ep->id) as $activity) {
+        $isnew = in_array($activity->state, [EP_ACTIVITY_DRAFT, EP_ACTIVITY_PROPOSED], true);
+        $mine = ep_is_activity_teacher($activity->id, $userid) || (int) ($activity->proposedby ?? 0) === (int) $userid;
+        $working = ep_get_working_syllabus($activity->id);
+        if (!$working && !($isnew && $mine)) {
             continue;
         }
-        $rows[] = (object) ['activity' => $activities[$activityid], 'syllabus' => $syllabus];
+        // La DEVE n'a à voir que ce qui lui est soumis ; les brouillons restent à leurs auteurs.
+        $submitted = $working && $working->status === 'submitted';
+        if (!$mine && !($ismanager && $submitted)) {
+            continue;
+        }
+        $rows[] = (object) ['activity' => $activity, 'syllabus' => $working];
     }
+    usort($rows, fn($a, $b) => ((int) ($b->syllabus->timesubmitted ?? 0)) <=> ((int) ($a->syllabus->timesubmitted ?? 0)));
     return $rows;
 }
 
@@ -4765,8 +4776,6 @@ function ep_get_proposals(stdClass $ep, context $context, $userid) {
 function ep_notification_definitions() {
     return [
         'creditdecided' => ['student', 'ep', 'decision', 'ects', 'grade', 'comment', 'link'],
-        'proposalsubmitted' => ['author', 'ep', 'link'],
-        'proposalreviewed' => ['author', 'ep', 'decision', 'comment', 'link'],
         'pendingreminder' => ['recipient', 'count', 'link'],
     ];
 }
@@ -4943,65 +4952,6 @@ function ep_notify_credit_decided(stdClass $credit) {
         'grade' => $credit->grade !== null ? ep_format_ects($credit->grade) : '-',
         'comment' => (string) $credit->validatorcomment,
     ], new moodle_url('/mod/ep/validate.php', ['id' => $cm->id, 'creditid' => $credit->id]));
-}
-
-/**
- * Prévient la DEVE (utilisateurs qui gèrent le catalogue de l'activité) qu'une proposition ou une
- * mise à jour de syllabus lui est soumise.
- *
- * @param stdClass $ep
- * @param stdClass $activity
- * @param stdClass $syllabus
- * @param int $authorid
- * @return int Nombre de destinataires.
- */
-function ep_notify_proposal_submitted(stdClass $ep, stdClass $activity, stdClass $syllabus, $authorid) {
-    global $DB;
-
-    $cm = ep_get_cm_of_instance($ep->id);
-    if (!$cm) {
-        return 0;
-    }
-    $context = context_module::instance($cm->id);
-    $author = $DB->get_record('user', ['id' => $authorid]);
-    $url = new moodle_url('/mod/ep/syllabus.php', ['id' => $cm->id, 'activityid' => $activity->id]);
-    $sent = 0;
-    foreach (get_enrolled_users($context, 'mod/ep:manage', 0, 'u.*') as $manager) {
-        if ((int) $manager->id === (int) $authorid) {
-            continue;
-        }
-        $sent += ep_send_notification($ep, 'proposalsubmitted', $manager, [
-            'author' => $author ? fullname($author) : '-',
-            'ep' => format_string($activity->name),
-        ], $url) ? 1 : 0;
-    }
-    return $sent;
-}
-
-/**
- * Prévient l'auteur d'une version de syllabus de la décision de la DEVE.
- *
- * @param stdClass $ep
- * @param stdClass $activity
- * @param stdClass $syllabus
- * @param string $decision publish, return ou reject.
- * @param string $comment
- * @return void
- */
-function ep_notify_proposal_reviewed(stdClass $ep, stdClass $activity, stdClass $syllabus, $decision, $comment) {
-    global $DB;
-
-    $cm = ep_get_cm_of_instance($ep->id);
-    $author = !empty($syllabus->authorid) ? $DB->get_record('user', ['id' => $syllabus->authorid]) : null;
-    if (!$cm || !$author || (int) $author->id === (int) $syllabus->reviewerid) {
-        return;
-    }
-    ep_send_notification($ep, 'proposalreviewed', $author, [
-        'author' => fullname($author),
-        'ep' => format_string($activity->name),
-        'decision' => get_string('syllabusdecision_' . $decision, 'mod_ep'),
-        'comment' => (string) $comment,
-    ], new moodle_url('/mod/ep/syllabus.php', ['id' => $cm->id, 'activityid' => $activity->id]));
 }
 
 /**
@@ -6508,55 +6458,34 @@ function ep_import_settings_catalog(stdClass $ep, array $rows, $userid, callable
 }
 
 /**
- * Publie directement une version du syllabus d'un EP, sans passer par la soumission ni la revue :
- * c'est le cas d'un catalogue importé par la DEVE. La version de travail (créée au besoin à
- * partir de la version publiée) reçoit les champs fournis, puis devient la version publiée ; une
- * version soumise par l'enseignant et non encore tranchée est reprise et publiée de même, car
- * l'import fait foi. L'état de l'EP n'est pas modifié.
+ * Publie directement une version de la fiche d'un EP, sans soumission ni relecture : c'est le
+ * cas d'un catalogue importé par la DEVE. La version de travail de sa fiche mod_syllabus (créée au
+ * besoin, reprise de la version publiée) reçoit les champs fournis puis est publiée ; une version
+ * soumise par l'enseignant et non encore tranchée est reprise et publiée de même, car l'import
+ * fait foi. L'état de l'EP n'est pas modifié.
  *
  * @param stdClass $activity
  * @param stdClass $data Champs texte (voir ep_syllabus_text_fields()), language, personalhours :
  *                       seuls ceux fournis remplacent la version précédente.
- * @param array|null $sessions Séances (voir ep_set_syllabus_sessions()), ou null pour les garder.
+ * @param array|null $sessions Séances {title, kind, duration, teacherid, teachername}, ou null pour
+ *                       les garder.
  * @param int $userid Auteur de l'import.
  * @return int Identifiant de la version publiée.
  */
 function ep_publish_syllabus_directly(stdClass $activity, stdClass $data, ?array $sessions, $userid) {
-    global $DB;
+    global $CFG, $DB;
 
-    $transaction = $DB->start_delegated_transaction();
-    $syllabus = ep_start_syllabus_revision($activity, $userid);
-    $now = time();
-    $update = (object) ['id' => $syllabus->id, 'status' => 'published', 'reviewerid' => $userid,
-        'reviewcomment' => '', 'timereviewed' => $now, 'timemodified' => $now];
-    foreach (ep_syllabus_text_fields() as $field) {
-        if (property_exists($data, $field)) {
-            $update->$field = (string) $data->$field;
-        }
+    require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
+    $ep = $DB->get_record('ep', ['id' => $activity->epid], '*', MUST_EXIST);
+    $syllabus = ep_ensure_activity_syllabus($ep, $activity);
+    $version = syllabus_start_working($syllabus, (int) $userid);
+    if ($version->status === SYLLABUS_STATUS_SUBMITTED) {
+        $DB->set_field('syllabus_version', 'status', SYLLABUS_STATUS_DRAFT, ['id' => $version->id]);
+        $version->status = SYLLABUS_STATUS_DRAFT;
     }
-    if (property_exists($data, 'language')) {
-        $update->language = core_text::substr(trim((string) $data->language), 0, 50);
-    }
-    if (property_exists($data, 'personalhours')) {
-        $update->personalhours = max(0, round((float) $data->personalhours, 2));
-    }
-    if ($sessions !== null) {
-        ep_set_syllabus_sessions($syllabus->id, $sessions);
-    }
-    $DB->set_field_select(
-        'ep_syllabus',
-        'status',
-        'superseded',
-        'activityid = :activityid AND status = :published AND id <> :id',
-        ['activityid' => $activity->id, 'published' => 'published', 'id' => $syllabus->id]
-    );
-    $DB->update_record('ep_syllabus', $update);
-    $transaction->allow_commit();
-
-    ep_trigger_syllabus_event(\mod_ep\event\syllabus_reviewed::class, $activity, $syllabus->id, $userid, [
-        'decision' => 'publish',
-    ]);
-    return (int) $syllabus->id;
+    syllabus_save_working($version, $data, $sessions, (int) $userid);
+    syllabus_publish($syllabus, $DB->get_record('syllabus_version', ['id' => $version->id], '*', MUST_EXIST), (int) $userid, '');
+    return (int) $version->id;
 }
 
 /**

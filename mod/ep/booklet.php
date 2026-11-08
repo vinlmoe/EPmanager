@@ -54,15 +54,7 @@ $types = ep_get_types($ep->id);
 // Versions publiées de tous les syllabus de l'instance, en une requête : il n'y en a qu'une par EP
 // (la publication d'une révision remplace la précédente), mais le tri par version garantit que
 // la plus récente l'emporte si une ancienne était restée publiée.
-$syllabi = [];
-$sql = "SELECT s.*
-          FROM {ep_syllabus} s
-          JOIN {ep_activity} a ON a.id = s.activityid
-         WHERE a.epid = :epid AND s.status = :status
-      ORDER BY s.version ASC, s.id ASC";
-foreach ($DB->get_records_sql($sql, ['epid' => $ep->id, 'status' => 'published']) as $syllabus) {
-    $syllabi[(int) $syllabus->activityid] = $syllabus;
-}
+$syllabi = ep_get_published_syllabi(array_keys($activities));
 
 // Le livret est conservé et resservi tant que rien de ce qu'il contient n'a changé : catalogue,
 // syllabus publiés, responsables, réglages et logo des PDF, langue, jour (imprimé en page de

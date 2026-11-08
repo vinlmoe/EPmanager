@@ -639,7 +639,8 @@ function epsynthesis_todo_participants_sql(array $activelinks) {
 }
 
 /**
- * Clause WHERE (sur {ep_syllabus} s JOIN {ep_activity} a) des versions de travail de syllabus qui
+ * Clause WHERE (sur {syllabus_version} s, fiche mod_syllabus d'un EP, JOIN {ep_activity} a) des
+ * versions de travail de fiches qui
  * concernent l'utilisateur : celles des EP qu'il a proposés ou dont il est responsable, dans les
  * activités actives — le périmètre « mes propositions » de mod/ep/proposals.php (voir
  * ep_get_proposals()), sans ce que la DEVE a à examiner.
@@ -737,8 +738,9 @@ function epsynthesis_count_todo(array $activelinks, $userid) {
         [$where, $params] = $built;
         $rows = $DB->get_records_sql(
             "SELECT s.status, COUNT(s.id) AS n
-               FROM {ep_syllabus} s
-               JOIN {ep_activity} a ON a.id = s.activityid
+               FROM {syllabus_version} s
+               JOIN {syllabus} sy ON sy.id = s.syllabusid AND sy.component = 'mod_ep'
+               JOIN {ep_activity} a ON a.id = sy.itemid
               WHERE $where
            GROUP BY s.status",
             $params
@@ -841,14 +843,15 @@ function epsynthesis_get_todo_syllabi(array $activelinks, $userid) {
     }
     [$where, $params] = $built;
     $rows = $DB->get_records_sql(
-        "SELECT s.id, s.activityid, s.version, s.status, s.authorid, s.reviewcomment, s.timesubmitted,
+        "SELECT s.id, sy.itemid AS activityid, s.version, s.status, s.authorid, s.reviewcomment, s.timesubmitted,
                 s.timereviewed, s.timemodified, a.epid, a.name AS activityname, a.code AS activitycode,
                 a.state AS activitystate, a.proposedby,
                 CASE WHEN EXISTS (SELECT 1 FROM {ep_activity_teacher} t2
                                    WHERE t2.activityid = a.id AND t2.teacherid = :tdteacher2)
                      THEN 1 ELSE 0 END AS isteacher
-           FROM {ep_syllabus} s
-           JOIN {ep_activity} a ON a.id = s.activityid
+           FROM {syllabus_version} s
+           JOIN {syllabus} sy ON sy.id = s.syllabusid AND sy.component = 'mod_ep'
+           JOIN {ep_activity} a ON a.id = sy.itemid
           WHERE $where
        ORDER BY s.timemodified DESC, s.id DESC",
         $params + ['tdteacher2' => $userid]

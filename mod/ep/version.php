@@ -25,10 +25,10 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_ep';
-$plugin->version   = 2026112600;
+$plugin->version   = 2026112700;
 $plugin->requires  = 2023100900; // Moodle 4.3+, comme mod_stage.
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.0.6';
+$plugin->release   = '1.1.0';
 $plugin->supported = [403, 405]; // Moodle 4.3 à 4.5, versions testées par la CI.
 $plugin->dependencies = [
     // Les EP de type « stage » sont attribués automatiquement à partir des stages complémentaires
@@ -36,4 +36,6 @@ $plugin->dependencies = [
     // attribution lit directement les tables de mod_stage, tout comme l'identification des
     // enseignants référents (stage_entry_teacher), qui n'est pas redemandée ici.
     'mod_stage' => 2026090300,
+    // La fiche de chaque EP est une activité « Syllabus du module ».
+    'mod_syllabus' => 2026112700,
 ];

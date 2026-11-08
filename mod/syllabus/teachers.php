@@ -34,6 +34,21 @@ if (!$rights->canedit && !$rights->canmanage) {
     throw new required_capability_exception($context, 'mod/syllabus:manage', 'nopermissions', '');
 }
 
+// Fiche d'un EP : les responsables sont ceux de l'EP, tenus dans son catalogue.
+$ownerurl = !empty($syllabus->component) ? syllabus_owner_url($syllabus) : null;
+if (!empty($syllabus->component)) {
+    echo $OUTPUT->header();
+    echo $OUTPUT->heading(get_string('teachers', 'mod_syllabus'));
+    echo $OUTPUT->notification(get_string('ownermanaged', 'mod_syllabus'), 'info');
+    $names = array_map(fn($user) => fullname($user), syllabus_get_teachers((int) $syllabus->id));
+    echo html_writer::alist($names ?: [get_string('noteachers', 'mod_syllabus')]);
+    if ($ownerurl) {
+        echo html_writer::link($ownerurl, get_string('ownerlink', 'mod_syllabus'), ['class' => 'btn btn-secondary']);
+    }
+    echo $OUTPUT->footer();
+    exit;
+}
+
 if (optional_param('save', 0, PARAM_BOOL) && confirm_sesskey()) {
     $count = syllabus_set_teachers($syllabus, $context, optional_param_array('teacherids', [], PARAM_INT));
     redirect($PAGE->url, get_string('teacherssaved', 'mod_syllabus', $count), null, \core\output\notification::NOTIFY_SUCCESS);

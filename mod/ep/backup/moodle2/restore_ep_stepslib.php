@@ -164,8 +164,16 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
         // L'auteur d'une proposition absent de l'archive est dissocié, pas rattaché à un autre compte.
         $data->proposedby = empty($data->proposedby) ? null : ($this->get_mappingid('user', $data->proposedby) ?: null);
 
+        // Fiche de l'EP (activité « Syllabus du module ») : rattachée après la restauration du
+        // cours entier, si elle en fait partie (voir after_restore()).
+        $oldsyllabuscmid = (int) ($data->syllabuscmid ?? 0);
+        $data->syllabuscmid = null;
+
         $newitemid = $DB->insert_record('ep_activity', $data);
         $this->set_mapping('ep_activity', $oldid, $newitemid);
+        if ($oldsyllabuscmid) {
+            $this->set_mapping('ep_activity_syllabuscmid', $newitemid, $oldsyllabuscmid);
+        }
     }
 
     /**
@@ -512,6 +520,19 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
         $epid = $this->task->get_activityid();
         if (!$epid) {
             return;
+        }
+
+        // Fiches des EP : l'activité « Syllabus du module » restaurée avec le cours redevient
+        // celle de l'EP restauré ; absente de la sauvegarde, elle sera recréée à la demande.
+        foreach ($DB->get_records('ep_activity', ['epid' => $epid], '', 'id') as $activity) {
+            $oldcmid = $this->get_mappingid('ep_activity_syllabuscmid', $activity->id);
+            $newcmid = $oldcmid ? $this->get_mappingid('course_module', $oldcmid) : 0;
+            $cm = $newcmid ? get_coursemodule_from_id('syllabus', $newcmid, 0, false, IGNORE_MISSING) : false;
+            if ($cm) {
+                $DB->set_field('ep_activity', 'syllabuscmid', $cm->id, ['id' => $activity->id]);
+                $DB->update_record('syllabus', (object) ['id' => $cm->instance, 'component' => 'mod_ep',
+                    'itemid' => $activity->id]);
+            }
         }
 
         $stagecmid = (int) $DB->get_field('ep', 'stagecmid', ['id' => $epid]);

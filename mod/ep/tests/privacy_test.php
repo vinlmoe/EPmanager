@@ -83,12 +83,17 @@ final class privacy_test extends \core_privacy\tests\provider_testcase {
         $activity = $epgen->create_activity($this->ep, ['code' => 'ANA1', 'name' => 'Anatomie']);
         ep_set_activity_teachers($activity->id, [$this->teacher->id]);
         $DB->set_field('ep_activity', 'proposedby', $this->teacher->id, ['id' => $activity->id]);
-        $syllabus = ep_start_syllabus_revision($activity, $this->teacher->id);
-        ep_save_syllabus($syllabus, (object) ['objectives' => 'Objectifs'], [
-            ['title' => 'Cours', 'kind' => 'lecture', 'duration' => 2, 'teacherid' => $this->teacher->id],
-        ]);
-        ep_submit_syllabus($this->ep, $activity, $syllabus, $this->teacher->id);
-        ep_review_syllabus($this->ep, $activity, $syllabus, $this->deve->id, 'publish', 'Parfait', false);
+        // Fiche d'avant la version 1.1, pas encore reprise dans mod_syllabus (tables ep_syllabus et
+        // ep_session) : le fournisseur de mod_ep la couvre jusqu'à sa reprise ; ensuite, c'est
+        // celui de mod_syllabus.
+        $now = time();
+        $syllabusid = $DB->insert_record('ep_syllabus', (object) ['activityid' => $activity->id, 'version' => 1,
+            'status' => 'published', 'objectives' => 'Objectifs', 'language' => '', 'personalhours' => 0,
+            'authorid' => $this->teacher->id, 'reviewerid' => $this->deve->id, 'reviewcomment' => 'Parfait',
+            'timesubmitted' => $now, 'timereviewed' => $now, 'timecreated' => $now, 'timemodified' => $now]);
+        $DB->insert_record('ep_session', (object) ['syllabusid' => $syllabusid, 'sortorder' => 10, 'title' => 'Cours',
+            'kind' => 'lecture', 'duration' => 2, 'teacherid' => $this->teacher->id, 'teachername' => '',
+            'timecreated' => $now]);
 
         $creditid = ep_register_to_activity($this->ep, $activity, $this->student->id, 3)->creditid;
         $credit = $DB->get_record('ep_credit', ['id' => $creditid]);
@@ -226,7 +231,11 @@ final class privacy_test extends \core_privacy\tests\provider_testcase {
             $this->assertEmpty(provider::get_contexts_for_userid($user->id)->get_contextids());
         }
         $this->assertSame(1, $DB->count_records('ep_activity', ['epid' => $this->ep->id]));
-        $this->assertNotFalse(ep_get_syllabus($DB->get_field('ep_activity', 'id', ['epid' => $this->ep->id])));
+        $this->assertTrue($DB->record_exists('ep_syllabus', ['activityid' => $DB->get_field(
+            'ep_activity',
+            'id',
+            ['epid' => $this->ep->id]
+        )]));
     }
 
     /**

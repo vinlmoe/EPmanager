@@ -181,5 +181,23 @@ function xmldb_syllabus_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026112500, 'syllabus');
     }
 
+    if ($oldversion < 2026112700) {
+        // Fiche gérée par un autre module : celle d'un EP du catalogue (mod_ep).
+        $table = new xmldb_table('syllabus');
+        $field = new xmldb_field('component', XMLDB_TYPE_CHAR, '100', null, XMLDB_NOTNULL, null, null, 'evalyear');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field('itemid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'component');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $index = new xmldb_index('component_itemid', XMLDB_INDEX_NOTUNIQUE, ['component', 'itemid']);
+        if (!$dbman->index_exists($table, $index)) {
+            $dbman->add_index($table, $index);
+        }
+        upgrade_mod_savepoint(true, 2026112700, 'syllabus');
+    }
+
     return true;
 }

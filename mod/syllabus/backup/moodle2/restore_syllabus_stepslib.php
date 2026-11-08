@@ -64,6 +64,10 @@ class restore_syllabus_activity_structure_step extends restore_activity_structur
         global $DB;
         $data = (object) $data;
         $data->course = $this->get_courseid();
+        // Fiche gérée par un autre module (un EP) : ce module la reprend à sa propre restauration
+        // (voir restore_ep_activity_structure_step) ; seule, elle redevient une fiche ordinaire.
+        $data->component = '';
+        $data->itemid = 0;
         if (!empty($data->typeid) && !$DB->record_exists('syllabus_type', ['id' => $data->typeid])) {
             $data->typeid = 0;
         }

@@ -308,3 +308,7 @@ $string['annualnotice'] = 'Feedback is collected once per academic year (current
 $string['windowlocked'] = 'Feedback has already been given: only the academic office can change the feedback window.';
 $string['windowlockedform'] = 'Feedback has already been given: only the academic office can change these dates.';
 $string['windowlockednotice'] = 'Feedback window: from {$a->open} to {$a->close}. Feedback has already been given, so only the academic office can change these dates.';
+$string['eventversionsubmitted'] = 'Syllabus version submitted for review';
+$string['eventversionreviewed'] = 'Syllabus version reviewed';
+$string['ownermanaged'] = 'This syllabus belongs to a personalised learning unit: its leaders are the unit\'s, managed in the catalogue.';
+$string['ownerlink'] = 'Unit in the catalogue';

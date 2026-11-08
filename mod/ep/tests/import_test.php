@@ -157,8 +157,9 @@ final class import_test extends \advanced_testcase {
         $this->assertSame('ANA2', $ana2->code);
         $this->assertEquals(3, $ana2->ects);
         $this->assertSame('Approfondir encore', ep_get_syllabus($ana2->id)->objectives);
-        $this->assertSame(1, $DB->count_records('ep_syllabus', ['activityid' => $ana2->id, 'status' => 'published']));
-        $this->assertSame(1, $DB->count_records('ep_syllabus', ['activityid' => $ana2->id, 'status' => 'superseded']));
+        $syllabusid = ep_activity_syllabus_record($ana2->id)->id;
+        $this->assertSame(1, $DB->count_records('syllabus_version', ['syllabusid' => $syllabusid, 'status' => 'published']));
+        $this->assertSame(1, $DB->count_records('syllabus_version', ['syllabusid' => $syllabusid, 'status' => 'superseded']));
 
         // Rejoué à l'identique : aucune nouvelle version ; une cellule vide garde le texte.
         $this->assertSame(0, catalog_importer::apply($this->ep, $read->rows, get_admin()->id)->syllabi);

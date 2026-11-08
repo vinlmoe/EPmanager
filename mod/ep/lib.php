@@ -223,6 +223,14 @@ function ep_delete_instance($id) {
             $DB->delete_records_select('ep_session', "syllabusid $sinsql", $sinparams);
         }
         $DB->delete_records_select('ep_syllabus', "activityid $insql", $inparams);
+        // Les fiches des EP (activités « Syllabus du module ») restent dans le cours, redevenues
+        // des fiches ordinaires : les supprimer ici gênerait la suppression du cours entier,
+        // qui passe aussi par elles.
+        [$sinsql, $sinparams] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'act');
+        $DB->execute(
+            "UPDATE {syllabus} SET component = '', itemid = 0 WHERE component = 'mod_ep' AND itemid $sinsql",
+            $sinparams
+        );
     }
     $DB->delete_records('ep_notification', ['epid' => $id]);
     $DB->delete_records('ep_supplement_item', ['epid' => $id]);
@@ -352,4 +360,71 @@ function ep_user_outline($course, $user, $mod, $ep) {
     $result->info = get_string('numcredits', 'mod_ep', $count);
     $result->time = time();
     return $result;
+}
+
+// Fiche d'un EP tenue par mod_syllabus : fonctions appelées par mod_syllabus (component_callback).
+
+/**
+ * Étudiants appelés à donner leur avis sur un EP : ses inscrits (inscription en attente ou
+ * validée), et non toute la promotion du cours.
+ *
+ * @param int $itemid Identifiant de l'EP (ep_activity).
+ * @return int[]
+ */
+function mod_ep_syllabus_eligible_users($itemid) {
+    global $DB;
+
+    return array_map('intval', $DB->get_fieldset_select(
+        'ep_credit',
+        'DISTINCT userid',
+        'activityid = :activityid AND status IN (:pending, :validated)',
+        ['activityid' => $itemid, 'pending' => EP_STATUS_PENDING, 'validated' => EP_STATUS_VALIDATED]
+    ));
+}
+
+/**
+ * Un nouvel EP (brouillon ou proposé) passe toujours par la relecture de la DEVE, même si la
+ * relecture des mises à jour n'est pas exigée.
+ *
+ * @param int $itemid Identifiant de l'EP.
+ * @return bool
+ */
+function mod_ep_syllabus_review_required($itemid) {
+    global $DB;
+
+    $state = $DB->get_field('ep_activity', 'state', ['id' => $itemid]);
+    return $state === false || in_array($state, [EP_ACTIVITY_DRAFT, EP_ACTIVITY_PROPOSED], true);
+}
+
+/**
+ * Mise à jour de la fiche d'un EP déjà publié publiée sans relecture, si la DEVE l'a choisi pour
+ * cette activité (réglage « Publication directe des mises à jour par les responsables »).
+ *
+ * @param int $itemid Identifiant de l'EP.
+ * @return bool
+ */
+function mod_ep_syllabus_review_exempt($itemid) {
+    global $DB;
+
+    return (bool) $DB->get_field_sql(
+        "SELECT e.proposalsdirectpublish
+           FROM {ep_activity} a
+           JOIN {ep} e ON e.id = a.epid
+          WHERE a.id = :id AND a.state NOT IN (:draft, :proposed)",
+        ['id' => $itemid, 'draft' => EP_ACTIVITY_DRAFT, 'proposed' => EP_ACTIVITY_PROPOSED]
+    );
+}
+
+/**
+ * Adresse de l'EP dans son catalogue, pour revenir de sa fiche.
+ *
+ * @param int $itemid Identifiant de l'EP.
+ * @return moodle_url|null
+ */
+function mod_ep_syllabus_owner_url($itemid) {
+    global $DB;
+
+    $epid = $DB->get_field('ep_activity', 'epid', ['id' => $itemid]);
+    $cm = $epid ? get_coursemodule_from_instance('ep', $epid, 0, false, IGNORE_MISSING) : null;
+    return $cm ? new moodle_url('/mod/ep/catalog.php', ['id' => $cm->id], 'ep-activity-' . (int) $itemid) : null;
 }

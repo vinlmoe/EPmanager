@@ -15,14 +15,8 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Téléchargement de la fiche PDF (syllabus) d'un EP du catalogue.
- *
- * Par défaut, c'est la version publiée qui est éditée : celle que voient les étudiants. Le
- * rédacteur du syllabus et la DEVE peuvent demander la version de travail (version=working),
- * pour relire une proposition sur papier avant de la soumettre ou de la publier.
- *
- * Un EP qui n'est pas au catalogue (brouillon, proposé, archivé) n'est accessible qu'à ceux qui
- * peuvent en rédiger le syllabus et à la DEVE : une proposition non publiée ne doit pas circuler.
+ * Fiche d'un EP en PDF : depuis la version 1.1, celle de son activité « Syllabus du module »
+ * (mod_syllabus), qui contrôle elle-même qui peut lire une version non publiée.
  *
  * @package   mod_ep
  * @copyright 2026 Sébastien Lefebvre
@@ -37,42 +31,13 @@ $activityid = required_param('activityid', PARAM_INT);
 $version = optional_param('version', '', PARAM_ALPHA);
 
 $cm = get_coursemodule_from_id('ep', $id, 0, false, MUST_EXIST);
-$course = get_course($cm->course);
 $ep = $DB->get_record('ep', ['id' => $cm->instance], '*', MUST_EXIST);
-
-require_login($course, true, $cm);
-$context = context_module::instance($cm->id);
-require_capability('mod/ep:view', $context);
-
-// L'EP est relu avec l'instance en condition : un identifiant d'une autre activité ne doit pas
-// pouvoir être édité depuis celle-ci.
+require_login($cm->course, true, $cm);
+require_capability('mod/ep:view', context_module::instance($cm->id));
 $activity = $DB->get_record('ep_activity', ['id' => $activityid, 'epid' => $ep->id], '*', MUST_EXIST);
-
-$canedit = ep_can_edit_syllabus($activity, $context) || has_capability('mod/ep:manage', $context);
-if (!ep_activity_is_listed($activity) && !$canedit) {
-    throw new required_capability_exception($context, 'mod/ep:propose', 'nopermissions', '');
+$syllabus = ep_activity_syllabus_record($activity->id);
+if (!$syllabus) {
+    throw new moodle_exception('nosyllabusyet', 'mod_ep');
 }
-
-if ($version === 'working') {
-    if (!$canedit) {
-        throw new required_capability_exception($context, 'mod/ep:propose', 'nopermissions', '');
-    }
-    // Sans révision en cours, la version de travail est la version publiée elle-même.
-    $syllabus = ep_get_working_syllabus($activity->id) ?? ep_get_syllabus($activity->id);
-} else {
-    $syllabus = ep_get_syllabus($activity->id);
-}
-
-$type = $DB->get_record('ep_type', ['id' => $activity->typeid, 'epid' => $ep->id]) ?: null;
-$teachers = ep_get_activity_teachers($activity->id);
-
-// L'édition d'une fiche longue (programme de nombreuses séances) peut dépasser les limites
-// ordinaires d'une requête.
-core_php_time_limit::raise();
-raise_memory_limit(MEMORY_EXTRA);
-
-$pdf = new \mod_ep\pdf\syllabus_pdf($ep, $context);
-$code = trim((string) $activity->code);
-$pdf->SetTitle(format_string($activity->name, true, ['context' => $context, 'escape' => false]));
-$pdf->add_activity($activity, $syllabus, $type, $teachers);
-$pdf->Output(clean_filename('syllabus-' . ($code !== '' ? $code : $activity->name) . '.pdf'), 'D');
+$working = $version === 'working' ? ep_get_working_syllabus($activity->id) : null;
+redirect(new moodle_url('/mod/syllabus/pdf.php', ['id' => $syllabus->cmid] + ($working ? ['versionid' => $working->id] : [])));

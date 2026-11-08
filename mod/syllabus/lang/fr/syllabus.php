@@ -308,3 +308,7 @@ $string['annualnotice'] = 'Les avis sont recueillis une fois par année universi
 $string['windowlocked'] = 'Des avis ont déjà été donnés : seule la DEVE peut modifier la fenêtre du recueil.';
 $string['windowlockedform'] = 'Des avis ont déjà été donnés : seule la DEVE peut modifier ces dates.';
 $string['windowlockednotice'] = 'Fenêtre du recueil : du {$a->open} au {$a->close}. Des avis ont déjà été donnés : seule la DEVE peut modifier ces dates.';
+$string['eventversionsubmitted'] = 'Version de la fiche soumise à relecture';
+$string['eventversionreviewed'] = 'Décision sur une version de la fiche';
+$string['ownermanaged'] = 'Cette fiche est celle d\'un EP : ses responsables sont ceux de l\'EP, gérés dans le catalogue.';
+$string['ownerlink'] = 'L\'EP au catalogue';

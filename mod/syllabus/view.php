@@ -72,6 +72,10 @@ if ($decision !== '' && data_submitted() && confirm_sesskey()) {
 (new completion_info($course))->set_module_viewed($cm);
 
 echo $OUTPUT->header();
+// Fiche d'un EP : retour à l'EP dans son catalogue.
+if (!empty($syllabus->component) && ($ownerurl = syllabus_owner_url($syllabus))) {
+    echo html_writer::div(html_writer::link($ownerurl, get_string('ownerlink', 'mod_syllabus')), 'mb-2');
+}
 $state = syllabus_eval_state($syllabus);
 $shown = ($show === 'working' && $working) ? $working : $published;
 $reviewing = $show === 'working' && $working && $working->status === SYLLABUS_STATUS_SUBMITTED && $rights->canmanage;

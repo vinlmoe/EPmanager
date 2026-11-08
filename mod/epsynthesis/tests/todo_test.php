@@ -115,19 +115,11 @@ final class todo_test extends \advanced_testcase {
             'name' => 'Imagerie avancée', 'typeid' => $academic->id, 'ects' => 2,
         ], $this->teacher->id);
         $this->proposal = $DB->get_record('ep_activity', ['id' => $created->activityid], '*', MUST_EXIST);
-        $syllabus = $DB->get_record('ep_syllabus', ['id' => $created->syllabusid], '*', MUST_EXIST);
-        $this->assertSame('submitted', ep_submit_syllabus($this->ep, $this->proposal, $syllabus, $this->teacher->id));
-        $syllabus = $DB->get_record('ep_syllabus', ['id' => $created->syllabusid], '*', MUST_EXIST);
-        $this->assertTrue(ep_review_syllabus(
-            $this->ep,
-            $this->proposal,
-            $syllabus,
-            get_admin()->id,
-            'return',
-            'Préciser les objectifs.'
-        ));
-        $revision = ep_start_syllabus_revision($this->activity, $this->teacher->id);
-        $this->assertSame('submitted', ep_submit_syllabus($this->ep, $this->activity, $revision, $this->teacher->id));
+        $epgen->write_syllabus($this->proposal, (int) $this->teacher->id, ['objectives' => 'Lire un scanner']);
+        $this->assertSame('submitted', $epgen->submit_syllabus($this->proposal, (int) $this->teacher->id));
+        $this->assertTrue($epgen->review_syllabus($this->proposal, (int) get_admin()->id, 'return', 'Préciser les objectifs.'));
+        $epgen->write_syllabus($this->activity, (int) $this->teacher->id, ['objectives' => 'Mise à jour']);
+        $this->assertSame('submitted', $epgen->submit_syllabus($this->activity, (int) $this->teacher->id));
         $sink->close();
 
         // Supplément : un élément de l'étudiant, à l'étape « référent ».

@@ -552,12 +552,18 @@ function syllabus_submit(stdClass $syllabus, $cm, stdClass $version, int $userid
     if (!in_array($version->status, [SYLLABUS_STATUS_DRAFT, SYLLABUS_STATUS_RETURNED], true)) {
         throw new moodle_exception('errornotdraft', 'mod_syllabus');
     }
-    if (!syllabus_setting('reviewrequired')) {
+    // Le module gestionnaire peut imposer la relecture (nouvel EP, toujours vu par la DEVE) ou en
+    // dispenser (mise à jour d'un EP publié, si la DEVE l'a choisi pour son catalogue).
+    $required = syllabus_owner_callback($syllabus, 'review_required', false)
+        || (syllabus_setting('reviewrequired') && !syllabus_owner_callback($syllabus, 'review_exempt', false));
+    if (!$required) {
         syllabus_publish($syllabus, $version, $userid, '');
+        syllabus_trigger_version_event('version_reviewed', $syllabus, $version, $userid, ['decision' => 'publish']);
         return 'published';
     }
     $DB->update_record('syllabus_version', (object) ['id' => $version->id, 'status' => SYLLABUS_STATUS_SUBMITTED,
         'timesubmitted' => time(), 'timemodified' => time()]);
+    syllabus_trigger_version_event('version_submitted', $syllabus, $version, $userid);
     syllabus_notify_submitted($syllabus, $cm, $userid);
     return 'submitted';
 }
@@ -621,6 +627,7 @@ function syllabus_review(stdClass $syllabus, $cm, stdClass $version, int $review
         $DB->update_record('syllabus_version', (object) ['id' => $version->id, 'status' => $status,
             'reviewerid' => $reviewerid, 'reviewcomment' => $comment, 'timereviewed' => time(), 'timemodified' => time()]);
     }
+    syllabus_trigger_version_event('version_reviewed', $syllabus, $version, $reviewerid, ['decision' => $decision]);
     syllabus_notify_reviewed($syllabus, $cm, $version, $decision, $comment);
     return true;
 }
@@ -984,6 +991,11 @@ function syllabus_evaluation_problem(stdClass $syllabus, context_module $context
     if (!has_capability('mod/syllabus:evaluate', $context, $userid, false)) {
         return 'evalnotallowed';
     }
+    // Fiche d'un EP : seuls ses inscrits donnent leur avis, pas toute la promotion.
+    $eligible = syllabus_owner_eligible($syllabus);
+    if ($eligible !== null && !isset($eligible[$userid])) {
+        return 'evalnotallowed';
+    }
     $state = syllabus_eval_state($syllabus);
     if ($state === SYLLABUS_EVAL_NONE) {
         return 'evalnone';
@@ -1098,7 +1110,17 @@ function syllabus_count_responses(int $syllabusid): int {
  * @return int
  */
 function syllabus_count_eligible(context_module $context): int {
-    return count_enrolled_users($context, 'mod/syllabus:evaluate', 0, true);
+    global $DB;
+
+    $syllabus = $DB->get_record_sql('SELECT s.id, s.component, s.itemid FROM {syllabus} s
+                                       JOIN {course_modules} cm ON cm.instance = s.id
+                                      WHERE cm.id = ?', [$context->instanceid]);
+    $eligible = $syllabus ? syllabus_owner_eligible($syllabus) : null;
+    if ($eligible === null) {
+        return count_enrolled_users($context, 'mod/syllabus:evaluate', 0, true);
+    }
+    $enrolled = get_enrolled_users($context, 'mod/syllabus:evaluate', 0, 'u.id', null, 0, 0, true);
+    return count(array_intersect_key($enrolled, $eligible));
 }
 
 /**
@@ -1241,8 +1263,9 @@ function syllabus_notify_evaluation_open(stdClass $syllabus, $cm): int {
     $count = 0;
     // Ceux qui ont déjà répondu, lus en une fois plutôt qu'une requête par étudiant.
     $responded = array_flip($DB->get_fieldset_select('syllabus_participant', 'userid', 'syllabusid = ?', [$syllabus->id]));
+    $eligible = syllabus_owner_eligible($syllabus);
     foreach (get_enrolled_users($context, 'mod/syllabus:evaluate', 0, 'u.*', null, 0, 0, true) as $student) {
-        if (isset($responded[(int) $student->id])) {
+        if (isset($responded[(int) $student->id]) || ($eligible !== null && !isset($eligible[(int) $student->id]))) {
             continue;
         }
         syllabus_send_message(
@@ -2521,4 +2544,85 @@ function syllabus_require_confirmation(moodle_url $actionurl, moodle_url $cancel
     );
     echo $OUTPUT->footer();
     exit;
+}
+
+// Fiche gérée par un autre module (component, itemid) : la fiche d'un EP du catalogue.
+
+/**
+ * Appelle une fonction du module qui gère la fiche (component_callback, fonction
+ * <component>_syllabus_<nom>(int $itemid, stdClass $syllabus)) ; la valeur par défaut pour une
+ * fiche de module d'enseignement.
+ *
+ * @param stdClass $syllabus
+ * @param string $name
+ * @param mixed $default
+ * @return mixed
+ */
+function syllabus_owner_callback(stdClass $syllabus, string $name, $default = null) {
+    if (empty($syllabus->component)) {
+        return $default;
+    }
+    return component_callback($syllabus->component, 'syllabus_' . $name, [(int) $syllabus->itemid, $syllabus], $default);
+}
+
+/**
+ * Public des avis fixé par le module gestionnaire (les inscrits d'un EP), ou null pour les
+ * inscrits du cours. Lu une fois par requête et par fiche.
+ *
+ * @param stdClass $syllabus
+ * @return int[]|null userid => userid
+ */
+function syllabus_owner_eligible(stdClass $syllabus): ?array {
+    static $cache = [];
+    if (empty($syllabus->component)) {
+        return null;
+    }
+    $key = $syllabus->component . ':' . (int) $syllabus->itemid;
+    if (!array_key_exists($key, $cache) || (defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
+        $users = syllabus_owner_callback($syllabus, 'eligible_users');
+        $cache[$key] = is_array($users) ? array_combine(array_map('intval', $users), array_map('intval', $users)) : null;
+    }
+    return $cache[$key];
+}
+
+/**
+ * Adresse de l'élément qui gère la fiche (l'EP au catalogue), ou null.
+ *
+ * @param stdClass $syllabus
+ * @return moodle_url|null
+ */
+function syllabus_owner_url(stdClass $syllabus): ?moodle_url {
+    $url = syllabus_owner_callback($syllabus, 'owner_url');
+    return $url instanceof moodle_url ? $url : null;
+}
+
+/**
+ * Déclenche un événement sur une version de la fiche (soumission, décision).
+ *
+ * @param string $class version_submitted ou version_reviewed
+ * @param stdClass $syllabus
+ * @param stdClass $version
+ * @param int $userid
+ * @param array $other
+ * @return void
+ */
+function syllabus_trigger_version_event(
+    string $class,
+    stdClass $syllabus,
+    stdClass $version,
+    int $userid,
+    array $other = []
+): void {
+    $cm = get_coursemodule_from_instance('syllabus', $syllabus->id, $syllabus->course, false, IGNORE_MISSING);
+    if (!$cm) {
+        return;
+    }
+    $classname = '\\mod_syllabus\\event\\' . $class;
+    $classname::create([
+        'objectid' => $version->id,
+        'context' => context_module::instance($cm->id),
+        'userid' => $userid,
+        'other' => $other + ['syllabusid' => (int) $syllabus->id, 'component' => (string) ($syllabus->component ?? ''),
+            'itemid' => (int) ($syllabus->itemid ?? 0)],
+    ])->trigger();
 }

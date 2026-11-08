@@ -70,7 +70,7 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
             'typeid', 'name', 'description', 'ects', 'minstudyyear', 'maxstudyyear', 'capacity',
             'code', 'state', 'registrationstart', 'registrationend', 'datestart', 'dateend',
             'grading', 'grademax', 'gradepass', 'minects', 'proposedby', 'timepublished', 'prereqblocking',
-            'sortorder', 'timecreated', 'timemodified',
+            'sortorder', 'syllabuscmid', 'timecreated', 'timemodified',
         ]);
 
         $activityteachers = new backup_nested_element('activityteachers');

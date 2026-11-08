@@ -22,31 +22,39 @@ global $CFG;
 require_once($CFG->dirroot . '/mod/ep/locallib.php');
 
 /**
- * Propositions d'EP et syllabus : proposition par un enseignant, soumission, décision de la DEVE,
- * mise à jour d'un EP publié, séances et volume horaire, courriels.
+ * Propositions d'EP et fiches : la fiche de chaque EP est une activité « Syllabus du module »
+ * (mod_syllabus), gérée par l'EP ; proposition par un enseignant, soumission, décision de la DEVE
+ * et état de l'EP, mise à jour d'un EP publié, reprise des anciennes fiches, avis des étudiants
+ * limités aux inscrits, courriels.
  *
  * @package    mod_ep
  * @copyright  2026 Sébastien Lefebvre
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers     ::ep_create_proposal
+ * @covers     ::ep_ensure_activity_syllabus
+ * @covers     ::ep_migrate_legacy_syllabus
+ * @covers     ::ep_sync_syllabus_teachers
+ * @covers     ::ep_sync_syllabus_details
+ * @covers     ::ep_apply_syllabus_decision
+ * @covers     ::ep_get_syllabus
+ * @covers     ::ep_get_published_syllabi
+ * @covers     ::ep_publish_syllabus_directly
  * @covers     ::ep_delete_activity
- * @covers     ::ep_start_syllabus_revision
- * @covers     ::ep_save_syllabus
- * @covers     ::ep_set_syllabus_sessions
  * @covers     ::ep_syllabus_hours
- * @covers     ::ep_submit_syllabus
- * @covers     ::ep_review_syllabus
  * @covers     ::ep_update_proposal_activity
  * @covers     ::ep_can_edit_syllabus
  * @covers     ::ep_get_proposals
+ * @covers     ::mod_ep_syllabus_eligible_users
+ * @covers     ::mod_ep_syllabus_review_required
+ * @covers     ::mod_ep_syllabus_review_exempt
+ * @covers     \mod_ep\observer
+ * @covers     \mod_ep\task\migrate_syllabi
  * @covers     ::ep_send_notification
  * @covers     ::ep_get_notification_template
  * @covers     ::ep_set_notification_template
  * @covers     ::ep_render_template
  * @covers     ::ep_notify_credit_decided
  * @covers     ::ep_send_pending_reminders
- * @covers     \mod_ep\event\syllabus_submitted
- * @covers     \mod_ep\event\syllabus_reviewed
  */
 final class syllabus_test extends \advanced_testcase {
     /** @var \stdClass Instance. */
@@ -61,56 +69,231 @@ final class syllabus_test extends \advanced_testcase {
     /** @var \stdClass Autre enseignant. */
     private $other;
 
-    /** @var \stdClass Membre de la DEVE (enseignant éditeur). */
+    /** @var \stdClass Membre de la DEVE (gestionnaire). */
     private $deve;
+
+    /** @var \mod_ep_generator */
+    private $gen;
 
     /**
      * Un cours, une activité, deux enseignants et un membre de la DEVE.
      */
     protected function setUp(): void {
+        global $CFG;
         parent::setUp();
         $this->resetAfterTest();
+        require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
         $gen = $this->getDataGenerator();
         $course = $gen->create_course();
         $this->ep = $gen->create_module('ep', ['course' => $course->id, 'currentstudyyear' => 2]);
         $this->context = \context_module::instance($this->ep->cmid);
         $this->teacher = $gen->create_and_enrol($course, 'teacher');
         $this->other = $gen->create_and_enrol($course, 'teacher');
-        $this->deve = $gen->create_and_enrol($course, 'editingteacher');
+        $this->deve = $gen->create_and_enrol($course, 'manager');
+        $this->gen = $gen->get_plugin_generator('mod_ep');
+        $this->setUser($this->teacher);
     }
 
     /**
-     * Crée une proposition rédigée par l'enseignant.
+     * Crée une proposition de l'enseignant.
      *
-     * @return array [stdClass $activity, stdClass $syllabus]
+     * @return \stdClass L'EP proposé.
      */
-    private function proposal(): array {
+    private function proposal(): \stdClass {
         global $DB;
         $academic = ep_get_type_by_code($this->ep->id, EP_TYPE_ACADEMIC);
         $created = ep_create_proposal($this->ep, (object) [
             'name' => 'Échographie abdominale', 'typeid' => $academic->id, 'ects' => 2, 'capacity' => 12,
         ], $this->teacher->id);
-        $activity = $DB->get_record('ep_activity', ['id' => $created->activityid], '*', MUST_EXIST);
-        $syllabus = $DB->get_record('ep_syllabus', ['id' => $created->syllabusid], '*', MUST_EXIST);
-        return [$activity, $syllabus];
+        return $DB->get_record('ep_activity', ['id' => $created->activityid], '*', MUST_EXIST);
     }
 
     /**
-     * Supprimer une proposition retire aussi ses versions de syllabus, leurs séances, ses
-     * responsables et les prérequis qui la citent ; un EP auquel un crédit se rattache reste.
+     * Une proposition crée l'EP en brouillon, son auteur responsable, et sa fiche : une activité
+     * « Syllabus du module » de la section des fiches, gérée par l'EP, dont l'auteur est
+     * responsable ; elle n'est créée qu'une fois.
+     */
+    public function test_proposal_creates_a_syllabus_activity(): void {
+        global $DB;
+        $activity = $this->proposal();
+        $this->assertSame(EP_ACTIVITY_DRAFT, $activity->state);
+        $this->assertEquals($this->teacher->id, $activity->proposedby);
+        $syllabus = ep_activity_syllabus_record($activity->id);
+        $this->assertNotNull($syllabus);
+        $this->assertSame(['mod_ep', (int) $activity->id], [$syllabus->component, (int) $syllabus->itemid]);
+        $this->assertEquals($syllabus->cmid, $activity->syllabuscmid);
+        $this->assertSame('Échographie abdominale', $syllabus->name);
+        $this->assertArrayHasKey($this->teacher->id, syllabus_get_teachers((int) $syllabus->id));
+        $section = $DB->get_field_sql('SELECT cs.name FROM {course_sections} cs JOIN {course_modules} cm ON cm.section = cs.id
+                                        WHERE cm.id = ?', [$syllabus->cmid]);
+        $this->assertSame(get_string('syllabussection', 'mod_ep'), $section);
+        $this->assertEquals($syllabus->id, ep_ensure_activity_syllabus($this->ep, $activity)->id);
+        $this->assertSame(1, $DB->count_records('syllabus', ['component' => 'mod_ep']));
+        $this->assertTrue(ep_can_edit_syllabus($activity, $this->context, $this->teacher->id));
+        $this->assertFalse(ep_can_edit_syllabus($activity, $this->context, $this->other->id));
+        $this->assertSame(1, count(ep_get_proposals($this->ep, $this->context, $this->teacher->id)));
+    }
+
+    /**
+     * Circuit d'un nouvel EP : soumise, la fiche fait passer l'EP à « proposé » ; renvoyée, il
+     * redevient brouillon ; publiée, il entre au catalogue avec sa fiche en vigueur.
+     */
+    public function test_submit_return_and_publish(): void {
+        global $DB;
+        $activity = $this->proposal();
+        $this->gen->write_syllabus($activity, (int) $this->teacher->id, ['objectives' => 'Lire une échographie',
+            'personalhours' => 4], [['title' => 'Cours', 'kind' => 'lecture', 'duration' => 2],
+            ['title' => 'TP', 'kind' => 'practical', 'duration' => 3]]);
+        $this->assertSame('submitted', $this->gen->submit_syllabus($activity, (int) $this->teacher->id));
+        $this->assertSame(EP_ACTIVITY_PROPOSED, $DB->get_field('ep_activity', 'state', ['id' => $activity->id]));
+        $this->assertCount(1, ep_get_proposals($this->ep, $this->context, $this->deve->id));
+
+        $this->assertTrue($this->gen->review_syllabus($activity, (int) $this->deve->id, 'return', 'Préciser'));
+        $this->assertSame(EP_ACTIVITY_DRAFT, $DB->get_field('ep_activity', 'state', ['id' => $activity->id]));
+        $this->assertCount(0, ep_get_proposals($this->ep, $this->context, $this->deve->id));
+
+        $this->gen->write_syllabus($activity, (int) $this->teacher->id, ['objectives' => 'Lire et interpréter']);
+        $this->gen->submit_syllabus($activity, (int) $this->teacher->id);
+        $this->assertTrue($this->gen->review_syllabus($activity, (int) $this->deve->id, 'publish'));
+        $activity = $DB->get_record('ep_activity', ['id' => $activity->id]);
+        $this->assertSame(EP_ACTIVITY_PUBLISHED, $activity->state);
+        $this->assertGreaterThan(0, (int) $activity->timepublished);
+
+        $published = ep_get_syllabus($activity->id);
+        $this->assertSame('Lire et interpréter', $published->objectives);
+        $this->assertEquals($activity->id, $published->activityid);
+        $hours = ep_syllabus_hours(array_values(ep_get_syllabus_sessions($published->id)), $published->personalhours);
+        $this->assertEquals([5, 4, 9], [$hours->sessions, $hours->personal, $hours->total]);
+        $this->assertArrayHasKey($activity->id, ep_get_published_syllabi([$activity->id]));
+    }
+
+    /**
+     * Un nouvel EP passe toujours par la DEVE, même sans relecture des mises à jour ; la mise à
+     * jour d'un EP publié suit le réglage commun, sauf publication directe choisie pour l'activité.
+     */
+    public function test_review_rules(): void {
+        global $DB;
+        syllabus_save_settings((object) ['reviewrequired' => 0]);
+        $activity = $this->proposal();
+        $this->gen->write_syllabus($activity, (int) $this->teacher->id, ['objectives' => 'A']);
+        $this->assertSame('submitted', $this->gen->submit_syllabus($activity, (int) $this->teacher->id));
+        $this->gen->review_syllabus($activity, (int) $this->deve->id, 'publish');
+
+        $this->gen->write_syllabus($activity, (int) $this->teacher->id, ['objectives' => 'B']);
+        $this->assertSame('published', $this->gen->submit_syllabus($activity, (int) $this->teacher->id));
+
+        syllabus_save_settings((object) ['reviewrequired' => 1]);
+        $this->gen->write_syllabus($activity, (int) $this->teacher->id, ['objectives' => 'C']);
+        $this->assertSame('submitted', $this->gen->submit_syllabus($activity, (int) $this->teacher->id));
+        $this->gen->review_syllabus($activity, (int) $this->deve->id, 'publish');
+
+        $DB->set_field('ep', 'proposalsdirectpublish', 1, ['id' => $this->ep->id]);
+        $this->gen->write_syllabus($activity, (int) $this->teacher->id, ['objectives' => 'D']);
+        $this->assertSame('published', $this->gen->submit_syllabus($activity, (int) $this->teacher->id));
+        $this->assertSame('D', ep_get_syllabus($activity->id)->objectives);
+        $this->assertSame(EP_ACTIVITY_PUBLISHED, $DB->get_field('ep_activity', 'state', ['id' => $activity->id]));
+    }
+
+    /**
+     * Refusée, une proposition est archivée ; un enseignant ne voit que ses propositions.
+     */
+    public function test_reject_and_proposal_lists(): void {
+        global $DB;
+        $activity = $this->proposal();
+        $this->gen->write_syllabus($activity, (int) $this->teacher->id, ['objectives' => 'A']);
+        $this->gen->submit_syllabus($activity, (int) $this->teacher->id);
+        $this->assertCount(0, ep_get_proposals($this->ep, $this->context, $this->other->id));
+        $this->assertCount(1, ep_get_proposals($this->ep, $this->context, $this->teacher->id));
+        $this->gen->review_syllabus($activity, (int) $this->deve->id, 'reject', 'Hors programme');
+        $this->assertSame(EP_ACTIVITY_ARCHIVED, $DB->get_field('ep_activity', 'state', ['id' => $activity->id]));
+    }
+
+    /**
+     * Caractéristiques et responsables de l'EP reportés sur sa fiche.
+     */
+    public function test_details_and_teachers_follow_the_unit(): void {
+        global $DB;
+        $activity = $this->proposal();
+        ep_save_activity($this->ep, (object) ['id' => $activity->id, 'name' => 'Échographie', 'code' => 'ECHO', 'ects' => 3]);
+        $syllabus = ep_activity_syllabus_record($activity->id);
+        $this->assertSame(['Échographie', 'ECHO', 3.0], [$syllabus->name, $syllabus->code, (float) $syllabus->ects]);
+        ep_set_activity_teachers($activity->id, [$this->other->id]);
+        $this->assertSame([(int) $this->other->id], array_map('intval', array_keys(syllabus_get_teachers((int) $syllabus->id))));
+        $this->assertEquals($activity->id, $DB->get_field('syllabus', 'itemid', ['id' => $syllabus->id]));
+    }
+
+    /**
+     * Avis des étudiants sur un EP : seuls ses inscrits sont appelés à répondre.
+     */
+    public function test_feedback_is_for_registered_students(): void {
+        global $CFG, $DB;
+        $activity = $this->gen->create_activity($this->ep, ['name' => 'Chirurgie']);
+        $course = get_course($this->ep->course);
+        $registered = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $notregistered = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        ep_register_to_activity($this->ep, $activity, $registered->id, 2);
+        $syllabus = ep_ensure_activity_syllabus($this->ep, $activity);
+        $DB->set_field('syllabus', 'evalopen', time() - 60, ['id' => $syllabus->id]);
+        $syllabus = ep_activity_syllabus_record($activity->id);
+        $context = \context_module::instance($syllabus->cmid);
+        $this->assertNull(syllabus_evaluation_problem($syllabus, $context, (int) $registered->id));
+        $this->assertSame('evalnotallowed', syllabus_evaluation_problem($syllabus, $context, (int) $notregistered->id));
+        $this->assertSame(1, syllabus_count_eligible($context));
+
+        // « Mes modules » : la fiche de l'EP n'y figure que pour ses inscrits.
+        require_once($CFG->dirroot . '/mod/syllabusstudent/locallib.php');
+        $this->assertArrayHasKey($syllabus->id, syllabusstudent_get_modules((int) $registered->id, 0));
+        $this->assertArrayNotHasKey($syllabus->id, syllabusstudent_get_modules((int) $notregistered->id, 0));
+    }
+
+    /**
+     * Une fiche rédigée avant la version 1.1 (tables ep_syllabus et ep_session) est reprise dans
+     * l'activité syllabus de l'EP, avec ses versions et ses séances, par la tâche de reprise.
+     */
+    public function test_legacy_syllabus_is_migrated(): void {
+        global $DB;
+        $activity = $this->gen->create_activity($this->ep, ['name' => 'Parasitologie']);
+        $now = time();
+        $base = ['activityid' => $activity->id, 'objectives' => 'Ancien', 'outcomes' => '', 'prerequisitestext' => '',
+            'content' => '', 'methods' => '', 'assessment' => '', 'resit' => '', 'bibliography' => '', 'language' => 'fr',
+            'personalhours' => 2, 'authorid' => $this->teacher->id, 'timesubmitted' => $now, 'timereviewed' => $now,
+            'timecreated' => $now, 'timemodified' => $now];
+        $DB->insert_record('ep_syllabus', (object) ($base + ['version' => 1, 'status' => 'superseded']));
+        $published = $DB->insert_record('ep_syllabus', (object) (['objectives' => 'En vigueur', 'version' => 2,
+            'status' => 'published'] + $base));
+        $DB->insert_record('ep_session', (object) ['syllabusid' => $published, 'sortorder' => 10, 'title' => 'Cours',
+            'kind' => 'lecture', 'duration' => 2, 'teacherid' => null, 'teachername' => 'Dr X', 'timecreated' => $now]);
+
+        $this->setAdminUser();
+        ob_start();
+        (new \mod_ep\task\migrate_syllabi())->execute();
+        ob_end_clean();
+
+        $this->assertSame(0, $DB->count_records('ep_syllabus', ['activityid' => $activity->id]));
+        $version = ep_get_syllabus($activity->id);
+        $this->assertSame(['En vigueur', 2], [$version->objectives, (int) $version->version]);
+        $sessions = array_values(ep_get_syllabus_sessions($version->id));
+        $this->assertSame(['Cours', 'Dr X'], [$sessions[0]->title, $sessions[0]->teachername]);
+        $syllabusid = ep_activity_syllabus_record($activity->id)->id;
+        $this->assertSame(2, $DB->count_records('syllabus_version', ['syllabusid' => $syllabusid]));
+    }
+
+    /**
+     * Supprimer un EP retire sa fiche, ses responsables et les prérequis qui le citent ; un EP
+     * auquel un crédit se rattache reste.
      */
     public function test_delete_activity_leaves_no_orphans(): void {
         global $DB;
-        [$activity, $syllabus] = $this->proposal();
-        ep_set_syllabus_sessions($syllabus->id, [['title' => 'Cours', 'kind' => 'lecture', 'duration' => 2]]);
-        [$other] = $this->proposal();
+        $activity = $this->proposal();
+        $syllabus = ep_activity_syllabus_record($activity->id);
+        $other = $this->proposal();
         $DB->insert_record('ep_activity_prereq', (object) ['activityid' => $other->id, 'requiredid' => $activity->id,
             'timecreated' => time()]);
 
         $this->assertTrue(ep_delete_activity($this->ep, $activity));
         $this->assertFalse($DB->record_exists('ep_activity', ['id' => $activity->id]));
-        $this->assertFalse($DB->record_exists('ep_syllabus', ['activityid' => $activity->id]));
-        $this->assertFalse($DB->record_exists('ep_session', ['syllabusid' => $syllabus->id]));
+        $this->assertFalse($DB->record_exists('course_modules', ['id' => $syllabus->cmid, 'deletioninprogress' => 0]));
+        $this->assertNull(ep_activity_syllabus_record($activity->id));
         $this->assertFalse($DB->record_exists('ep_activity_teacher', ['activityid' => $activity->id]));
         $this->assertFalse($DB->record_exists('ep_activity_prereq', ['requiredid' => $activity->id]));
 
@@ -123,198 +306,6 @@ final class syllabus_test extends \advanced_testcase {
         );
         $this->assertFalse(ep_delete_activity($this->ep, $other));
         $this->assertTrue($DB->record_exists('ep_activity', ['id' => $other->id]));
-    }
-
-    /**
-     * Relit une version de syllabus.
-     *
-     * @param int $id
-     * @return \stdClass
-     */
-    private function syllabus(int $id): \stdClass {
-        global $DB;
-        return $DB->get_record('ep_syllabus', ['id' => $id], '*', MUST_EXIST);
-    }
-
-    /**
-     * Proposition : un EP en brouillon dont l'auteur est responsable, absent du catalogue des
-     * étudiants, avec une première version de syllabus modifiable par lui seul (et la DEVE).
-     */
-    public function test_proposal_creates_a_draft_unit_owned_by_its_author(): void {
-        [$activity, $syllabus] = $this->proposal();
-        $this->assertSame(EP_ACTIVITY_DRAFT, $activity->state);
-        $this->assertSame((int) $this->teacher->id, (int) $activity->proposedby);
-        $this->assertTrue(ep_is_activity_teacher($activity->id, $this->teacher->id));
-        $this->assertArrayNotHasKey($activity->id, ep_get_activities($this->ep->id, true));
-        $this->assertSame('draft', $syllabus->status);
-        $this->assertSame(1, (int) $syllabus->version);
-
-        $this->assertTrue(ep_can_edit_syllabus($activity, $this->context, $this->teacher->id));
-        $this->assertFalse(ep_can_edit_syllabus($activity, $this->context, $this->other->id));
-        $this->assertTrue(ep_can_edit_syllabus($activity, $this->context, $this->deve->id));
-
-        // Un type qui ne passe pas par le catalogue est refusé.
-        $this->expectException(\moodle_exception::class);
-        ep_create_proposal($this->ep, (object) [
-            'name' => 'X', 'typeid' => ep_get_type_by_code($this->ep->id, EP_TYPE_SPORT)->id,
-        ], $this->teacher->id);
-    }
-
-    /**
-     * Rédaction : texte et séances enregistrés, volume horaire calculé ; une version soumise ne se
-     * modifie plus.
-     */
-    public function test_syllabus_writing_and_hours(): void {
-        [$activity, $syllabus] = $this->proposal();
-        $sessions = [
-            ['title' => 'Bases physiques', 'kind' => 'lecture', 'duration' => 2, 'teacherid' => $this->teacher->id,
-                'teachername' => 'ignoré'],
-            ['title' => 'Manipulation', 'kind' => 'practical', 'duration' => 3.5, 'teachername' => 'Dr Martin'],
-            ['title' => '', 'kind' => 'lecture', 'duration' => 9],
-            ['title' => 'Cas cliniques', 'kind' => 'bogus', 'duration' => -1],
-        ];
-        $this->assertTrue(ep_save_syllabus($syllabus, (object) [
-            'objectives' => 'Savoir réaliser une échographie.', 'outcomes' => 'Identifier les organes.',
-            'assessment' => 'Épreuve pratique notée sur 20.', 'language' => 'Français', 'personalhours' => 10,
-        ], $sessions));
-        $saved = ep_get_syllabus_sessions($syllabus->id);
-        $this->assertCount(3, $saved);
-        $saved = array_values($saved);
-        $this->assertSame('', $saved[0]->teachername);
-        $this->assertSame('Dr Martin', $saved[1]->teachername);
-        $this->assertSame('other', $saved[2]->kind);
-        $this->assertSame(0.0, (float) $saved[2]->duration);
-
-        $hours = ep_syllabus_hours($saved, $this->syllabus($syllabus->id)->personalhours);
-        $this->assertSame(5.5, $hours->sessions);
-        $this->assertSame(15.5, $hours->total);
-        $this->assertSame(3.5, $hours->bykind['practical']);
-
-        $submitted = ep_submit_syllabus($this->ep, $activity, $this->syllabus($syllabus->id), $this->teacher->id);
-        $this->assertSame('submitted', $submitted);
-        $this->assertFalse(ep_save_syllabus($this->syllabus($syllabus->id), (object) ['objectives' => 'Modifié'], []));
-        $this->assertSame('Savoir réaliser une échographie.', $this->syllabus($syllabus->id)->objectives);
-        $this->assertCount(3, ep_get_syllabus_sessions($syllabus->id));
-    }
-
-    /**
-     * Soumission puis décision de la DEVE : renvoi (retour en brouillon, commentaire), nouvelle
-     * soumission, publication (l'EP entre au catalogue) ; la DEVE est prévenue de la soumission,
-     * l'auteur de chaque décision ; une seconde décision sur la même version n'est pas écrite.
-     */
-    public function test_submit_return_and_publish(): void {
-        global $DB;
-        [$activity, $syllabus] = $this->proposal();
-        $sink = $this->redirectMessages();
-        $events = $this->redirectEvents();
-
-        $this->assertSame('submitted', ep_submit_syllabus($this->ep, $activity, $syllabus, $this->teacher->id));
-        $this->assertSame(EP_ACTIVITY_PROPOSED, $DB->get_field('ep_activity', 'state', ['id' => $activity->id]));
-        $messages = $sink->get_messages();
-        $this->assertCount(1, $messages);
-        $this->assertSame((int) $this->deve->id, (int) $messages[0]->useridto);
-        $this->assertStringContainsString('Échographie abdominale', $messages[0]->subject);
-        $this->assertNull(ep_submit_syllabus($this->ep, $activity, $this->syllabus($syllabus->id), $this->teacher->id));
-
-        $activity = $DB->get_record('ep_activity', ['id' => $activity->id]);
-        $this->assertTrue(ep_review_syllabus(
-            $this->ep,
-            $activity,
-            $this->syllabus($syllabus->id),
-            $this->deve->id,
-            'return',
-            'Préciser les conditions d\'examen.'
-        ));
-        $this->assertSame(EP_ACTIVITY_DRAFT, $DB->get_field('ep_activity', 'state', ['id' => $activity->id]));
-        $returned = $this->syllabus($syllabus->id);
-        $this->assertSame('returned', $returned->status);
-        $this->assertSame('Préciser les conditions d\'examen.', $returned->reviewcomment);
-        $this->assertTrue(ep_save_syllabus($returned, (object) ['assessment' => 'Oral de 20 minutes.']));
-
-        $activity = $DB->get_record('ep_activity', ['id' => $activity->id]);
-        ep_submit_syllabus($this->ep, $activity, $this->syllabus($syllabus->id), $this->teacher->id);
-        $activity = $DB->get_record('ep_activity', ['id' => $activity->id]);
-        $this->assertTrue(ep_review_syllabus($this->ep, $activity, $this->syllabus($syllabus->id), $this->deve->id, 'publish'));
-        $this->assertFalse(ep_review_syllabus($this->ep, $activity, $this->syllabus($syllabus->id), $this->deve->id, 'reject'));
-
-        $activity = $DB->get_record('ep_activity', ['id' => $activity->id]);
-        $this->assertSame(EP_ACTIVITY_PUBLISHED, $activity->state);
-        $this->assertGreaterThan(0, (int) $activity->timepublished);
-        $this->assertSame('published', $this->syllabus($syllabus->id)->status);
-        $this->assertSame($syllabus->id, ep_get_syllabus($activity->id)->id);
-
-        $messages = $sink->get_messages();
-        $tostudent = array_filter($messages, fn($m) => (int) $m->useridto === (int) $this->teacher->id);
-        $this->assertCount(2, $tostudent);
-        $classes = array_map('get_class', $events->get_events());
-        $this->assertContains(event\syllabus_submitted::class, $classes);
-        $this->assertContains(event\syllabus_reviewed::class, $classes);
-        $sink->close();
-        $events->close();
-    }
-
-    /**
-     * Mise à jour d'un EP publié : la version en vigueur reste au catalogue jusqu'à la publication
-     * de la nouvelle, qui la remplace ; une seule révision à la fois. Avec la publication directe,
-     * la mise à jour du responsable est publiée aussitôt.
-     */
-    public function test_revision_of_a_published_unit(): void {
-        global $DB;
-        [$activity, $syllabus] = $this->proposal();
-        ep_save_syllabus($syllabus, (object) ['objectives' => 'V1'], [['title' => 'Séance 1', 'duration' => 2]]);
-        ep_submit_syllabus($this->ep, $activity, $this->syllabus($syllabus->id), $this->teacher->id);
-        $activity = $DB->get_record('ep_activity', ['id' => $activity->id]);
-        ep_review_syllabus($this->ep, $activity, $this->syllabus($syllabus->id), $this->deve->id, 'publish');
-        $activity = $DB->get_record('ep_activity', ['id' => $activity->id]);
-
-        $revision = ep_start_syllabus_revision($activity, $this->teacher->id);
-        $this->assertSame(2, (int) $revision->version);
-        $this->assertSame('V1', $revision->objectives);
-        $this->assertCount(1, ep_get_syllabus_sessions($revision->id));
-        $this->assertEquals($revision->id, ep_start_syllabus_revision($activity, $this->teacher->id)->id);
-        ep_save_syllabus($revision, (object) ['objectives' => 'V2']);
-        $this->assertSame('V1', ep_get_syllabus($activity->id)->objectives);
-
-        // Les caractéristiques d'un EP publié ne se changent plus par la proposition.
-        $this->assertFalse(ep_update_proposal_activity($this->ep, $activity, (object) ['ects' => 6]));
-
-        ep_submit_syllabus($this->ep, $activity, $this->syllabus($revision->id), $this->teacher->id);
-        ep_review_syllabus($this->ep, $activity, $this->syllabus($revision->id), $this->deve->id, 'publish');
-        $this->assertSame('V2', ep_get_syllabus($activity->id)->objectives);
-        $this->assertSame('superseded', $this->syllabus($syllabus->id)->status);
-        $this->assertSame(EP_ACTIVITY_PUBLISHED, $DB->get_field('ep_activity', 'state', ['id' => $activity->id]));
-
-        // Publication directe.
-        $DB->set_field('ep', 'proposalsdirectpublish', 1, ['id' => $this->ep->id]);
-        $ep = $DB->get_record('ep', ['id' => $this->ep->id]);
-        $third = ep_start_syllabus_revision($activity, $this->teacher->id);
-        ep_save_syllabus($third, (object) ['objectives' => 'V3']);
-        $this->assertSame('published', ep_submit_syllabus($ep, $activity, $this->syllabus($third->id), $this->teacher->id));
-        $this->assertSame('V3', ep_get_syllabus($activity->id)->objectives);
-    }
-
-    /**
-     * Refus d'une proposition : l'EP est archivé ; les propositions listées dépendent du rôle.
-     */
-    public function test_reject_and_proposal_lists(): void {
-        global $DB;
-        [$activity, $syllabus] = $this->proposal();
-        [$second] = $this->proposal();
-        ep_submit_syllabus($this->ep, $activity, $syllabus, $this->teacher->id);
-
-        $this->assertCount(2, ep_get_proposals($this->ep, $this->context, $this->teacher->id));
-        $this->assertCount(0, ep_get_proposals($this->ep, $this->context, $this->other->id));
-        // La DEVE ne voit que ce qui lui est soumis.
-        $deve = ep_get_proposals($this->ep, $this->context, $this->deve->id);
-        $this->assertCount(1, $deve);
-        $this->assertSame((int) $activity->id, (int) $deve[0]->activity->id);
-
-        $activity = $DB->get_record('ep_activity', ['id' => $activity->id]);
-        ep_review_syllabus($this->ep, $activity, $this->syllabus($syllabus->id), $this->deve->id, 'reject', 'Hors maquette.');
-        $this->assertSame(EP_ACTIVITY_ARCHIVED, $DB->get_field('ep_activity', 'state', ['id' => $activity->id]));
-        $this->assertSame('rejected', $this->syllabus($syllabus->id)->status);
-        $this->assertTrue(ep_update_proposal_activity($this->ep, $second, (object) ['ects' => 4, 'name' => 'Renommé']));
-        $this->assertEquals(4, $DB->get_field('ep_activity', 'ects', ['id' => $second->id]));
     }
 
     /**

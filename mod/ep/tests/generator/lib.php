@@ -142,4 +142,56 @@ class mod_ep_generator extends testing_module_generator {
         }
         return $credit;
     }
+
+    /**
+     * Rédige la fiche d'un EP (activité « Syllabus du module », créée au besoin) : sa version de
+     * travail reçoit les rubriques et les séances données.
+     *
+     * @param stdClass $activity
+     * @param int $userid Auteur.
+     * @param array $data Rubriques (objectives, language, personalhours...).
+     * @param array|null $sessions Séances {title, kind, duration, teacherid, teachername}.
+     * @return stdClass La version de travail.
+     */
+    public function write_syllabus(stdClass $activity, int $userid, array $data = [], ?array $sessions = null): stdClass {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/mod/ep/locallib.php');
+        require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
+        $ep = $DB->get_record('ep', ['id' => $activity->epid], '*', MUST_EXIST);
+        $syllabus = ep_ensure_activity_syllabus($ep, $activity);
+        $version = syllabus_start_working($syllabus, $userid);
+        syllabus_save_working($version, (object) $data, $sessions, $userid);
+        return $DB->get_record('syllabus_version', ['id' => $version->id], '*', MUST_EXIST);
+    }
+
+    /**
+     * Soumet la version de travail de la fiche d'un EP, comme le bouton de mod_syllabus.
+     *
+     * @param stdClass $activity
+     * @param int $userid
+     * @return string 'submitted' ou 'published'
+     */
+    public function submit_syllabus(stdClass $activity, int $userid): string {
+        $syllabus = ep_activity_syllabus_record($activity->id);
+        $cm = get_coursemodule_from_id('syllabus', $syllabus->cmid, 0, false, MUST_EXIST);
+        $version = syllabus_start_working($syllabus, $userid);
+        return syllabus_submit($syllabus, $cm, $version, $userid);
+    }
+
+    /**
+     * Décision de la DEVE sur la version soumise de la fiche d'un EP.
+     *
+     * @param stdClass $activity
+     * @param int $reviewerid
+     * @param string $decision publish, return ou reject
+     * @param string $comment
+     * @return bool
+     */
+    public function review_syllabus(stdClass $activity, int $reviewerid, string $decision, string $comment = ''): bool {
+        global $DB;
+        $syllabus = ep_activity_syllabus_record($activity->id);
+        $cm = get_coursemodule_from_id('syllabus', $syllabus->cmid, 0, false, MUST_EXIST);
+        $version = $DB->get_record('syllabus_version', ['syllabusid' => $syllabus->id, 'status' => 'submitted'], '*', MUST_EXIST);
+        return syllabus_review($syllabus, $cm, $version, $reviewerid, $decision, $comment);
+    }
 }

@@ -190,13 +190,15 @@ final class backup_restore_test extends \advanced_testcase {
         ep_set_activity_teachers($activity->id, [$teacher->id]);
         // Syllabus publié avec ses séances, et une version de travail en cours : tous deux suivent
         // la copie, de même que les courriels personnalisés.
-        $syllabus = ep_start_syllabus_revision($activity, $teacher->id);
-        ep_save_syllabus($syllabus, (object) ['objectives' => 'Maîtriser les sutures.', 'personalhours' => 6], [
+        // La fiche est l'activité « Syllabus du module » de l'EP, copiée avec le cours.
+        $epgen->write_syllabus($activity, (int) $teacher->id, ['objectives' => 'Maîtriser les sutures.',
+            'personalhours' => 6], [
             ['title' => 'Nœuds', 'kind' => 'practical', 'duration' => 2, 'teacherid' => $teacher->id],
             ['title' => 'Conférence', 'kind' => 'lecture', 'duration' => 1, 'teachername' => 'Dr Invité'],
         ]);
-        $DB->set_field('ep_syllabus', 'status', 'published', ['id' => $syllabus->id]);
-        ep_start_syllabus_revision($activity, $teacher->id);
+        $epgen->submit_syllabus($activity, (int) $teacher->id);
+        $epgen->review_syllabus($activity, (int) get_admin()->id, 'publish');
+        $epgen->write_syllabus($activity, (int) $teacher->id);
         ep_set_notification_template($ep->id, 'creditdecided', false, 'Objet personnalisé', 'Corps');
         ep_set_year_requirement($ep->id, 3, 6);
 

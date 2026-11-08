@@ -80,6 +80,13 @@ function syllabus_clean_instance(stdClass $data): stdClass {
     $data->typeid = (int) ($data->typeid ?? 0);
     $data->evalopen = (int) ($data->evalopen ?? 0);
     $data->evalclose = (int) ($data->evalclose ?? 0);
+    // Gestionnaire de la fiche (mod_ep pour un EP) : fixé à la création, jamais par le formulaire.
+    if (!isset($data->instance) || !empty($data->component)) {
+        $data->component = core_text::substr(clean_param((string) ($data->component ?? ''), PARAM_COMPONENT), 0, 100);
+        $data->itemid = (int) ($data->itemid ?? 0);
+    } else {
+        unset($data->component, $data->itemid);
+    }
     return $data;
 }
 

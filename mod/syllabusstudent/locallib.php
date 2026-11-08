@@ -27,7 +27,8 @@ defined('MOODLE_INTERNAL') || die();
 require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
 
 /**
- * Modules d'un étudiant : les syllabus des cours où il est inscrit (inscription active), dans
+ * Modules d'un étudiant : les syllabus des cours où il est inscrit (inscription active), et
+ * parmi les fiches d'EP celles des EP qu'il suit, dans
  * le périmètre, qu'il peut voir ; avec, pour chacun, où il en est de l'évaluation.
  *
  * @param int $userid
@@ -41,6 +42,11 @@ function syllabusstudent_get_modules(int $userid, int $categoryid): array {
     foreach ($rows as $row) {
         $cminfo = get_fast_modinfo($row->course, $userid)->get_cm($row->cmid);
         if (!$cminfo->uservisible) {
+            continue;
+        }
+        // Fiche d'un EP : seulement pour ses inscrits (les autres la lisent depuis le catalogue).
+        $eligible = syllabus_owner_eligible($row);
+        if ($eligible !== null && !isset($eligible[$userid])) {
             continue;
         }
         $row->evalproblem = syllabus_evaluation_problem($row, context_module::instance($row->cmid), $userid);
