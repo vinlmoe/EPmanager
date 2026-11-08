@@ -154,7 +154,7 @@ final class syllabus_test extends \advanced_testcase {
 
         $this->gen->write_syllabus($activity, (int) $this->teacher->id, ['objectives' => 'Lire et interpréter']);
         $this->gen->submit_syllabus($activity, (int) $this->teacher->id);
-        $this->assertTrue($this->gen->review_syllabus($activity, (int) $this->deve->id, 'publish'));
+        $this->assertTrue($this->gen->review_syllabus($activity, (int) $this->deve->id, 'publish', '', 1793530800));
         $activity = $DB->get_record('ep_activity', ['id' => $activity->id]);
         $this->assertSame(EP_ACTIVITY_PUBLISHED, $activity->state);
         $this->assertGreaterThan(0, (int) $activity->timepublished);
@@ -174,7 +174,10 @@ final class syllabus_test extends \advanced_testcase {
     public function test_review_rules(): void {
         global $DB;
         syllabus_save_settings((object) ['reviewrequired' => 0]);
+        // Un type du catalogue autre qu'académique : pas de commission de validation.
+        $DB->set_field('ep_type', 'acquisition', EP_ACQ_CATALOG, ['epid' => $this->ep->id, 'code' => EP_TYPE_SPORT]);
         $activity = $this->proposal();
+        $DB->set_field('ep_activity', 'typeid', ep_get_type_by_code($this->ep->id, EP_TYPE_SPORT)->id, ['id' => $activity->id]);
         $this->gen->write_syllabus($activity, (int) $this->teacher->id, ['objectives' => 'A']);
         $this->assertSame('submitted', $this->gen->submit_syllabus($activity, (int) $this->teacher->id));
         $this->gen->review_syllabus($activity, (int) $this->deve->id, 'publish');
@@ -192,6 +195,58 @@ final class syllabus_test extends \advanced_testcase {
         $this->assertSame('published', $this->gen->submit_syllabus($activity, (int) $this->teacher->id));
         $this->assertSame('D', ep_get_syllabus($activity->id)->objectives);
         $this->assertSame(EP_ACTIVITY_PUBLISHED, $DB->get_field('ep_activity', 'state', ['id' => $activity->id]));
+    }
+
+    /**
+     * Un EP académique est validé en commission : publier sa fiche exige la date de la commission,
+     * conservée avec la version ; ses modifications passent toujours par la DEVE, même si la
+     * publication directe des mises à jour est choisie.
+     */
+    public function test_academic_requires_commission(): void {
+        global $DB;
+        $activity = $this->proposal();
+        $syllabus = ep_activity_syllabus_record($activity->id);
+        $this->assertTrue(syllabus_commission_required($syllabus));
+        $this->gen->write_syllabus($activity, (int) $this->teacher->id, ['objectives' => 'A']);
+        $this->gen->submit_syllabus($activity, (int) $this->teacher->id);
+        try {
+            $this->gen->review_syllabus($activity, (int) $this->deve->id, 'publish');
+            $this->fail('La date de commission devrait être exigée.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('errorcommissionrequired', $e->errorcode);
+        }
+        $this->assertNull(ep_get_syllabus($activity->id));
+        // Renvoyer ne demande pas de date.
+        $this->assertTrue($this->gen->review_syllabus($activity, (int) $this->deve->id, 'return', 'Préciser'));
+        $this->gen->submit_syllabus($activity, (int) $this->teacher->id);
+        $date = make_timestamp(2026, 11, 20, 12);
+        $this->assertTrue($this->gen->review_syllabus($activity, (int) $this->deve->id, 'publish', '', $date));
+        $this->assertEquals($date, ep_get_syllabus($activity->id)->commissiondate);
+
+        syllabus_save_settings((object) ['reviewrequired' => 0]);
+        $DB->set_field('ep', 'proposalsdirectpublish', 1, ['id' => $this->ep->id]);
+        $this->gen->write_syllabus($activity, (int) $this->teacher->id, ['objectives' => 'B']);
+        $this->assertSame('submitted', $this->gen->submit_syllabus($activity, (int) $this->teacher->id));
+        $this->assertSame('A', ep_get_syllabus($activity->id)->objectives);
+        $this->gen->review_syllabus($activity, (int) $this->deve->id, 'publish', '', $date + DAYSECS);
+        $published = ep_get_syllabus($activity->id);
+        $this->assertSame('B', $published->objectives);
+        $this->assertEquals($date + DAYSECS, $published->commissiondate);
+
+        // Une fiche hors gestion d'un EP (module d'enseignement) n'exige pas de commission.
+        $this->assertFalse(syllabus_commission_required((object) ['component' => '', 'itemid' => 0]));
+    }
+
+    /**
+     * Le livret des fiches à valider reprend les versions soumises, pas celles publiées.
+     */
+    public function test_pending_booklet(): void {
+        $activity = $this->proposal();
+        $this->gen->write_syllabus($activity, (int) $this->teacher->id, ['objectives' => 'Objectif soumis']);
+        $this->gen->submit_syllabus($activity, (int) $this->teacher->id);
+        $syllabus = ep_activity_syllabus_record($activity->id);
+        $pdf = syllabus_pending_booklet([(int) $syllabus->id], 'Fiches à valider', ['Commission'])->Output('', 'S');
+        $this->assertStringStartsWith('%PDF', $pdf);
     }
 
     /**

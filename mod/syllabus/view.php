@@ -59,7 +59,29 @@ if ($decision !== '' && data_submitted() && confirm_sesskey()) {
             \core\output\notification::NOTIFY_ERROR
         );
     }
-    $done = syllabus_review($syllabus, $cm, $working, (int) $USER->id, $decision, $comment);
+    // Date de la commission de validation (champ date du navigateur, AAAA-MM-JJ) : exigée pour
+    // publier une fiche qui l'impose (EP académique), facultative sinon.
+    $commission = 0;
+    if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', optional_param('commissiondate', '', PARAM_RAW_TRIMMED), $m)) {
+        $commission = make_timestamp((int) $m[1], (int) $m[2], (int) $m[3], 12);
+    }
+    if ($decision === 'publish' && !$commission && syllabus_commission_required($syllabus)) {
+        redirect(
+            new moodle_url($PAGE->url, ['show' => 'working'], 'review'),
+            get_string('errorcommissionrequired', 'mod_syllabus'),
+            null,
+            \core\output\notification::NOTIFY_ERROR
+        );
+    }
+    $done = syllabus_review(
+        $syllabus,
+        $cm,
+        $working,
+        (int) $USER->id,
+        $decision,
+        $comment,
+        $decision === 'publish' ? $commission : 0
+    );
     redirect(
         $returnto !== '' ? new moodle_url($returnto) : new moodle_url('/mod/syllabus/view.php', ['id' => $cm->id]),
         $done ? get_string('reviewdone_' . $decision, 'mod_syllabus') : get_string('reviewchanged', 'mod_syllabus'),
@@ -234,7 +256,14 @@ if ($reviewing) {
         . html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()])
         . html_writer::tag('label', get_string('reviewcomment', 'mod_syllabus'), ['for' => 'reviewcomment'])
         . html_writer::tag('textarea', '', ['name' => 'reviewcomment', 'id' => 'reviewcomment', 'rows' => 3,
-            'class' => 'form-control mb-2', 'required' => 'required']);
+            'class' => 'form-control mb-2', 'required' => 'required'])
+        . html_writer::div(
+            html_writer::tag('label', get_string(syllabus_commission_required($syllabus) ? 'commissiondaterequired'
+                : 'commissiondate', 'mod_syllabus'), ['for' => 'commissiondate', 'class' => 'mr-2'])
+            . html_writer::empty_tag('input', ['type' => 'date', 'name' => 'commissiondate', 'id' => 'commissiondate',
+                'class' => 'form-control', 'value' => date('Y-m-d')]),
+            'form-inline mb-2'
+        );
     foreach (['publish' => 'btn-primary', 'return' => 'btn-secondary', 'reject' => 'btn-danger'] as $value => $class) {
         // Publier n'exige pas de commentaire : le navigateur ne le réclame que pour renvoyer ou refuser.
         $attributes = ['type' => 'submit', 'name' => 'decision', 'value' => $value, 'class' => 'btn ' . $class . ' mr-2'];

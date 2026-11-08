@@ -4,9 +4,9 @@
 \documentclass[11pt,a4paper]{article}
 
 \newcommand{\titreguide}{Syllabus et avis des étudiants}
-\newcommand{\versionguide}{1.8}
+\newcommand{\versionguide}{1.9}
 \newcommand{\dateguide}{novembre 2026}
-\newcommand{\versionep}{1.6.0}
+\newcommand{\versionep}{1.7.0}
 \newcommand{\versionsynthese}{1.0.0}
 
 \usepackage{guide-commun}
@@ -67,6 +67,7 @@ années passées archivées et consultables, évolution des moyennes. \\
 1.7 & novembre 2026 & Après l'audit complet : la fenêtre d'un recueil qui a reçu des avis n'est
 plus modifiable que par la DEVE ; les suppressions se confirment sur une page dédiée. \\
 1.8 & novembre 2026 & Les fiches des EP du catalogue sont aussi des activités « Syllabus du module », gérées par mod\_ep : leurs inscrits seuls donnent leur avis. \\
+1.9 & novembre 2026 & Date de la commission de validation enregistrée à la publication (obligatoire pour un EP académique) ; PDF des fiches à valider (modules 1.7.0). \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -445,6 +446,14 @@ responsables sont prévenus, et vous revenez à la liste des fiches à relire.
 \capture{sy-deve-relecture}{Relecture d'une mise à jour : rubriques et séances modifiées signalées.}
 
 \capture{sy-deve-decision}{Décision de la DEVE, sous la fiche relue.}
+
+Sous la fiche, un champ \og Date de la commission de validation\fg{} enregistre la date de la
+commission qui a approuvé la version ; elle figure alors sur la fiche et sur son PDF
+(\og Validée en commission le\fg{}). Ce champ est facultatif pour un module d'enseignement ; il
+est \textbf{obligatoire} pour la fiche d'un EP académique, dont chaque modification passe par
+la DEVE. Le bouton \bouton{PDF des fiches à valider} de la page \chemin{Fiches à relire} réunit
+en un seul document toutes les fiches soumises (version proposée), avec un récapitulatif et un
+sommaire, pour la commission.
 
 \section{Référentiels de compétences}
 

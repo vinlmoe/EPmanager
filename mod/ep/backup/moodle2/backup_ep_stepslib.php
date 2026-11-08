@@ -51,7 +51,7 @@ class backup_ep_activity_structure_step extends backup_activity_structure_step {
         $ep = new backup_nested_element('ep', ['id'], [
             'name', 'intro', 'introformat', 'currentstudyyear', 'mincursusects', 'stagecmid',
             'proposalsdirectpublish', 'supplementflow', 'supplementevidence', 'supplementprefix', 'birthdatefield',
-            'pdfheader', 'pdffooter', 'timesynced',
+            'pdfheader', 'pdffooter', 'timesynced', 'registrationstart', 'registrationend',
             'timecreated', 'timemodified',
         ]);
 

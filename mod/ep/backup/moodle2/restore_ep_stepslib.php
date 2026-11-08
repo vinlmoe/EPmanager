@@ -102,6 +102,10 @@ class restore_ep_activity_structure_step extends restore_activity_structure_step
         $data = (object) $data;
         $data->course = $this->get_courseid();
         $data->timesynced = 0;
+        // Période d'inscription du catalogue : décalée avec les dates du cours copié.
+        foreach (['registrationstart', 'registrationend'] as $field) {
+            $data->$field = empty($data->$field) ? 0 : $this->apply_date_offset($data->$field);
+        }
 
         $newitemid = $DB->insert_record('ep', $data);
         $this->apply_activity_instance($newitemid);

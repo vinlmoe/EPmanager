@@ -4,9 +4,9 @@
 
 % Version du guide : à mettre à jour à chaque modification, avec une ligne dans l'historique.
 \newcommand{\titreguide}{Guide de paramétrage}
-\newcommand{\versionguide}{1.2}
+\newcommand{\versionguide}{1.3}
 \newcommand{\dateguide}{novembre 2026}
-\newcommand{\versionep}{1.1.0}
+\newcommand{\versionep}{1.2.0}
 \newcommand{\versionsynthese}{1.0.3}
 
 \usepackage{guide-commun}
@@ -29,6 +29,7 @@ diplôme}{deve-administration}
 1.0 & novembre 2026 & Première version, pour EP Manager 1.0. \\
 1.1 & novembre 2026 & Captures refaites ; séances du programme sans date (EP Manager 1.0.4). \\
 1.2 & novembre 2026 & Fiches des EP tenues par le module des fiches ; relecture sous la fiche ; activités furtives recommandées. \\
+1.3 & novembre 2026 & Période d'inscription du catalogue fixée par la DEVE ; EP académiques validés en commission (date requise) ; PDF des fiches à valider (EP Manager 1.2.0). \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -130,6 +131,13 @@ non), état.
 
 \capture{deve-catalogue}{Gestion du catalogue : états, places prises, responsables.}
 
+\paragraph{Période d'inscription du catalogue.} En tête de la page, la DEVE fixe la période
+pendant laquelle les étudiants s'inscrivent à tous les EP du catalogue (début et fin, date et
+heure ; une date laissée vide ne limite pas). Un EP qui a sa propre période la garde ; la case
+\og Appliquer aussi aux EP qui ont leur propre période\fg{} les aligne tous. Hors période,
+l'étudiant ne peut plus s'inscrire : seuls le \textbf{responsable de l'EP} ou la \textbf{DEVE}
+ajoutent encore un étudiant, depuis la page \bouton{Participants} de l'EP.
+
 Les \textbf{états} d'un EP :
 \begin{itemize}
   \item \statut{Brouillon}, \statut{Proposé} : en préparation, invisible des étudiants ;
@@ -157,6 +165,16 @@ les activités furtives (réglage \texttt{allowstealth}) : elles ne s'y affichen
 restent ouvertes depuis le catalogue.
 
 \capture{gu-deve-comparer}{Examen d'une version soumise : publier, renvoyer à l'auteur ou refuser.}
+
+\paragraph{EP académiques : validation en commission.} La fiche d'un EP de type
+\og académique interne\fg{} est validée par une commission : pour la publier, la DEVE indique
+la \textbf{date de la commission de validation} sous la fiche (champ obligatoire) ; la date
+figure ensuite sur la fiche (\og Validée en commission le\fg{}) et sur son PDF. Il en va de même
+de chaque modification : la mise à jour d'un EP académique passe toujours par la DEVE, même si
+la publication directe des mises à jour est permise, et sa publication porte la date de sa
+commission. Le bouton \bouton{PDF des fiches à valider} de \chemin{Propositions et syllabus}
+réunit en un seul PDF toutes les fiches soumises (version proposée), avec un sommaire, à
+remettre à la commission.
 
 Dans \chemin{Éditions PDF et propositions}, vous pouvez laisser les mises à jour des EP déjà
 publiés être publiées directement par leur responsable, et régler l'en-tête, le pied de page

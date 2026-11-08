@@ -82,7 +82,9 @@ if ($mform->is_cancelled()) {
     syllabus_save_working($version, $data, $rows, (int) $USER->id);
     if (!empty($data->submitforreview)) {
         $version = $DB->get_record('syllabus_version', ['id' => $version->id], '*', MUST_EXIST);
-        if ($rights->canmanage) {
+        // La DEVE publie directement, sauf une fiche qui doit être validée en commission : elle
+        // la soumet, puis la valide sur la fiche en indiquant la date de la commission.
+        if ($rights->canmanage && !syllabus_commission_required($syllabus)) {
             syllabus_publish($syllabus, $version, (int) $USER->id, '');
             $result = 'published';
         } else {

@@ -199,5 +199,15 @@ function xmldb_syllabus_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026112700, 'syllabus');
     }
 
+    if ($oldversion < 2026112800) {
+        // Date de la commission qui a validé une version (EP académiques, modifications comprises).
+        $table = new xmldb_table('syllabus_version');
+        $field = new xmldb_field('commissiondate', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'timereviewed');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_mod_savepoint(true, 2026112800, 'syllabus');
+    }
+
     return true;
 }

@@ -29,6 +29,8 @@ require_once($CFG->dirroot . '/mod/ep/locallib.php');
  * @copyright  2026 Sébastien Lefebvre
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @covers     ::ep_activity_registration_open
+ * @covers     ::ep_activity_registration_window
+ * @covers     ::ep_set_registration_window
  * @covers     ::ep_activity_is_listed
  * @covers     ::ep_get_activities
  * @covers     ::ep_registration_problem
@@ -145,6 +147,46 @@ final class participants_test extends \advanced_testcase {
         $DB->set_field('ep_activity', 'registrationend', $now - 60, ['id' => $this->activity->id]);
         $result = ep_register_to_activity($this->ep, $this->activity, $this->students['Alice']->id, 3);
         $this->assertSame('errorregisterclosed', $result->problem);
+    }
+
+    /**
+     * Période d'inscription fixée par la DEVE pour tout le catalogue : un EP sans période propre la
+     * suit, un EP qui a la sienne la garde, sauf alignement demandé. Hors période, l'étudiant ne
+     * s'inscrit plus, mais le responsable ou la DEVE peuvent encore l'ajouter.
+     */
+    public function test_catalog_registration_window(): void {
+        global $DB;
+        $now = time();
+        $own = $this->gen->create_activity($this->ep, ['registrationstart' => $now - DAYSECS,
+            'registrationend' => $now + DAYSECS]);
+        $ep = $DB->get_record('ep', ['id' => $this->ep->id]);
+        ep_set_registration_window($ep, $now - 2 * DAYSECS, $now - DAYSECS);
+
+        $activity = $DB->get_record('ep_activity', ['id' => $this->activity->id]);
+        $this->assertSame([$now - 2 * DAYSECS, $now - DAYSECS], ep_activity_registration_window($activity));
+        $this->assertFalse(ep_activity_registration_open($activity, $now));
+        $this->assertTrue(ep_activity_registration_open($own, $now));
+        $this->assertNotSame('', ep_activity_registration_label($activity));
+
+        $alice = $this->students['Alice']->id;
+        $this->assertSame('errorregisterclosed', ep_register_to_activity($ep, $activity, $alice, 3)->problem);
+        $added = ep_add_participants($ep, $activity, [$alice], $this->owner->id);
+        $this->assertCount(1, $added->added);
+
+        try {
+            ep_set_registration_window($ep, $now, $now - 1);
+            $this->fail('Une période inversée devrait être refusée.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('errorregistrationrange', $e->errorcode);
+        }
+
+        ep_set_registration_window($ep, 0, $now - DAYSECS, true);
+        $own = $DB->get_record('ep_activity', ['id' => $own->id]);
+        $this->assertSame([0, 0], [(int) $own->registrationstart, (int) $own->registrationend]);
+        $this->assertFalse(ep_activity_registration_open($own, $now));
+
+        ep_set_registration_window($ep, 0, 0);
+        $this->assertTrue(ep_activity_registration_open($own, $now));
     }
 
     /**

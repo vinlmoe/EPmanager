@@ -103,6 +103,12 @@ class fiche {
         if ($version && trim((string) $version->language) !== '') {
             $rows[get_string('language', 'mod_syllabus')] = s($version->language);
         }
+        if ($version && !empty($version->commissiondate)) {
+            $rows[get_string('commissionvalidated', 'mod_syllabus')] = userdate(
+                $version->commissiondate,
+                get_string('strftimedate', 'langconfig')
+            );
+        }
         $table = new html_table();
         $table->attributes = ['class' => 'generaltable syllabus-characteristics', 'border' => '1', 'cellpadding' => '4'];
         foreach ($rows as $label => $value) {

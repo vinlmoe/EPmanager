@@ -393,7 +393,27 @@ function mod_ep_syllabus_review_required($itemid) {
     global $DB;
 
     $state = $DB->get_field('ep_activity', 'state', ['id' => $itemid]);
-    return $state === false || in_array($state, [EP_ACTIVITY_DRAFT, EP_ACTIVITY_PROPOSED], true);
+    return $state === false || in_array($state, [EP_ACTIVITY_DRAFT, EP_ACTIVITY_PROPOSED], true)
+        || mod_ep_syllabus_commission_required($itemid);
+}
+
+/**
+ * La fiche d'un EP académique, et chacune de ses modifications, est validée par la DEVE avec la
+ * date de la commission qui l'a approuvée.
+ *
+ * @param int $itemid Identifiant de l'EP.
+ * @return bool
+ */
+function mod_ep_syllabus_commission_required($itemid) {
+    global $DB;
+
+    return $DB->get_field_sql(
+        "SELECT t.code
+           FROM {ep_activity} a
+           JOIN {ep_type} t ON t.id = a.typeid
+          WHERE a.id = :id",
+        ['id' => $itemid]
+    ) === EP_TYPE_ACADEMIC;
 }
 
 /**

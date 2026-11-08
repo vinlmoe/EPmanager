@@ -35,6 +35,17 @@ require_capability('mod/syllabusstaff:manageall', $context);
 $overview = syllabus_get_overview(array_keys($rows));
 $teachers = syllabus_get_teachers_bulk(array_map('intval', array_keys($rows)));
 
+// Livret PDF de toutes les fiches soumises, à remettre à la commission de validation.
+if ($rows && optional_param('pdf', 0, PARAM_BOOL)) {
+    syllabus_send_pending_booklet(
+        array_map('intval', array_keys($rows)),
+        get_string('pendingbooklettitle', 'mod_syllabus'),
+        [format_string($instance->name), userdate(time(), get_string('strftimedate', 'langconfig'))],
+        'fiches-a-valider.pdf'
+    );
+    exit;
+}
+
 echo $OUTPUT->header();
 echo syllabusstaff_navlinks($cm, 'review', $canmanageall);
 echo $OUTPUT->heading(get_string('toreview', 'mod_syllabusstaff') . ' (' . count($rows) . ')', 3);
@@ -43,6 +54,11 @@ echo html_writer::tag('p', syllabus_setting('reviewrequired') ? get_string('tore
 if (!$rows) {
     echo $OUTPUT->notification(get_string('nothingtoreview', 'mod_syllabusstaff'), 'info');
 } else {
+    echo html_writer::link(
+        new moodle_url($PAGE->url, ['pdf' => 1]),
+        get_string('pendingbooklet', 'mod_syllabus', count($rows)),
+        ['class' => 'btn btn-secondary mb-2']
+    );
     $table = new html_table();
     $table->head = [get_string('module', 'mod_syllabus'), get_string('teachers', 'mod_syllabus'),
         get_string('version'), get_string('submittedon', 'mod_syllabusstaff'), get_string('actions')];

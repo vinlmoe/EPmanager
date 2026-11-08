@@ -5,6 +5,25 @@ numéros de `version.php` (AAAAMMJJ) : fixés à l'avance pendant le développem
 correspondent pas toujours au jour du commit. À tenir à jour à chaque modification de
 `version.php`.
 
+## EP 1.2.0 et modules syllabus 1.7.0 — mod_ep, mod_syllabus, mod_syllabusstaff 2026112800
+
+Période d'inscription fixée par la DEVE, validation des EP académiques en commission.
+
+- **Période d'inscription du catalogue** (`ep.registrationstart`, `ep.registrationend`) : fixée
+  par la DEVE en tête de la gestion du catalogue ; un EP sans période propre la suit, un EP qui
+  a la sienne la garde, sauf alignement demandé. Hors période, seuls le responsable de l'EP ou
+  la DEVE ajoutent un étudiant (page Participants). Recopiée à la sauvegarde, décalée à la
+  restauration.
+- **Commission de validation** (`syllabus_version.commissiondate`) : la DEVE indique, en
+  publiant une fiche, la date de la commission qui l'a validée ; elle figure sur la fiche et
+  son PDF. Obligatoire pour un EP de type académique (fonction de rappel
+  `mod_ep_syllabus_commission_required`), dont chaque modification passe alors par la DEVE,
+  même si la publication directe des mises à jour est permise ; la DEVE qui rédige elle-même la
+  fiche d'un tel EP la soumet, puis la valide avec la date.
+- **PDF des fiches à valider** : un livret des versions soumises (récapitulatif, sommaire, une
+  fiche par EP ou module), depuis « Propositions et syllabus » (mod_ep) et « Fiches à relire »
+  (mod_syllabusstaff), à remettre à la commission.
+
 ## EP 1.1.0 et modules syllabus 1.6.0 — mod_ep, mod_syllabus, mod_syllabusstaff, mod_syllabusstudent 2026112700
 
 La fiche de chaque EP est une activité « Syllabus du module » ; interface allégée.

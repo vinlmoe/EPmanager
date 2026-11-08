@@ -434,5 +434,17 @@ function xmldb_ep_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026112700, 'ep');
     }
 
+    if ($oldversion < 2026112800) {
+        // Période d'inscription aux EP du catalogue fixée par la DEVE pour toute l'activité.
+        $table = new xmldb_table('ep');
+        foreach (['registrationstart' => 'stagesyncsig', 'registrationend' => 'registrationstart'] as $name => $after) {
+            $field = new xmldb_field($name, XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', $after);
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+        upgrade_mod_savepoint(true, 2026112800, 'ep');
+    }
+
     return true;
 }

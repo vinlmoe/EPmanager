@@ -3689,8 +3689,31 @@ function ep_activity_is_listed(stdClass $activity) {
 }
 
 /**
+ * Période d'inscription en vigueur pour un EP : la sienne s'il en a une, sinon celle que la DEVE
+ * a fixée pour tout le catalogue de l'activité. Hors de cette période, l'étudiant ne s'inscrit
+ * plus lui-même ; seuls le responsable de l'EP et la DEVE peuvent l'ajouter (participants).
+ *
+ * @param stdClass $activity
+ * @return int[] [début, fin], 0 pour une borne absente.
+ */
+function ep_activity_registration_window(stdClass $activity) {
+    global $DB;
+    static $instances = [];
+
+    if (!empty($activity->registrationstart) || !empty($activity->registrationend)) {
+        return [(int) $activity->registrationstart, (int) $activity->registrationend];
+    }
+    $epid = (int) ($activity->epid ?? 0);
+    if (!array_key_exists($epid, $instances) || (defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
+        $instances[$epid] = $epid ? $DB->get_record('ep', ['id' => $epid], 'id, registrationstart, registrationend') : null;
+    }
+    $ep = $instances[$epid];
+    return $ep ? [(int) $ep->registrationstart, (int) $ep->registrationend] : [0, 0];
+}
+
+/**
  * Indique si un EP accepte des inscriptions à un instant donné : publié, et dans sa période
- * d'inscription si elle est fixée.
+ * d'inscription (voir ep_activity_registration_window()).
  *
  * @param stdClass $activity
  * @param int|null $now
@@ -3701,13 +3724,39 @@ function ep_activity_registration_open(stdClass $activity, $now = null) {
     if ($activity->state !== EP_ACTIVITY_PUBLISHED) {
         return false;
     }
-    if (!empty($activity->registrationstart) && $now < (int) $activity->registrationstart) {
+    [$start, $end] = ep_activity_registration_window($activity);
+    if ($start && $now < $start) {
         return false;
     }
-    if (!empty($activity->registrationend) && $now > (int) $activity->registrationend) {
+    if ($end && $now > $end) {
         return false;
     }
     return true;
+}
+
+/**
+ * Fixe la période d'inscription de tout le catalogue d'une activité (DEVE). Avec $resetown, les
+ * périodes propres des EP sont effacées : tous suivent alors celle-ci.
+ *
+ * @param stdClass $ep
+ * @param int $start 0 : sans limite.
+ * @param int $end 0 : sans limite.
+ * @param bool $resetown
+ * @return void
+ */
+function ep_set_registration_window(stdClass $ep, int $start, int $end, bool $resetown = false) {
+    global $DB;
+
+    if ($start && $end && $end <= $start) {
+        throw new moodle_exception('errorregistrationrange', 'mod_ep');
+    }
+    $DB->update_record('ep', (object) ['id' => $ep->id, 'registrationstart' => $start, 'registrationend' => $end,
+        'timemodified' => time()]);
+    $ep->registrationstart = $start;
+    $ep->registrationend = $end;
+    if ($resetown) {
+        $DB->execute('UPDATE {ep_activity} SET registrationstart = 0, registrationend = 0 WHERE epid = ?', [$ep->id]);
+    }
 }
 
 /**
@@ -3718,8 +3767,9 @@ function ep_activity_registration_open(stdClass $activity, $now = null) {
  */
 function ep_activity_registration_label(stdClass $activity) {
     $format = get_string('strftimedatetimeshort');
-    $start = empty($activity->registrationstart) ? null : userdate($activity->registrationstart, $format);
-    $end = empty($activity->registrationend) ? null : userdate($activity->registrationend, $format);
+    [$from, $until] = ep_activity_registration_window($activity);
+    $start = $from ? userdate($from, $format) : null;
+    $end = $until ? userdate($until, $format) : null;
     if ($start && $end) {
         return get_string('registrationperiod', 'mod_ep', (object) ['start' => $start, 'end' => $end]);
     }

@@ -109,6 +109,18 @@ $rows = ep_get_proposals($ep, $context, $USER->id);
 $toreview = $canmanage ? array_values(array_filter($rows, fn($row) => ($row->syllabus->status ?? '') === 'submitted')) : [];
 $mine = array_values(array_filter($rows, fn($row) => !in_array($row, $toreview, true)));
 
+// Livret PDF de toutes les fiches soumises à la DEVE, pour la commission.
+if ($toreview && optional_param('pendingpdf', 0, PARAM_BOOL)) {
+    require_once($CFG->dirroot . '/mod/syllabus/locallib.php');
+    syllabus_send_pending_booklet(
+        array_map(fn($row) => (int) $row->syllabus->syllabusid, $toreview),
+        get_string('pendingbooklettitle', 'mod_syllabus'),
+        [format_string($ep->name), format_string($course->fullname), userdate(time(), get_string('strftimedate'))],
+        'fiches-ep-a-valider.pdf'
+    );
+    exit;
+}
+
 $authorids = array_unique(array_filter(array_map(fn($row) => (int) ($row->syllabus->authorid ?? 0), $rows)));
 $authors = $authorids ? $DB->get_records_list('user', 'id', $authorids) : [];
 
@@ -124,6 +136,11 @@ echo html_writer::div(ep_render_actions([
 if ($canmanage) {
     echo $OUTPUT->heading(get_string('proposalstoreview', 'mod_ep'), 3);
     if ($toreview) {
+        echo html_writer::link(
+            new moodle_url($baseurl, ['pendingpdf' => 1]),
+            get_string('pendingbooklet', 'mod_syllabus', count($toreview)),
+            ['class' => 'btn btn-secondary mb-2']
+        );
         echo ep_proposals_table($toreview, $cm, $context, $authors);
     } else {
         echo $OUTPUT->notification(get_string('noproposals', 'mod_ep'), 'info');

@@ -197,7 +197,7 @@ final class backup_restore_test extends \advanced_testcase {
             ['title' => 'Conférence', 'kind' => 'lecture', 'duration' => 1, 'teachername' => 'Dr Invité'],
         ]);
         $epgen->submit_syllabus($activity, (int) $teacher->id);
-        $epgen->review_syllabus($activity, (int) get_admin()->id, 'publish');
+        $epgen->review_syllabus($activity, (int) get_admin()->id, 'publish', '', make_timestamp(2026, 11, 20, 12));
         $epgen->write_syllabus($activity, (int) $teacher->id);
         ep_set_notification_template($ep->id, 'creditdecided', false, 'Objet personnalisé', 'Corps');
         ep_set_year_requirement($ep->id, 3, 6);

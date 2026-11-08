@@ -185,13 +185,20 @@ class mod_ep_generator extends testing_module_generator {
      * @param int $reviewerid
      * @param string $decision publish, return ou reject
      * @param string $comment
+     * @param int $commissiondate Date de la commission (obligatoire pour publier un EP académique).
      * @return bool
      */
-    public function review_syllabus(stdClass $activity, int $reviewerid, string $decision, string $comment = ''): bool {
+    public function review_syllabus(
+        stdClass $activity,
+        int $reviewerid,
+        string $decision,
+        string $comment = '',
+        int $commissiondate = 0
+    ): bool {
         global $DB;
         $syllabus = ep_activity_syllabus_record($activity->id);
         $cm = get_coursemodule_from_id('syllabus', $syllabus->cmid, 0, false, MUST_EXIST);
         $version = $DB->get_record('syllabus_version', ['syllabusid' => $syllabus->id, 'status' => 'submitted'], '*', MUST_EXIST);
-        return syllabus_review($syllabus, $cm, $version, $reviewerid, $decision, $comment);
+        return syllabus_review($syllabus, $cm, $version, $reviewerid, $decision, $comment, $commissiondate);
     }
 }

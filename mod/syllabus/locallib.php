@@ -575,9 +575,16 @@ function syllabus_submit(stdClass $syllabus, $cm, stdClass $version, int $userid
  * @param stdClass $version
  * @param int $reviewerid
  * @param string $comment
+ * @param int $commissiondate Date de la commission de validation (0 : non renseignée).
  * @return void
  */
-function syllabus_publish(stdClass $syllabus, stdClass $version, int $reviewerid, string $comment): void {
+function syllabus_publish(
+    stdClass $syllabus,
+    stdClass $version,
+    int $reviewerid,
+    string $comment,
+    int $commissiondate = 0
+): void {
     global $DB;
 
     $lock = syllabus_get_lock((int) $syllabus->id);
@@ -592,7 +599,7 @@ function syllabus_publish(stdClass $syllabus, stdClass $version, int $reviewerid
         );
         $DB->update_record('syllabus_version', (object) [
             'id' => $version->id, 'status' => SYLLABUS_STATUS_PUBLISHED, 'reviewerid' => $reviewerid,
-            'reviewcomment' => $comment, 'timereviewed' => time(), 'timemodified' => time(),
+            'reviewcomment' => $comment, 'timereviewed' => time(), 'timemodified' => time(), 'commissiondate' => $commissiondate,
             'timesubmitted' => !empty($version->timesubmitted) ? $version->timesubmitted : time(),
         ]);
         $transaction->allow_commit();
@@ -611,9 +618,18 @@ function syllabus_publish(stdClass $syllabus, stdClass $version, int $reviewerid
  * @param int $reviewerid
  * @param string $decision publish, return, reject
  * @param string $comment
+ * @param int $commissiondate Date de la commission de validation (publication).
  * @return bool False si la version n'était plus soumise (décidée entre-temps).
  */
-function syllabus_review(stdClass $syllabus, $cm, stdClass $version, int $reviewerid, string $decision, string $comment): bool {
+function syllabus_review(
+    stdClass $syllabus,
+    $cm,
+    stdClass $version,
+    int $reviewerid,
+    string $decision,
+    string $comment,
+    int $commissiondate = 0
+): bool {
     global $DB;
 
     $current = $DB->get_field('syllabus_version', 'status', ['id' => $version->id]);
@@ -621,7 +637,10 @@ function syllabus_review(stdClass $syllabus, $cm, stdClass $version, int $review
         return false;
     }
     if ($decision === 'publish') {
-        syllabus_publish($syllabus, $version, $reviewerid, $comment);
+        if (!$commissiondate && syllabus_commission_required($syllabus)) {
+            throw new moodle_exception('errorcommissionrequired', 'mod_syllabus');
+        }
+        syllabus_publish($syllabus, $version, $reviewerid, $comment, $commissiondate);
     } else {
         $status = $decision === 'return' ? SYLLABUS_STATUS_RETURNED : SYLLABUS_STATUS_REJECTED;
         $DB->update_record('syllabus_version', (object) ['id' => $version->id, 'status' => $status,
@@ -2625,4 +2644,67 @@ function syllabus_trigger_version_event(
         'other' => $other + ['syllabusid' => (int) $syllabus->id, 'component' => (string) ($syllabus->component ?? ''),
             'itemid' => (int) ($syllabus->itemid ?? 0)],
     ])->trigger();
+}
+
+/**
+ * Une version ne se publie qu'avec la date de la commission qui l'a validée : c'est le cas des
+ * fiches d'EP académiques (module gestionnaire), nouvel EP comme modification.
+ *
+ * @param stdClass $syllabus
+ * @return bool
+ */
+function syllabus_commission_required(stdClass $syllabus): bool {
+    return (bool) syllabus_owner_callback($syllabus, 'commission_required', false);
+}
+
+/**
+ * Livret PDF des fiches soumises à la relecture (versions de travail, pas les versions publiées),
+ * à remettre à la commission de validation.
+ *
+ * @param int[] $syllabusids Fiches (instances mod_syllabus) ; celles sans version soumise sont omises.
+ * @param string $title Titre du livret.
+ * @param string[] $lines Lignes sous le titre.
+ * @return \mod_syllabus\pdf\booklet_pdf
+ */
+function syllabus_pending_booklet(array $syllabusids, string $title, array $lines): \mod_syllabus\pdf\booklet_pdf {
+    global $DB;
+
+    core_php_time_limit::raise();
+    raise_memory_limit(MEMORY_EXTRA);
+    [$modules] = $syllabusids ? syllabus_list_instances(['syllabusids' => $syllabusids]) : [[]];
+    $modules = syllabus_sort_by_period($modules);
+    $ids = array_map(fn($m) => (int) $m->id, $modules);
+    $teachers = syllabus_get_teachers_bulk($ids);
+    $submitted = [];
+    if ($ids) {
+        [$insql, $params] = $DB->get_in_or_equal($ids, SQL_PARAMS_NAMED);
+        foreach (
+            $DB->get_records_select(
+                'syllabus_version',
+                "syllabusid $insql AND status = :submitted",
+                $params + ['submitted' => SYLLABUS_STATUS_SUBMITTED],
+                'version ASC'
+            ) as $version
+        ) {
+            $submitted[(int) $version->syllabusid] = $version;
+        }
+    }
+    foreach ($modules as $module) {
+        $module->published = $submitted[(int) $module->id] ?? null;
+        $module->teachers = $teachers[(int) $module->id] ?? [];
+    }
+    return new \mod_syllabus\pdf\booklet_pdf($title, $lines, array_filter($modules, fn($m) => $m->published));
+}
+
+/**
+ * Envoie au navigateur le livret des fiches à valider (voir syllabus_pending_booklet()).
+ *
+ * @param int[] $syllabusids
+ * @param string $title
+ * @param string[] $lines
+ * @param string $filename
+ * @return void
+ */
+function syllabus_send_pending_booklet(array $syllabusids, string $title, array $lines, string $filename): void {
+    syllabus_pending_booklet($syllabusids, $title, $lines)->Output(clean_filename($filename), 'D');
 }

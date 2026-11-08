@@ -47,6 +47,24 @@ $PAGE->set_title(format_string($ep->name) . ' - ' . get_string('managecatalog', 
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
+// Période d'inscription commune aux EP du catalogue, fixée par la DEVE. Un EP qui a sa propre
+// période la garde, sauf si la DEVE choisit de l'aligner.
+if ($action === 'savewindow' && confirm_sesskey()) {
+    $parse = static function (string $value): int {
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/', $value, $m)) {
+            return 0;
+        }
+        return make_timestamp((int) $m[1], (int) $m[2], (int) $m[3], (int) $m[4], (int) $m[5]);
+    };
+    $start = $parse(optional_param('regstart', '', PARAM_RAW_TRIMMED));
+    $end = $parse(optional_param('regend', '', PARAM_RAW_TRIMMED));
+    if ($start && $end && $end <= $start) {
+        redirect($baseurl, get_string('errorregistrationrange', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+    }
+    ep_set_registration_window($ep, $start, $end, optional_param('resetown', 0, PARAM_BOOL));
+    redirect($baseurl, get_string('registrationwindowsaved', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
+}
+
 // Seuls les types non automatiques peuvent porter un EP du catalogue (voir
 // ep_get_catalogable_types()). Les libellés de tous les types restent chargés à part, pour
 // afficher correctement la ligne d'un EP créé sur un type depuis désactivé.
@@ -194,6 +212,38 @@ ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('managecatalog', 'mod_ep'));
 echo html_writer::link(new moodle_url('/mod/ep/administration.php', ['id' => $cm->id]), get_string('back'));
+
+// Période d'inscription du catalogue.
+$fmt = static fn(int $t): string => $t ? userdate($t, '%Y-%m-%dT%H:%M', 99, false) : '';
+$ownwindows = $DB->count_records_select(
+    'ep_activity',
+    'epid = ? AND (registrationstart > 0 OR registrationend > 0)',
+    [$ep->id]
+);
+$windowform = html_writer::tag('h3', get_string('registrationwindow', 'mod_ep') . ' '
+    . $OUTPUT->help_icon('registrationwindow', 'mod_ep'), ['class' => 'h5']);
+$windowform .= html_writer::start_tag('form', ['method' => 'post', 'action' => $baseurl->out(false),
+    'class' => 'd-flex flex-wrap align-items-end gap-2']);
+$windowform .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+$windowform .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'action', 'value' => 'savewindow']);
+foreach (['regstart' => [(int) $ep->registrationstart, 'from'], 'regend' => [(int) $ep->registrationend, 'to']] as $name => $def) {
+    $windowform .= html_writer::label(get_string($def[1]), 'id_' . $name, true, ['class' => 'me-1 mb-0'])
+        . html_writer::empty_tag('input', ['type' => 'datetime-local', 'name' => $name, 'id' => 'id_' . $name,
+            'value' => $fmt($def[0]), 'class' => 'form-control w-auto me-2']);
+}
+if ($ownwindows) {
+    $windowform .= html_writer::div(html_writer::checkbox(
+        'resetown',
+        1,
+        false,
+        get_string('registrationwindowreset', 'mod_ep', $ownwindows)
+    ), 'me-2');
+}
+$windowform .= html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('savechanges'),
+    'class' => 'btn btn-secondary']);
+$windowform .= html_writer::end_tag('form');
+echo $OUTPUT->box($windowform, 'generalbox mt-2 mb-2');
+
 echo html_writer::link(
     new moodle_url($baseurl, ['action' => 'edit']),
     get_string('addactivity', 'mod_ep'),

@@ -49,7 +49,8 @@ class backup_syllabus_activity_structure_step extends backup_activity_structure_
         $versions = new backup_nested_element('versions');
         $version = new backup_nested_element('version', ['id'], ['version', 'status', 'objectives', 'outcomes',
             'prerequisitestext', 'content', 'methods', 'assessment', 'resit', 'bibliography', 'language', 'personalhours',
-            'authorid', 'reviewerid', 'reviewcomment', 'timesubmitted', 'timereviewed', 'timecreated', 'timemodified']);
+            'authorid', 'reviewerid', 'reviewcomment', 'timesubmitted', 'timereviewed', 'commissiondate', 'timecreated',
+            'timemodified']);
         $sessions = new backup_nested_element('sessions');
         $session = new backup_nested_element('session', ['id'], ['sortorder', 'title', 'kind', 'duration', 'teacherid',
             'teachername', 'timecreated']);

@@ -5,9 +5,9 @@
 
 % Version du guide : à mettre à jour à chaque modification, avec une ligne dans l'historique.
 \newcommand{\titreguide}{Guide utilisateur}
-\newcommand{\versionguide}{1.4}
+\newcommand{\versionguide}{1.5}
 \newcommand{\dateguide}{novembre 2026}
-\newcommand{\versionep}{1.1.0}
+\newcommand{\versionep}{1.2.0}
 \newcommand{\versionsynthese}{1.0.3}
 
 \usepackage{guide-commun}
@@ -40,6 +40,7 @@ syllabus. \\
 1.3 & novembre 2026 & Captures des documents PDF : fiche d'un EP, aperçu du supplément au diplôme,
 feuille d'émargement, livret des EP. \\
 1.4 & novembre 2026 & Fiche de chaque EP tenue par une activité « Syllabus du module » (proposition en deux temps, relecture sous la fiche) ; catalogue allégé (descriptions résumées, année d'inscription choisie une fois) ; menu d'actions dans la gestion du catalogue ; émission des suppléments en un formulaire. \\
+1.5 & novembre 2026 & Période d'inscription du catalogue fixée par la DEVE ; EP académiques validés en commission, date requise à chaque publication ; PDF des fiches à valider (EP Manager 1.2.0). \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -730,6 +731,13 @@ rangées dans le menu de la ligne (les trois points).
 
 \capture{gu-deve-catalogue}{Catalogue des EP vu par la DEVE.}
 
+\paragraph{Période d'inscription du catalogue.} En tête de la page, la DEVE fixe la période
+pendant laquelle les étudiants s'inscrivent à tous les EP du catalogue (début et fin, date et
+heure ; une date laissée vide ne limite pas). Un EP qui a sa propre période la garde ; la case
+\og Appliquer aussi aux EP qui ont leur propre période\fg{} les aligne tous. Hors période,
+l'étudiant ne peut plus s'inscrire : seuls le \textbf{responsable de l'EP} ou la \textbf{DEVE}
+ajoutent encore un étudiant, depuis la page \bouton{Participants} de l'EP.
+
 La fiche d'un EP (\bouton{Ajouter un EP au catalogue} ou \bouton{Modifier}) réunit :
 \begin{itemize}
   \item description, type, ECTS, années minimale et maximale, nombre de places, code, ordre
@@ -781,6 +789,15 @@ relire\fg{} du suivi des modules.
 \capture{gu-deve-propositions}{Propositions et mises à jour à examiner.}
 
 \capture{gu-deve-comparer}{Mise à jour soumise : version en vigueur, version proposée et décision.}
+
+\paragraph{EP académiques : validation en commission.} Pour publier la fiche d'un EP de type
+\og académique interne\fg{}, la DEVE indique sous la fiche la \textbf{date de la commission de
+validation} (champ obligatoire) ; la date figure ensuite sur la fiche et sur son PDF
+(\og Validée en commission le\fg{}). Chaque modification d'un EP académique passe aussi par la
+DEVE, même si la publication directe des mises à jour est permise, et sa publication porte la
+date de sa commission. Le bouton \bouton{PDF des fiches à valider} réunit en un seul document
+toutes les fiches soumises (version proposée), avec un sommaire, à remettre à la commission ;
+le même bouton existe dans \og Fiches à relire\fg{} du suivi des modules.
 
 \section{Éditions PDF et courriels}\label{sec:courriels}
 
