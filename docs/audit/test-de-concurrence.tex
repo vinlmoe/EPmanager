@@ -1,0 +1,108 @@
+% Test de concurrence de mod_ep : courses HTTP et en ligne de commande, invariants.
+% Compilation : latexmk -pdf test-de-concurrence.tex
+\documentclass[11pt,a4paper]{article}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype,booktabs,tabularx,longtable,xcolor,hyperref,array}
+\usepackage[margin=2.2cm]{geometry}
+\hypersetup{colorlinks=true, linkcolor=blue!50!black, urlcolor=blue!50!black}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\title{Test de concurrence de \code{mod_ep}}
+\author{Sébastien Lefebvre}
+\date{Novembre 2026 -- version 0.8.0 du module}
+
+\begin{document}
+\maketitle
+
+\section{Ce qui protège les écritures}
+
+Le module combine trois mécanismes (lot~1 de la mise à niveau) :
+\begin{itemize}
+  \item un \textbf{verrou d'activité} (\code{ep_get_activity_lock}, fabrique de verrous de
+    Moodle) pris avant toute écriture dont la validité dépend d'une lecture qui précède : places
+    restantes avant une inscription, imports, restauration, synchronisation des stages, émission
+    d'un supplément, transfert d'un étudiant ;
+  \item des \textbf{écritures conditionnées} (\code{ep_update_credit_if},
+    \code{ep_update_record_if}) : une décision n'est enregistrée que si la demande est toujours
+    à l'état et à l'étape lus ; la ligne est d'abord verrouillée par une mise à jour sans effet
+    dans une transaction, puis la condition est revérifiée ;
+  \item des \textbf{transactions} autour de chaque écriture composée (crédit et décision,
+    émission et remplacement, import complet).
+\end{itemize}
+Le test vérifie que ces protections tiennent sous des accès réellement simultanés.
+
+\section{Méthode}
+
+Même banc que le test de charge : Moodle~4.5, PostgreSQL~16 (les tests unitaires passent aussi
+sous MariaDB~10.11), serveur intégré de PHP à huit
+processus, promotion de 2\,000 étudiants et 60\,000 crédits. Chaque course part d'un état
+préparé (\code{race_prep.php prep}) ; les requêtes partent ensemble derrière une barrière
+(\code{race.py}) ou les processus à la même seconde (\code{wave.sh}) ; les invariants sont
+ensuite vérifiés en base (\code{race_prep.php check}) :
+\begin{itemize}
+  \item nombre d'inscriptions actives d'un EP au plus égal à ses places, aucune inscription en
+    double d'un même étudiant ;
+  \item au plus une décision par étape et par demande, aucune demande tranchée sans décision ;
+  \item un seul supplément en vigueur par étudiant, aucun numéro en double ;
+  \item aucun verrou consultatif restant, aucune transaction restée ouverte.
+\end{itemize}
+Les durées sont celles vues par le client : elles comprennent l'attente d'un des huit processus
+PHP, d'où des médianes de plusieurs secondes quand 200 requêtes arrivent ensemble.
+
+\section{Résultats}
+
+\begin{longtable}{@{}p{4.9cm}p{5.3cm}p{5.3cm}@{}}
+\toprule
+\textbf{Course} & \textbf{Attendu} & \textbf{Obtenu} \\
+\midrule\endhead
+\textbf{Ruée} : 200 étudiants s'inscrivent au même instant à un EP de 30 places & 30 inscrits,
+  170 refus « plus de place », aucun doublon & \textbf{30 inscrits}, 0 doublon, 0 erreur ;
+  médiane 1,8~s, maximum 3,4~s \\
+\textbf{Double-clic} : un étudiant envoie dix fois la même inscription & Une inscription &
+  \textbf{1 inscription}, 0 erreur \\
+\textbf{Décisions simultanées} : le responsable valide et la DEVE refuse les mêmes 12 demandes
+  au même instant ; deux membres de la DEVE tranchent ensemble 100 déclarations (l'un valide,
+  l'autre refuse) & Une seule décision par demande, l'autre personne prévenue que la demande a
+  changé & \textbf{0 décision en double}, 0 demande tranchée sans décision, 0 erreur
+  (224 requêtes) \\
+\textbf{Émissions simultanées} : deux membres de la DEVE émettent le supplément des mêmes dix
+  étudiants au même instant, l'un en français, l'autre en anglais & Deux émissions par étudiant,
+  la seconde remplace la première ; un seul supplément en vigueur & \textbf{0 étudiant avec deux
+  suppléments en vigueur}, 0 numéro en double, 0 erreur \\
+\textbf{Restaurations simultanées} : deux membres de la DEVE restaurent la même archive de
+  60\,000 crédits dans la même activité & Le contenu une fois, sans doublon & La première
+  restauration ajoute 59\,550 crédits, 6\,000 éléments et 4\,996 décisions d'année en 14,6~s ; la
+  seconde, servie après elle par le verrou, \textbf{écarte tout} (70\,546 éléments) en 117
+  requêtes \\
+\textbf{Imports simultanés} : trois imports du même fichier de 2\,000 crédits au même instant &
+  2\,000 crédits & \textbf{2\,000 crédits} : le premier import les crée (2,4~s), les deux autres
+  les écartent tous \\
+\textbf{Charge mixte}, 60~s : 40 étudiants, 10 enseignants et 2 membres de la DEVE ouvrent leurs
+  pages en boucle pendant qu'un export complet est demandé & Aucune erreur, aucun verrou ni
+  transaction restant & 3\,088 pages servies (51 par seconde), \textbf{0 erreur}, médiane 0,99~s
+  et 95\textsuperscript{e} centile 1,2~s avec 52 clients pour 8 processus ; export terminé
+  en 32~s ; 0 verrou, 0 transaction ouverte \\
+\bottomrule
+\end{longtable}
+
+\section{Lecture}
+
+\begin{itemize}
+  \item Aucune course n'a produit d'état incohérent ni d'erreur PHP ou de base de données.
+  \item Le verrou d'activité sérialise les traitements lourds (restauration, import) sans les
+    faire échouer : le second attend le premier, puis reconnaît ce qui est déjà là. Une
+    restauration qui attendrait plus de 30~secondes un verrou tenu par une autre opération
+    reçoit le message « Une autre opération est en cours sur cette activité : réessayez dans
+    quelques secondes ».
+  \item Les décisions concurrentes ne se perdent pas en silence : la personne dont la décision
+    n'est pas enregistrée voit « Cette demande a changé entre-temps (décision prise, demande
+    retirée) : rien n'a été enregistré ».
+  \item Sous charge, le temps de réponse est dominé par le nombre de processus PHP : avec huit
+    processus, 51 pages par seconde sont servies. Un serveur de production (PHP-FPM avec
+    davantage de processus) en servira proportionnellement plus ; aucune page ne garde de
+    verrou pendant sa lecture.
+\end{itemize}
+
+Les scripts sont dans \code{docs/audit/concurrence/} (\code{README.md}).
+\end{document}

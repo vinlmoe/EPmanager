@@ -1,0 +1,336 @@
+% Audit complet de la branche de mise à niveau : mod_ep, mod_epsynthesis, mod_syllabus,
+% mod_syllabusstaff, mod_syllabusstudent.
+% Compilation : latexmk -pdf audit-complet.tex
+\documentclass[11pt,a4paper]{article}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype,booktabs,tabularx,xltabular,xcolor,hyperref,array,enumitem}
+\usepackage[margin=2.2cm]{geometry}
+\hypersetup{colorlinks=true, linkcolor=blue!50!black, urlcolor=blue!50!black}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\grav}[1]{\textsc{#1}}
+\setlist{itemsep=2pt, topsep=4pt}
+\title{Audit complet de la mise à niveau d'EP Manager et des modules syllabus}
+\author{Sébastien Lefebvre}
+\date{Novembre 2026 -- mod\_ep 1.0.6, mod\_epsynthesis 1.0.3, modules syllabus 1.5.1}
+
+\begin{document}
+\maketitle
+
+\section{Objet et méthode}
+
+L'audit porte sur l'ensemble de la branche de mise à niveau, avant sa fusion : les cinq modules
+d'activité (\code{mod_ep}, \code{mod_epsynthesis}, \code{mod_syllabus},
+\code{mod_syllabusstaff}, \code{mod_syllabusstudent}, environ 45\,000 lignes de PHP), leur
+liaison avec \code{mod_stage}, leurs tests, la CI et la documentation. Il complète les rapports
+de charge, de concurrence et de bout en bout déjà présents dans \code{docs/audit}, sans en
+reprendre les mesures.
+
+\paragraph{Six revues du code}, menées en parallèle, chacune sur tout le périmètre de son
+domaine, en lecture seule, chaque constat tracé dans le code de bout en bout :
+\begin{enumerate}
+  \item sécurité de \code{mod_ep} et \code{mod_epsynthesis} (droits par page et par action,
+    identifiants de la requête, clé de session, échappement, fichiers, imports) ;
+  \item sécurité des modules syllabus (mêmes points, plus l'anonymat des avis et les actions
+    du suivi sur les modules d'autres cours) ;
+  \item intégrité des données (schéma et mises à jour, suppression, réinitialisation,
+    sauvegarde et restauration, RGPD, concurrence, tâches planifiées) ;
+  \item performance et portabilité SQL (PostgreSQL, MariaDB/MySQL, SQL Server, Oracle) ;
+  \item langues, accessibilité et cohérence de l'interface ;
+  \item tests, CI, métadonnées de version et cohérence de la documentation.
+\end{enumerate}
+Chaque constat retenu a ensuite été revérifié dans le code ; les défauts confirmés et de portée
+limitée sont corrigés, avec un test qui échoue sans la correction quand c'est possible. Les
+autres sont décrits en section~\ref{sec:residuel}, avec la raison pour laquelle ils restent.
+
+\paragraph{Contrôles sur le banc} (Moodle 4.5, PHP~8.3, PostgreSQL~16, jeu de données de 1\,000
+étudiants) : schéma de la base comparé aux fichiers \code{install.xml} après les mises à jour
+successives, test de conformité RGPD du cœur, balayage dynamique des droits
+(\code{docs/audit/banc/balayage_droits.py}, nouveau), scénario de bout en bout des modules
+syllabus rejoué avec le code corrigé.
+
+\section{Synthèse}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}X r r r@{}}
+\toprule
+\textbf{Domaine} & \textbf{Constats} & \textbf{Corrigés} & \textbf{Restants} \\
+\midrule
+Sécurité & 14 & 8 & 6 \\
+Intégrité des données & 15 & 9 & 6 \\
+Performance et portabilité & 7 & 5 & 2 \\
+Langues et accessibilité & 8 & 4 & 4 \\
+Tests, CI et documentation & 7 & 2 & 5 \\
+\midrule
+\textbf{Total} & \textbf{51} & \textbf{28} & \textbf{23} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+Un constat peut regrouper plusieurs points de même nature (par exemple trois écarts de
+portabilité SQL, ou les tableaux sans conteneur défilant de cinq pages).
+
+Aucun constat critique. Les plus graves, tous corrigés :
+\begin{itemize}
+  \item un compte qui voit tous les dossiers d'une activité EP (la DEVE) pouvait lire le
+    supplément au diplôme -- nom, numéro, date de naissance -- de n'importe quel compte du
+    site, en changeant l'identifiant dans l'adresse ; reproduit sur le banc avant correction ;
+  \item un étudiant pouvait faire sauter l'étape DEVE d'une déclaration en changeant son type ;
+  \item un responsable pouvait lire les avis avant la fin du recueil (fermeture puis
+    réouverture de la fenêtre), et l'heure de chaque avis, dans le journal, permettait de
+    retrouver son auteur en comparant les résultats ;
+  \item une restauration rendait invérifiables les suppléments déjà remis aux étudiants.
+\end{itemize}
+Les constats restants sont de gravité moyenne ou basse ; deux recommandations de gravité
+haute concernent la CI (mise à jour depuis la version en production, scénarios Behat de
+\code{mod_ep}).
+
+\section{Contrôles automatiques}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}X l@{}}
+\toprule
+\textbf{Contrôle} & \textbf{Résultat} \\
+\midrule
+Schéma de la base du banc, mis à jour version après version, comparé aux \code{install.xml}
+(\code{check_database_schema.php}) & conforme \\
+Test de conformité RGPD du cœur (fournisseurs des cinq modules compris) & 1\,648 tests réussis \\
+Tests unitaires des cinq modules (132 + 8 + 43 + 6 + 1), après corrections & 190 réussis \\
+Scénarios Behat des modules syllabus & 6 scénarios, 102 étapes \\
+Style Moodle (\code{phpcs}), PHPDoc, validation, points de mise à jour (CI) & sans remarque \\
+Scénario de bout en bout des modules syllabus, code corrigé & 51/51 contrôles \\
+Balayage des droits : 59 pages $\times$ 3 comptes & 177 appels, 27 ouvertures attendues \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Balayage des droits.} Chaque page des cinq modules est appelée avec l'identifiant
+d'une activité par trois comptes : un étudiant d'une autre promotion (non inscrit), un étudiant
+inscrit, le responsable d'un autre module. Les 27 pages qui ne refusent pas sont toutes
+légitimes : pages de l'étudiant (vue, catalogue, déclaration, son supplément, ses éléments, sa
+fiche de module en PDF, « Mes modules »), vérification publique d'un supplément par son code,
+pages des enseignants du cours (tableau de pilotage, validation, propositions, matrice et
+progression ouvertes aux enseignants), page des compétences d'un module en lecture seule. Le
+balayage ne fait que des requêtes de consultation : les actions sont couvertes par les tests
+unitaires et la revue du code.
+
+\section{Constats corrigés}
+
+\subsection{Sécurité}
+
+\begin{xltabular}{\linewidth}{@{}l X X@{}}
+\toprule
+\textbf{Gravité} & \textbf{Constat} & \textbf{Correction} \\
+\midrule
+\endhead
+\grav{moyenne} & \code{supplement.php} et \code{dashboard.php} : l'identifiant d'étudiant de
+l'adresse n'était pas contrôlé ; un détenteur de \code{mod/ep:viewall} lisait le supplément
+(PDF avec date de naissance) ou la situation de tout compte du site. & Contrôle de l'inscription
+à l'activité, comme à l'émission. Banc : PDF obtenu avant, « Invalid user ID » après. \\
+\grav{moyenne} & Déclaration en attente : le type changeait, pas l'étape en attente ; le
+référent tranchait un type que seule la DEVE valide. & Étape recalculée sur le circuit du
+nouveau type (test \texttt{test\_type\_change\_\-follows\_new\_flow}). \\
+\grav{haute} & Avis : un responsable fixait librement la fenêtre ; il pouvait la fermer pour
+lire les résultats, la rouvrir, ou ouvrir dans une autre année pour archiver le recueil en
+cours. & Dès le premier avis, seule la DEVE déplace la fenêtre, par la page du recueil comme par
+les paramètres de l'activité (test \texttt{test\_window\_locked\_\-after\_first\_response}). \\
+\grav{haute} & Avis : l'événement d'envoi gardait l'auteur et l'heure ; rapproché de
+l'évolution des résultats, il désignait l'auteur de chaque avis. & Événement anonyme : le
+journal ne le montre qu'aux administrateurs (\code{moodle/site:viewanonymousevents}). \\
+\grav{moyenne} & Résultats comparés du suivi : seul le droit du suivi était vérifié, pas celui
+de chaque module. & Modules filtrés sur \code{mod/syllabus:manage}, comme la liste et la
+relecture. \\
+\grav{basse} & Libellés des listes déroulantes (nom et numéro d'étudiant, code de compétence,
+période) non échappés : \code{html_writer::select()} ne le fait pas. & \code{s()} sur ces
+libellés. \\
+\grav{basse} & Exports CSV : une cellule commençant par \code{=}, \code{+}, \code{-} ou
+\code{@} s'exécutait comme formule dans un tableur ; le cœur ne le neutralise que dans ses
+versions récentes. & Apostrophe ajoutée à ces cellules dans les 15 lignes d'export des deux
+modules. \\
+\grav{moyenne} & Suppressions de questions, types, référentiels et compétences confirmées en
+JavaScript seulement : sans JavaScript, un clic supprimait. & Page de confirmation du serveur
+comme dans \code{mod_ep} (\texttt{syllabus\_require\_\-confirmation()}). \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Intégrité des données}
+
+\begin{xltabular}{\linewidth}{@{}l X X@{}}
+\toprule
+\textbf{Gravité} & \textbf{Constat} & \textbf{Correction} \\
+\midrule
+\endhead
+\grav{haute} & Restauration : le sceau des suppléments n'était pas sauvegardé ; après
+suppression et restauration d'une activité (corbeille), les diplômes remis étaient déclarés
+« non reconnus ». & Sceau sauvegardé ; sur le même site, s'il est authentique et que le numéro
+d'origine est libre, il est recalculé ; toute autre copie reste non reconnue (deux tests). \\
+\grav{moyenne} & Restauration : les décisions d'un crédit écarté étaient rattachées au crédit
+restauré juste avant. & \code{SKIP_ALL_CHILDREN}. \\
+\grav{moyenne} & Rentrée appliquée deux fois depuis deux onglets ou par un envoi répété (année
+N vers N+2). & Mise à jour conditionnée à l'année de départ confirmée (test). \\
+\grav{moyenne} & Transfert d'un étudiant : ses crédits de stage étaient supprimés comme
+orphelins par la synchronisation de la cible. & Convertis en saisies DEVE si la cible ne lit pas
+les mêmes stages, laissés à sa synchronisation sinon (test). \\
+\grav{moyenne} & Suppression d'un EP du catalogue : versions du syllabus, séances et
+prérequis restaient orphelins ; le contrôle des inscriptions n'était pas sous verrou ; le bouton
+échouait toujours (clé de session absente du lien). & \code{ep_delete_activity()} sous verrou et
+en transaction ; page de confirmation (test). \\
+\grav{moyenne} & Émission groupée des suppléments : une erreur faisait relancer toute la tâche,
+qui réémettait les suppléments déjà émis (nouveaux numéros). & Un étudiant en échec n'arrête pas
+les autres ; ceux dont le supplément a été émis depuis la demande sont sautés (test). \\
+\grav{basse} & Copie d'un cours sans données utilisateurs : la fenêtre des avis gardait les
+anciennes dates ; les étudiants du nouveau cours étaient prévenus d'un recueil passé. & Recueil
+sans fenêtre après une telle copie (test). \\
+\grav{basse} & Tâche d'ouverture des avis : un arrêt en cours d'envoi renvoyait tous les
+messages du module. & Module marqué avant l'envoi. \\
+\grav{basse} & Transfert : le second verrou était pris hors du bloc qui libère le premier. &
+Pris dans le bloc. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Performance et portabilité}
+
+\begin{xltabular}{\linewidth}{@{}l X X@{}}
+\toprule
+\textbf{Gravité} & \textbf{Constat} & \textbf{Correction} \\
+\midrule
+\endhead
+\grav{haute} & Intitulé des crédits de stage sans troncature (thème et structure jusqu'à
+255 caractères chacun) : l'insertion échouait, et avec elle chaque page qui synchronise. & Borné
+à 255 caractères (test) ; rédigé dans la langue du site, pour qu'une consultation dans une autre
+langue ne réécrive pas tous les crédits. \\
+\grav{moyenne} & Décisions en lot : les courriels partaient pendant que le verrou de l'activité
+était pris (20 à 60\,s pour une promotion). & Messages gardés puis envoyés après validation et
+libération du verrou ; rien n'est envoyé si le lot échoue (test). \\
+\grav{moyenne} & Tâche d'ouverture des avis : une requête par étudiant. & Une requête par
+module. \\
+\grav{moyenne} & \code{AVG} sur un entier : moyenne tronquée sous SQL Server. & Moyenne
+décimale. \\
+\grav{basse} & \code{DISTINCT} sur la fiche utilisateur (champs texte, refusé par Oracle) ;
+\code{<> ''} (Oracle) ; alias \code{uid} (réservé sous Oracle). & Sous-requête,
+\code{sql_isnotempty()}, alias \code{userid}. \\
+\bottomrule
+\end{xltabular}
+
+\subsection{Langues, accessibilité, documentation}
+
+\begin{itemize}
+  \item Listes de filtres : le nom lu par les lecteurs d'écran était le nom technique du
+    paramètre (« status ») ; c'est désormais le libellé de la liste.
+  \item Cases à cocher des responsables d'un EP et des activités liées à une synthèse nommées ;
+    indicateurs d'étape (coche, cercle) doublés d'un texte « Fait » / « À faire ».
+  \item Tableaux larges (gabarit commun de \code{mod_ep}, liste des modules, résultats,
+    catalogue, synthèse) dans un conteneur défilant : la page ne défile plus en largeur sur
+    téléphone.
+  \item Chaînes absentes du cœur 4.5 (\code{nonewmodules}, \code{cannotcreatezip}) remplacées :
+    elles s'affichaient entre crochets.
+  \item README et INSTALL au vocabulaire « Avis des étudiants » ; règle de la fenêtre et
+    anonymat du journal documentés ; guides au numéro des modules (guide syllabus 1.7).
+  \item \code{\$plugin->supported = [403, 405]} dans les cinq modules ; CHANGELOG corrigé sur
+    la datation des versions et complété ; trois fichiers de tests rendus exécutables seuls.
+\end{itemize}
+
+\section{Constats restants et recommandations}\label{sec:residuel}
+
+\subsection{Recommandations prioritaires}
+
+\begin{description}
+  \item[CI : mise à jour depuis la version en production] (\grav{haute}). La CI n'installe qu'à
+    neuf ; la conversion des données des sites en 0.1.0 n'a été vérifiée que sur le banc
+    (\code{migration_avant.php}, \code{migration_apres.php}). Ajouter un job qui installe
+    \code{main}, crée des données, passe au code de la branche, lance la mise à jour et rejoue
+    les contrôles.
+  \item[Behat de \code{mod_ep}] (\grav{haute}). Aucun scénario pour les 43 pages de
+    \code{mod_ep}, alors que le CHANGELOG 0.2.0 en annonce. Le balayage des droits du banc
+    couvre la consultation ; trois scénarios sont recommandés : justificatif d'un autre étudiant
+    refusé, supplément émis visible du seul étudiant et de la DEVE, pages DEVE refusées à un
+    enseignant.
+  \item[Réglages communs des avis] (\grav{moyenne}). Seuil d'anonymat, résultats des
+    enseignants, relecture et questions communes valent pour tout le site, mais se règlent
+    depuis n'importe quelle activité de suivi. C'est le choix demandé (tout depuis le suivi,
+    sans l'administration du site) ; il suppose de ne donner \code{mod/syllabusstaff:manageall}
+    qu'à la DEVE et de garder un seuil d'au moins 3. Une capacité au niveau du site est
+    possible si plusieurs services gèrent des catégories distinctes.
+  \item[Anonymat en base] (\grav{moyenne}, risque résiduel). Participation et réponse sont
+    insérées l'une après l'autre : leurs identifiants séquentiels se correspondent, en base et
+    dans une sauvegarde avec données utilisateurs. Aucune page ni aucun export ne les relie ; le
+    risque est documenté dans l'INSTALL : accès à la base et aux sauvegardes restreint. Découpler
+    l'ordre (réponses insérées par lots mélangés) demanderait une file d'attente.
+\end{description}
+
+\subsection{Autres constats, sans correction}
+
+\begin{xltabular}{\linewidth}{@{}l X X@{}}
+\toprule
+\textbf{Gravité} & \textbf{Constat} & \textbf{Raison, recommandation} \\
+\midrule
+\endhead
+\grav{moyenne} & Restauration d'une archive globale dans une instance liée aux mêmes stages :
+ECTS de stage comptés deux fois (plausible). & Cas rare (remise à zéro puis restauration) ;
+écarter les crédits de stage dans ce cas. \\
+\grav{moyenne} & Oracle : colonnes \code{comment}, \code{number}, \code{level}, mots réservés. &
+Oracle n'est ni visé ni testé ; les renommer est un changement de schéma, à faire seulement si
+Oracle devient une cible. \\
+\grav{basse} & Responsables : tout responsable désigne ou retire des co-responsables ; dans un
+module sans responsable, un enseignant peut se désigner. & Conforme au guide ; la DEVE voit les
+responsables dans la liste des modules. \\
+\grav{basse} & Progression, livret : modules de cours masqués visibles aux enseignants du
+suivi. & Filtrer sur la visibilité du cours si des cours en préparation doivent rester
+discrets. \\
+\grav{basse} & Effacement RGPD d'un étudiant : il peut redonner son avis la même année. &
+Effacement rare et en fin de parcours ; documenté. \\
+\grav{basse} & Imports : responsables et validateurs reconnus sur tout le site. & Aucun gain de
+droits ; limiter aux enseignants du cours si besoin. \\
+\grav{basse} & Concurrences sans corruption : double décision d'année (erreur d'index unique),
+deux brouillons de syllabus de même numéro, création simultanée du secret du sceau. & Cas
+improbables ; verrouiller si observés. \\
+\grav{basse} & Relances fondées sur la date de création de la demande ; DEVE non inscrite au
+cours jamais relancée. & Inscrire la DEVE au cours (recommandé par l'INSTALL). \\
+\grav{basse} & Réglage du premier mois de l'année changé en cours d'année : le recueil suivant
+archive le précédent. & Ne changer ce réglage qu'entre deux années ; documenté. \\
+\grav{basse} & Liens de compétences des cours sans module absents des sauvegardes de cours ;
+périmètre de catégorie restauré sur un autre site. & À refaire après une copie d'un site à
+l'autre. \\
+\grav{basse} & Réinitialisation : empreinte de synchronisation des stages gardée (crédits de
+stage recalculés au plus tard à la tâche de nuit) ; suppression par sous-requête lente sous
+MariaDB pour de très gros volumes. & Sans conséquence fonctionnelle. \\
+\grav{basse} & Livrets : deux premiers téléchargements simultanés produisent tous deux le PDF ;
+renommage d'un responsable visible le lendemain ; archive ZIP des suppléments lue fichier par
+fichier. & Coût mesuré acceptable (rapports de charge). \\
+\grav{basse} & Messages rédigés dans la langue de l'expéditeur ou du site, non du destinataire.
+& Site monolingue ; à revoir pour un site bilingue. \\
+\grav{basse} & Accessibilité : pas de légende ni d'en-tête de ligne dans les tableaux, sens de
+tri sans \code{aria-sort}, niveaux de titres sautés, actions de ligne sans contexte. & Lisible
+au lecteur d'écran ; à reprendre avec une revue RGAA. \\
+\grav{basse} & Langues : concaténations avec « : » codé en dur, « DEVE » et « academic office »
+mêlés en anglais, descriptions d'événements de \code{mod_ep} et traces des tâches en français,
+19 chaînes inutilisées. & Sans effet en français ; à harmoniser avec la traduction anglaise. \\
+\grav{basse} & Retrait de fenêtre en lot confirmé en JavaScript seulement. & Retrait réversible
+(la fenêtre se refixe), réponses conservées. \\
+\grav{moyenne} & CI : dépôt StageCompagnon pris sur \code{main} sans épinglage, outils non
+épinglés, ni PHP~8.3, ni MySQL, ni SQL Server ; seuil de couverture absent. & Épingler un
+commit de StageCompagnon et ajouter une ligne PHP~8.3 lors d'une prochaine révision de la CI. \\
+\grav{basse} & Tests : quelques assertions faibles (exception générique, crédit préexistant non
+vérifié) ; test annuel sensible à la minute qui suit le 1\textsuperscript{er} septembre. &
+Probabilité très faible ; à resserrer au fil de l'eau. \\
+\grav{basse} & Banc : prérequis (Python \code{requests}, Playwright, \code{pdftoppm}) et en-têtes
+GPL des scripts ; traduction française minimale des guides sans attribution. & Prérequis
+d'exécution précisés dans le README du banc ; le reste à compléter. \\
+\bottomrule
+\end{xltabular}
+
+\section{Conclusion}
+
+Les contrôles de base sont solides et uniformes : chaque page exige la connexion au cours et un
+droit dans le bon contexte, toutes les écritures passent par la clé de session, tout le SQL est
+paramétré, l'échappement est cohérent, aucun service web ni code JavaScript n'est exposé. Les
+défauts trouvés tenaient à des chemins secondaires -- un identifiant de la requête non relié à
+l'activité, un champ non recalculé, une donnée non sauvegardée -- et à l'anonymat des avis face
+aux traces indirectes (journal, ouverture et fermeture de la fenêtre).
+
+Les 28 corrections sont couvertes par 7 tests unitaires de plus (190 au total), le balayage
+des droits et le scénario de bout en bout rejoués sur le banc. La branche peut être fusionnée ;
+les deux recommandations de CI (mise à jour depuis la version en production, Behat de
+\code{mod_ep}) sont à traiter ensuite, avant la prochaine évolution du schéma.
+
+\end{document}

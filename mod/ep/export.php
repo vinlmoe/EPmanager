@@ -69,7 +69,7 @@ if ($mode === 'students') {
     foreach ($types as $type) {
         $header[] = format_string($type->name);
     }
-    $export->add_data($header);
+    $export->add_data(ep_csv_safe($header));
 
     foreach (ep_get_pilotage_overview($ep, $context) as $row) {
         $progress = $row->progress;
@@ -89,7 +89,7 @@ if ($mode === 'students') {
         foreach ($types as $typeid => $type) {
             $line[] = isset($progress->types[$typeid]) ? ep_format_ects($progress->types[$typeid]->retained) : '0';
         }
-        $export->add_data($line);
+        $export->add_data(ep_csv_safe($line));
     }
 
     $export->download_file();
@@ -101,7 +101,7 @@ if ($mode === 'credits') {
 
     $export = new csv_export_writer();
     $export->set_filename(clean_filename(format_string($ep->name) . '-credits'));
-    $export->add_data([
+    $export->add_data(ep_csv_safe([
         get_string('lastname'),
         get_string('firstname'),
         get_string('email'),
@@ -115,7 +115,7 @@ if ($mode === 'credits') {
         get_string('decidedby', 'mod_ep'),
         get_string('decidedon', 'mod_ep'),
         get_string('validatorcomment', 'mod_ep'),
-    ]);
+    ]));
 
     $credits = ep_get_filtered_credits($ep->id, [], 'student', 'ASC');
     $students = ep_get_credit_users($credits);
@@ -135,7 +135,7 @@ if ($mode === 'credits') {
             $decidedby = get_string('automaticattribution', 'mod_ep');
         }
 
-        $export->add_data([
+        $export->add_data(ep_csv_safe([
             $student ? $student->lastname : '',
             $student ? $student->firstname : '',
             $student ? $student->email : '',
@@ -149,13 +149,14 @@ if ($mode === 'credits') {
             $decidedby,
             $credit->validatetime ? userdate($credit->validatetime, get_string('strftimedatetimeshort')) : '',
             (string) $credit->validatorcomment,
-        ]);
+        ]));
     }
 
     $export->download_file();
     exit;
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('exportcsv', 'mod_ep'));
 echo html_writer::link(new moodle_url('/mod/ep/dashboard.php', ['id' => $cm->id]), get_string('back'));
@@ -163,13 +164,19 @@ echo html_writer::link(new moodle_url('/mod/ep/dashboard.php', ['id' => $cm->id]
 $table = new html_table();
 $table->head = [get_string('adminsectionpage', 'mod_ep'), get_string('adminsectionpurpose', 'mod_ep')];
 $table->data[] = [
-    html_writer::link(new moodle_url($baseurl, ['mode' => 'students']),
-        get_string('exportstudents', 'mod_ep'), ['class' => 'btn btn-secondary']),
+    html_writer::link(
+        new moodle_url($baseurl, ['mode' => 'students']),
+        get_string('exportstudents', 'mod_ep'),
+        ['class' => 'btn btn-secondary']
+    ),
     get_string('exportstudents_desc', 'mod_ep'),
 ];
 $table->data[] = [
-    html_writer::link(new moodle_url($baseurl, ['mode' => 'credits']),
-        get_string('exportcredits', 'mod_ep'), ['class' => 'btn btn-secondary']),
+    html_writer::link(
+        new moodle_url($baseurl, ['mode' => 'credits']),
+        get_string('exportcredits', 'mod_ep'),
+        ['class' => 'btn btn-secondary']
+    ),
     get_string('exportcredits_desc', 'mod_ep'),
 ];
 echo html_writer::table($table);

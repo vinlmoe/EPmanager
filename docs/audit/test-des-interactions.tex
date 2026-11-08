@@ -1,0 +1,261 @@
+% Test des interactions de bout en bout d'une promotion de 1 000 étudiants, par l'interface web.
+% Compilation : latexmk -pdf test-des-interactions.tex
+\documentclass[11pt,a4paper]{article}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype,booktabs,tabularx,xcolor,hyperref,array,amsmath}
+\usepackage[margin=2.2cm]{geometry}
+\hypersetup{colorlinks=true, linkcolor=blue!50!black, urlcolor=blue!50!black}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+\title{Test des interactions à 1\,000 étudiants}
+\author{Sébastien Lefebvre}
+\date{Novembre 2026 -- versions 1.0.3 et 1.0.5 du module}
+
+\begin{document}
+\maketitle
+
+\section{Objet et méthode}
+
+Les tests précédents mesuraient des pages (test de charge), des courses à la même ressource
+(test de concurrence) et la tenue d'un serveur saturé (test de stress). Celui-ci fait vivre une
+promotion entière, \textbf{de la première inscription au supplément au diplôme émis}, par
+l'interface web seule, comme des navigateurs : chaque formulaire est lu dans la page, avec ses
+champs cachés et sa clé de session ; chaque justificatif est déposé dans la zone brouillon par
+le sélecteur de fichiers de Moodle. Puis il vérifie en base que chaque action a laissé exactement
+la trace attendue.
+
+\paragraph{Serveur.} Le banc habituel : une machine de 4 c\oe urs et 15~Go, nginx, PHP-FPM~8.3
+(16 processus, OPcache, JIT), PostgreSQL~16, Redis pour les sessions, APCu pour le cache
+applicatif, Moodle~4.5. Le client tourne sur la même machine.
+
+\paragraph{Promotion.} Une promotion \textbf{vierge} (\code{VIERGE=1 charge_setup.php}) :
+1\,000 étudiants inscrits au cours, chacun avec son enseignant référent dans « Gestion des
+stages » ; 150 enseignants ; 4 membres de la DEVE ; 60 EP publiés au catalogue (un sur quatre noté
+sur 20, seuil 10 ; places limitées à 40 pour deux EP sur trois), avec un ou deux responsables
+chacun ; minimum de 6 ECTS en troisième année ; circuit des éléments du supplément
+« référent puis DEVE ». Aucun crédit, aucun élément, aucune décision au départ : tout ce qui est
+compté à la fin est né des formulaires. Les enseignants et la DEVE sont ceux des six promotions du
+test de stress, et la synthèse enseignant est propre à la promotion.
+
+\paragraph{Scénario.} \code{docs/audit/banc/interactions.py}, 40 acteurs en parallèle dans chaque
+phase :
+\begin{enumerate}
+  \item \textbf{Étudiants} (1\,000) : tableau de bord ; une page du catalogue ; trois inscriptions
+    directes depuis la liste ; une déclaration hors catalogue avec justificatif PDF ; une demande
+    d'élément du supplément avec preuve PDF et période ; un sur dix retire ensuite sa déclaration,
+    un sur dix la modifie.
+  \item \textbf{Responsables d'EP} (55, ceux des EP qui ont des inscrits) : notes ou validations
+    de toute la liste des participants en un envoi (une note sur quatre sous le seuil, une
+    décision sur dix négative) ; un EP noté par import CSV (prévisualisation puis confirmation).
+  \item \textbf{Référents} (150) : chaque déclaration de leurs étudiants, ouverte puis validée
+    (neuf sur dix) ou refusée avec un commentaire ; puis chaque élément du supplément, tranché
+    depuis la page « À traiter » de la synthèse.
+  \item \textbf{DEVE} : paramétrage du supplément (textes des rubriques, signataire) ; décision
+    finale sur les 1\,000 éléments, les quatre comptes de la DEVE se partageant la file ;
+    validation des années en lot (atteintes, puis non atteintes) ; émission groupée des 1\,000
+    suppléments (tâche de fond) ; vérification publique de 50 suppléments, et de 50 faux codes ;
+    exports CSV et export complet.
+  \item \textbf{Contrôles en base}.
+\end{enumerate}
+
+\section{Déroulement}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}X r r r r@{}}
+\toprule
+\textbf{Phase} & \textbf{Acteurs} & \textbf{Durée} & \textbf{Requêtes} & \textbf{Requêtes/s} \\
+\midrule
+1. Étudiants : inscriptions, déclarations, éléments & 1\,000 & 254,7 s & 13\,500 & 53,0 \\
+2. Responsables : notes et validations en lot & 55 & 23,7 s & 222 & 9,4 \\
+3. Référents : déclarations, éléments (synthèse) & 150 & 77,2 s & 3\,685 & 47,7 \\
+4. DEVE : paramétrage du supplément & 1 & 0,4 s & 4 & -- \\
+4a. DEVE : décision finale sur les éléments & 4 & 42,8 s & 1\,115 & 26,0 \\
+4b. DEVE : validation des années en lot & 1 & 1,4 s & 5 & -- \\
+4c. DEVE : émission groupée des suppléments & 1 & 155,1 s & 4 & -- \\
+4d. Public : vérification de 50 suppléments et 50 faux codes & 50 & 0,6 s & 100 & 173,9 \\
+4e. DEVE : exports CSV et export complet & 1 & 6,4 s & 5 & -- \\
+\midrule
+\textbf{Total} & & \textbf{9 min 22 s} & \textbf{18\,640} & \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{itemize}
+  \item Un étudiant fait tout son parcours (14 pages et envois, deux dépôts de fichiers) en
+    10~s en médiane, avec 39 autres en même temps : la promotion entière passe en un peu plus de
+    4 minutes, au rythme de 53 requêtes par seconde -- pages à formulaire, dépôts et envois
+    compris, soit un peu moins que les 60 pages par seconde de simple consultation du test de
+    stress.
+  \item L'enregistrement d'une liste de participants (40 à 50 notes, avec un message à chaque
+    étudiant dont la décision est finale) prend 3 à 4~s.
+  \item L'émission groupée produit les 1\,000 suppléments, chacun avec son PDF, son empreinte et
+    son sceau, en 140~s de tâche de fond (0,14~s et 25 requêtes à la base par supplément).
+  \item L'export complet de la promotion pèse 133~Mo (classeur, paramétrage, données, et les
+    3\,000 fichiers : justificatifs, preuves, suppléments) et se télécharge en 6~s ; les exports
+    CSV en moins d'une seconde.
+\end{itemize}
+
+\section{Contrôles}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}X r r@{}}
+\toprule
+\textbf{Contrôle} & \textbf{Attendu} & \textbf{Constaté} \\
+\midrule
+Inscriptions faites depuis le catalogue & 2\,984 & 2\,984 \\
+\quad dont validées / refusées par les responsables & & 2\,570 / 414 \\
+Déclarations, chacune avec son justificatif & 1\,000 & 1\,000 \\
+\quad dont retirées par l'étudiant & 100 & 100 \\
+\quad dont modifiées par l'étudiant avant décision & 100 & 100 \\
+\quad dont validées / refusées par le référent & & 811 / 89 \\
+Demandes encore en attente & 0 & 0 \\
+Demandes tranchées sans décision dans l'historique & 0 & 0 \\
+Décisions enregistrées deux fois pour la même étape & 0 & 0 \\
+Inscriptions en double, places dépassées & 0 & 0 \\
+Éléments du supplément, chacun avec sa preuve & 1\,000 & 1\,000 \\
+\quad validés par le référent puis par la DEVE & 1\,000 & 1\,000 \\
+Décisions d'année (3\textsuperscript{e} année) & 1\,000 & 1\,000 \\
+\quad années validées (minimum de 6 ECTS atteint) / non validées & & 605 / 395 \\
+Suppléments émis, scellés, avec leur PDF & 1\,000 & 1\,000 \\
+Numéros de supplément en double & 0 & 0 \\
+Vérifications publiques acceptées / faux codes refusés & 50 / 50 & 50 / 50 \\
+Verrous restés pris en fin de test & 0 & 0 \\
+Anomalies relevées dans les pages (erreur, avertissement PHP, message d'erreur) & 0 & 0 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Les refus sont ceux du scénario : notes de 8 sur 20 (sous le seuil) pour un quart des inscrits
+aux EP notés, une décision négative sur dix ailleurs. Les 395 années non validées sont celles des
+étudiants dont les ECTS validés n'atteignent pas 6, à cause de ces refus : la validation en lot a
+validé les autres et marqué celles-là, sans en laisser aucune sans décision.
+
+\section{Défauts trouvés et corrigés}
+
+\subsection{Connexions refusées après un redémarrage de PHP-FPM}
+
+Au premier passage, \textbf{8 étudiants sur 1\,000} n'ont rien pu faire : leur connexion
+aboutissait à une erreur 500 de la page d'accueil de Moodle (\code{/my/}), toutes dans la même
+seconde, au tout début. Le second passage n'en a eu aucune. La différence : PHP-FPM venait d'être
+redémarré avant le premier.
+
+L'erreur, reproduite à volonté, est \og Unable to acquire a lock for caching\fg{}, levée par la
+fonction \code{build_course_cache()} de \code{course_modinfo}, c'est-à-dire par le c\oe ur de Moodle quand il
+reconstruit le cache des activités d'un cours. Le cache applicatif est dans APCu (recommandation
+du test de stress), qui vit dans la mémoire de PHP-FPM : un redémarrage, comme une purge des
+caches, le vide. APCu n'a pas de verrouillage natif ; Moodle~4.5 prend alors un verrou de fichier
+\emph{sans attendre} (la méthode \code{lock()} de \code{cachelock_file} est appelée sans
+blocage) : toute requête qui veut
+reconstruire le cache d'un cours pendant qu'une autre le fait échoue aussitôt, en 0,8~s. Le
+module n'y est pour rien (il ne fournit pas d'informations au cache des cours, dont la
+reconstruction prend 5 à 21~ms), mais la recommandation d'APCu l'expose.
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}X r@{}}
+\toprule
+\textbf{40 premières connexions simultanées} & \textbf{Échecs} \\
+\midrule
+Tout le cache applicatif dans APCu, après purge des caches (deux essais) & 12, 14 \\
+Idem, après un simple redémarrage de PHP-FPM (vague de 60 étudiants) & 14 sur 60 \\
+Idem, attente du verrou de fichier portée de 100 à 600 essais & 4 sur 60 \\
+\code{core/coursemodinfo} sur le magasin fichier, APCu pour le reste (trois essais) & 0, 0, 0 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Allonger l'attente ne change rien, puisque Moodle n'attend pas. Le remède est d'associer la seule
+définition \code{core/coursemodinfo} au magasin fichier par défaut, qui verrouille nativement et
+attend (\code{docs/audit/banc/muc_modinfo.php}). Le débit n'en souffre pas : sur un palier de
+100 utilisateurs du test de stress, 56,0 et 55,4 pages par seconde avec ce réglage, 50,7 sans
+(le premier essai sans ce réglage s'est d'ailleurs arrêté sur ce même échec de connexion).
+\code{INSTALL.md} le prescrit désormais avec APCu.
+
+\subsection{Entité HTML affichée en clair}
+
+Les captures du guide ont montré, sur la page des participants d'un EP noté, \og Seuil de
+validation\&nbsp;: 10 / 20\fg{} : le séparateur de libellé de la langue française
+(\code{&nbsp;:}) passait par \code{s()} et était échappé une seconde fois. Même défaut dans les
+dates de la feuille d'émargement et dans la colonne de résultat de la prévisualisation d'un
+import de notes. Ces trois libellés emploient désormais le séparateur en texte brut.
+
+\subsection{Titre en double}
+
+La page publique de vérification d'un supplément affichait son titre deux fois (titre de page de
+Moodle et titre du contenu). Le second est retiré.
+
+\section{Liaison avec « Gestion des stages »}
+
+Le scénario précédent laissait le barème du type stage à 0 : aucun EP de stage n'y était
+attribué. La liaison avec \code{mod_stage} a donc été vérifiée à part, par les pages des deux
+modules (\code{liaison_stage.py}), sur la même promotion : 300 stages préparés par les fonctions
+de \code{mod_stage} (200 complémentaires, dont un sur sept à l'étranger, 50 obligatoires,
+50 complémentaires laissés à valider).
+
+\paragraph{Ce que lit le module.} Quatre tables de \code{mod_stage} (saisies, détail de convention,
+enseignants référents, thématiques), en lecture seule ; aucun champ ne manque dans la version
+courante de \code{mod_stage}, et l'état « validé DEVE » y est bien l'état final d'un stage.
+
+\paragraph{Défaut trouvé.} Les EP de stage n'étaient recalculés qu'à l'ouverture de trois pages
+du module, au plus toutes les cinq minutes, et la nuit. Deux conséquences : un stage que la DEVE
+venait de valider dans « Gestion des stages » ne comptait pas si elle passait aussitôt à la
+\textbf{validation des années} (année refusée à tort) ou à l'\textbf{émission d'un supplément}
+(supplément certifié sans ce stage) ; et une durée retenue corrigée après validation restait
+fausse jusqu'à cinq minutes sur les autres pages. \code{mod_stage} ne déclenche pas d'événement
+pour une telle correction : écouter ses événements n'aurait pas suffi. Six tests unitaires
+reproduisaient le défaut.
+
+\paragraph{Correctif (1.0.5).} Une empreinte des stages complémentaires validés (nombre,
+identifiants, durées retenues, années, mobilité, dates de modification) et du barème est comparée
+à celle du dernier calcul ; le recalcul a lieu dès qu'elle change, à l'ouverture des pages qui
+décomptent, et la validation des années et l'émission d'un supplément l'attendent.
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}X l@{}}
+\toprule
+\textbf{Contrôle, après le correctif} & \textbf{Résultat} \\
+\midrule
+Barème de 0,5 ECTS par jour saisi dans le formulaire du type & conforme \\
+250 stages validés en masse dans la page DEVE de \code{mod_stage} & 0,5 s \\
+Premier tableau de bord ouvert : 200 crédits, $\text{durée} \times 0{,}5$ chacun & 0,29 s \\
+Stages obligatoires et non validés : aucun crédit & conforme \\
+20 durées revalidées (page DEVE) et 20 corrigées dans la saisie (sans événement) & suivies \\
+10 stages annulés, 10 repassés en obligatoire & crédits retirés \\
+Stage validé puis, aussitôt, décision d'année & le stage compte \\
+Stage validé puis, aussitôt, émission du supplément & le stage figure au PDF \\
+Référent changé dans \code{mod_stage} & la déclaration en attente passe au nouveau \\
+Tâche de la nuit ensuite & rien à recalculer \\
+Coût de l'empreinte / de la vérification à l'ouverture d'une page & 1,4 ms / 1,7 ms \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Ce que le test ne couvre pas}
+
+\begin{itemize}
+  \item Les propositions d'EP et les syllabus, les imports du catalogue et des crédits, la
+    rentrée et le transfert d'un étudiant, la restauration d'un export : ils ont leurs
+    procédures de bout en bout (rapport \emph{Test de charge}) et leurs tests unitaires.
+  \item L'envoi réel des courriels : les messages sont produits, le banc ne les expédie pas.
+  \item Les navigateurs eux-mêmes (JavaScript, rendu) : les captures du guide utilisateur, prises
+    avec Chromium sur cette promotion après le test, en tiennent lieu pour l'affichage.
+\end{itemize}
+
+\section{Reproduire}
+
+{\small
+\begin{verbatim}
+cd docs/audit/banc
+VIERGE=1 PERSONNEL=a sudo -E -u www-data php charge_setup.php x 1000 150 60 0
+sudo -u www-data php synthese_setup.php site-x.json      # affiche le cmid de la synthèse
+python3 interactions.py site-x.json <cmid> > interactions.json
+\end{verbatim}
+}
+
+Le résumé est écrit sur la sortie d'erreur, le détail (durées, anomalies, contrôles) en JSON sur
+la sortie standard. Les variables \code{PHASES}, \code{DEBUT}, \code{LIMITE} et \code{REFERENTS}
+rejouent une partie du scénario : c'est ainsi qu'une seconde vague d'étudiants, laissée en
+attente, a servi aux captures du guide utilisateur.
+
+\end{document}

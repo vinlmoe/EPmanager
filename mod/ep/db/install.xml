@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/ep/db" VERSION="20260905" COMMENT="XMLDB file for module mod_ep"
+<XMLDB PATH="mod/ep/db" VERSION="20261128" COMMENT="XMLDB file for module mod_ep"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
@@ -17,8 +17,24 @@
             COMMENT="Minimum d'ECTS d'enseignement personnalisé à valider sur l'ensemble du cursus (0 = aucune obligation), en plus des minimums annuels (voir ep_year_requirement)"/>
         <FIELD NAME="stagecmid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="Course-module de l'activité « Gestion des stages » d'où proviennent les EP de type stage (0 = toutes celles du même cours)"/>
+        <FIELD NAME="proposalsdirectpublish" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="1 : la mise à jour du syllabus d'un EP publié, soumise par son responsable, est publiée sans attendre la DEVE"/>
+        <FIELD NAME="supplementflow" TYPE="char" LENGTH="50" NOTNULL="true" DEFAULT="deve" SEQUENCE="false"
+            COMMENT="Circuit de validation des éléments que l'étudiant demande à ajouter à son supplément (vide, referent, deve, referent,deve)"/>
+        <FIELD NAME="supplementevidence" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="2" SEQUENCE="false"
+            COMMENT="Preuves des éléments ajoutés : 0 sans objet, 1 facultatives, 2 obligatoires (PDF)"/>
+        <FIELD NAME="supplementprefix" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false"
+            COMMENT="Préfixe des numéros des suppléments émis (SD par défaut)"/>
+        <FIELD NAME="birthdatefield" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false"
+            COMMENT="Nom court du champ de profil personnalisé qui porte la date de naissance (rubrique 1.3)"/>
+        <FIELD NAME="pdfheader" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="En-tête des documents PDF de l'activité"/>
+        <FIELD NAME="pdffooter" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Pied de page des documents PDF de l'activité"/>
         <FIELD NAME="timesynced" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="Dernière synchronisation des EP de type stage depuis mod_stage (voir ep_sync_stage_credits_if_due())"/>
+        <FIELD NAME="stagesyncsig" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false"
+            COMMENT="Empreinte des stages et du barème lors de cette synchronisation (voir ep_stage_sync_signature())"/>
+        <FIELD NAME="registrationstart" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Début des inscriptions aux EP du catalogue, fixé par la DEVE (0 : sans limite) ; un EP peut avoir sa propre période"/>
+        <FIELD NAME="registrationend" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Fin des inscriptions aux EP du catalogue (0 : sans limite)"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
       </FIELDS>
@@ -28,21 +44,36 @@
       </KEYS>
     </TABLE>
 
-    <TABLE NAME="ep_type" COMMENT="Type d'enseignement personnalisé (académique interne, stage, engagement étudiant, expérience professionnelle, sport, académique externe) et les règles d'attribution d'ECTS qui lui sont propres. Les six types sont créés avec l'instance (voir ep_create_default_types()) puis paramétrés par la DEVE.">
+    <TABLE NAME="ep_type" COMMENT="Type d'enseignement personnalisé et les règles qui lui sont propres : mode d'acquisition, circuit de validation, notation, justificatifs, plafonds d'ECTS. Six types sont créés avec l'instance (voir ep_create_default_types()) ; la DEVE les paramètre, en ajoute et en supprime.">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="epid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="code" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false"
-            COMMENT="Identifiant stable du type : academic, stage, engagement, professional, sport, external"/>
+            COMMENT="Code court du type, unique dans l'instance, utilisé dans les imports et les exports (academic, stage, engagement... pour les types par défaut)"/>
         <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"
             COMMENT="Libellé affiché, modifiable par la DEVE (le libellé par défaut vient de la langue)"/>
         <FIELD NAME="description" TYPE="text" NOTNULL="false" SEQUENCE="false"
             COMMENT="Consigne affichée à l'étudiant lorsqu'il déclare un EP de ce type"/>
         <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"/>
-        <FIELD NAME="catalog" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
-            COMMENT="Les EP de ce type se prennent par inscription à un EP du catalogue interne (ep_activity), qui porte son propre nombre d'ECTS, et sont validés par le responsable de cet EP"/>
-        <FIELD NAME="autovalidate" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
-            COMMENT="Les ECTS de ce type sont attribués automatiquement, sans vérification d'un enseignant (cas du type stage, alimenté par les stages complémentaires déjà validés par la DEVE)"/>
+        <FIELD NAME="acquisition" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="declaration" SEQUENCE="false"
+            COMMENT="Comment un crédit de ce type arrive : catalog (inscription à un EP du catalogue), declaration (déclaré par l'étudiant avec justificatifs), stage (attribué automatiquement d'après les stages complémentaires validés dans mod_stage), deve (saisi par la DEVE ou importé)"/>
+        <FIELD NAME="validationflow" TYPE="char" LENGTH="50" NOTNULL="true" SEQUENCE="false"
+            COMMENT="Étapes de validation, dans l'ordre, séparées par des virgules, parmi owner (responsable de l'EP du catalogue), referent (enseignant référent de l'étudiant) et deve ; vide = validé d'office à la demande"/>
+        <FIELD NAME="grading" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="none" SEQUENCE="false"
+            COMMENT="none : validé ou non validé par le validateur ; grade : une note décide, selon grademax et gradepass"/>
+        <FIELD NAME="grademax" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="20" SEQUENCE="false"/>
+        <FIELD NAME="gradepass" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="10" SEQUENCE="false"
+            COMMENT="Note à partir de laquelle le crédit est validé"/>
+        <FIELD NAME="evidence" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"
+            COMMENT="Justificatifs : 0 sans objet, 1 facultatifs, 2 obligatoires (au moins un fichier)"/>
+        <FIELD NAME="evidencetypes" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="documents" SEQUENCE="false"
+            COMMENT="Formats admis : pdf (PDF seul) ou documents (documents, images, archives)"/>
+        <FIELD NAME="maxclaimedects" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Types déclarés : nombre maximal d'ECTS qu'un étudiant peut demander pour un EP (0 = sans limite)"/>
+        <FIELD NAME="stagescope" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="all" SEQUENCE="false"
+            COMMENT="Types stage : stages pris en compte, all, abroad (à l'étranger) ou domestic (en France) ; un stage va au premier type dont la portée le couvre"/>
+        <FIELD NAME="insupplement" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"
+            COMMENT="Les crédits validés de ce type figurent au supplément au diplôme (rubrique 4.3)"/>
         <FIELD NAME="maxects" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="Maximum d'ECTS retenus pour ce type sur l'ensemble du cursus (0 = pas de plafond) : au-delà, les ECTS validés restent acquis mais ne sont plus comptés"/>
         <FIELD NAME="maxectsperyear" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
@@ -76,9 +107,32 @@
         <FIELD NAME="maxstudyyear" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="capacity" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="Nombre de places (0 = illimité) : les inscriptions en attente comptent, pour ne pas ouvrir plus de places que ce que le responsable pourra valider"/>
-        <FIELD NAME="visible" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"
-            COMMENT="Proposé au catalogue : un EP masqué n'accepte plus de nouvelle inscription mais conserve celles déjà prises"/>
+        <FIELD NAME="code" TYPE="char" LENGTH="30" NOTNULL="true" SEQUENCE="false"
+            COMMENT="Code de l'EP, unique dans l'instance s'il est renseigné : identifie l'EP dans les imports et les exports"/>
+        <FIELD NAME="state" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="published" SEQUENCE="false"
+            COMMENT="draft (brouillon d'une proposition), proposed (soumis à la DEVE), published (au catalogue, inscriptions ouvertes selon la période), closed (au catalogue, inscriptions closes), archived (retiré du catalogue, inscriptions conservées)"/>
+        <FIELD NAME="registrationstart" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Ouverture des inscriptions (0 = dès la publication)"/>
+        <FIELD NAME="registrationend" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Fermeture des inscriptions (0 = jusqu'à la clôture de l'EP)"/>
+        <FIELD NAME="datestart" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Début du déroulement de l'EP (information)"/>
+        <FIELD NAME="dateend" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Fin du déroulement de l'EP (information)"/>
+        <FIELD NAME="grading" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false"
+            COMMENT="Évaluation propre à l'EP : vide = celle de son type, none = sans note, grade = avec note (grademax, gradepass)"/>
+        <FIELD NAME="grademax" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="20" SEQUENCE="false"/>
+        <FIELD NAME="gradepass" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="10" SEQUENCE="false"/>
+        <FIELD NAME="minects" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Prérequis : ECTS d'EP déjà retenus au moment de l'inscription (0 = aucun)"/>
+        <FIELD NAME="proposedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"
+            COMMENT="Enseignant qui a proposé l'EP (vide pour un EP créé par la DEVE)"/>
+        <FIELD NAME="timepublished" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Publication au catalogue d'un EP proposé"/>
+        <FIELD NAME="prereqblocking" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"
+            COMMENT="1 : un prérequis manquant empêche l'inscription ; 0 : il est seulement signalé à l'étudiant et au responsable"/>
         <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="syllabuscmid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Activité « Syllabus du module » (mod_syllabus) qui porte la fiche de l'EP"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
       </FIELDS>
@@ -86,7 +140,29 @@
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
         <KEY NAME="epid" TYPE="foreign" FIELDS="epid" REFTABLE="ep" REFFIELDS="id"/>
         <KEY NAME="typeid" TYPE="foreign" FIELDS="typeid" REFTABLE="ep_type" REFFIELDS="id"/>
+        <KEY NAME="proposedby" TYPE="foreign" FIELDS="proposedby" REFTABLE="user" REFFIELDS="id"/>
       </KEYS>
+      <INDEXES>
+        <INDEX NAME="epid-state" UNIQUE="false" FIELDS="epid, state"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="ep_activity_prereq" COMMENT="EP du catalogue à avoir validé avant de s'inscrire à un autre EP du catalogue">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="activityid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="requiredid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"
+            COMMENT="EP du catalogue de la même instance dont une inscription validée est exigée"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="activityid" TYPE="foreign" FIELDS="activityid" REFTABLE="ep_activity" REFFIELDS="id"/>
+        <KEY NAME="requiredid" TYPE="foreign" FIELDS="requiredid" REFTABLE="ep_activity" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="activityid-requiredid" UNIQUE="true" FIELDS="activityid, requiredid"/>
+      </INDEXES>
     </TABLE>
 
     <TABLE NAME="ep_activity_teacher" COMMENT="Responsable d'un EP du catalogue : valide les inscriptions des étudiants à cet EP et à lui seul">
@@ -126,12 +202,20 @@
             COMMENT="ECTS retenus après validation, avant application des plafonds par type (voir ep_get_student_progress())"/>
         <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="-2 annulé, -1 refusé, 0 en attente de validation, 1 validé"/>
+        <FIELD NAME="step" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Étape courante du circuit de validation du type (0 = première), tant que le crédit est en attente"/>
+        <FIELD NAME="pendingrole" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false"
+            COMMENT="Rôle attendu à l'étape courante (owner, referent, deve), vide une fois le crédit tranché"/>
+        <FIELD NAME="grade" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="false" SEQUENCE="false"
+            COMMENT="Note obtenue, pour un type ou un EP noté"/>
         <FIELD NAME="source" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="student" SEQUENCE="false"
             COMMENT="Origine du crédit : student (inscription ou déclaration de l'étudiant), stage (attribution automatique depuis mod_stage), deve (saisi par la DEVE)"/>
         <FIELD NAME="sourceref" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
             COMMENT="Identifiant de l'objet d'origine pour les attributions automatiques : id de la saisie mod_stage pour source = stage"/>
         <FIELD NAME="validatedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"
             COMMENT="Utilisateur ayant validé ou refusé (vide pour une attribution automatique)"/>
+        <FIELD NAME="addedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"
+            COMMENT="Responsable de l'EP ou DEVE ayant inscrit l'étudiant depuis la liste des participants (vide si l'étudiant s'est inscrit lui-même)"/>
         <FIELD NAME="validatetime" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="validatorcomment" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
@@ -144,12 +228,41 @@
         <KEY NAME="typeid" TYPE="foreign" FIELDS="typeid" REFTABLE="ep_type" REFFIELDS="id"/>
         <KEY NAME="activityid" TYPE="foreign" FIELDS="activityid" REFTABLE="ep_activity" REFFIELDS="id"/>
         <KEY NAME="validatedby" TYPE="foreign" FIELDS="validatedby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="addedby" TYPE="foreign" FIELDS="addedby" REFTABLE="user" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
         <INDEX NAME="epid-userid" UNIQUE="false" FIELDS="epid, userid"/>
         <INDEX NAME="status" UNIQUE="false" FIELDS="status"/>
         <INDEX NAME="epid-source-sourceref" UNIQUE="false" FIELDS="epid, source, sourceref"/>
+        <INDEX NAME="epid-status" UNIQUE="false" FIELDS="epid, status"/>
+        <INDEX NAME="epid-activityid-status" UNIQUE="false" FIELDS="epid, activityid, status" COMMENT="Places prises et états par EP du catalogue, lus sur l'index seul"/>
+        <INDEX NAME="epid-status-timecreated" UNIQUE="false" FIELDS="epid, status, timecreated" COMMENT="Files d'attente paginées par date sans tri de toute la file"/>
+        <INDEX NAME="activityid-status" UNIQUE="false" FIELDS="activityid, status"/>
+        <INDEX NAME="userid" UNIQUE="false" FIELDS="userid"/>
+        <INDEX NAME="epid-pendingrole" UNIQUE="false" FIELDS="epid, pendingrole"/>
       </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="ep_credit_decision" COMMENT="Historique des décisions prises sur un crédit, une ligne par étape du circuit de validation (validation, refus, retrait), pour la traçabilité et les circuits à plusieurs étapes">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="creditid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="step" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="role" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false"
+            COMMENT="owner, referent, deve ou student (retrait par l'étudiant)"/>
+        <FIELD NAME="decision" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false"
+            COMMENT="validated, rejected ou cancelled"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="grade" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="retainedects" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="comment" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="creditid" TYPE="foreign" FIELDS="creditid" REFTABLE="ep_credit" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
     </TABLE>
 
     <TABLE NAME="ep_year_requirement" COMMENT="Minimum d'ECTS d'enseignement personnalisé à valider pour une année d'étude, tous types confondus">
@@ -168,6 +281,218 @@
       <INDEXES>
         <INDEX NAME="epid-studyyear" UNIQUE="true" FIELDS="epid, studyyear"/>
       </INDEXES>
+    </TABLE>
+    <TABLE NAME="ep_syllabus" COMMENT="Fiche descriptive (syllabus) d'un EP du catalogue, une ligne par version : la version publiée est celle du catalogue ; une version en brouillon ou soumise attend la DEVE (proposition d'un nouvel EP ou mise à jour d'un EP publié)">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="activityid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="version" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="draft" SEQUENCE="false"
+            COMMENT="draft (en rédaction), submitted (soumise à la DEVE), returned (renvoyée à son auteur avec un commentaire), published (version en vigueur), superseded (remplacée par une version publiée plus récente), rejected (proposition refusée)"/>
+        <FIELD NAME="objectives" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Objectifs de l'EP"/>
+        <FIELD NAME="outcomes" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Acquis d'apprentissage visés"/>
+        <FIELD NAME="prerequisitestext" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Prérequis, en clair"/>
+        <FIELD NAME="content" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Contenu de l'EP"/>
+        <FIELD NAME="methods" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Méthodes d'enseignement et activités d'apprentissage"/>
+        <FIELD NAME="assessment" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Conditions d'examen : modalités et critères d'évaluation, seuil"/>
+        <FIELD NAME="resit" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Seconde session, rattrapage"/>
+        <FIELD NAME="bibliography" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Lectures et ressources recommandées"/>
+        <FIELD NAME="language" TYPE="char" LENGTH="50" NOTNULL="true" SEQUENCE="false" COMMENT="Langue d'enseignement"/>
+        <FIELD NAME="personalhours" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="Heures de travail personnel de l'étudiant, en plus des séances"/>
+        <FIELD NAME="authorid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Auteur de cette version"/>
+        <FIELD NAME="reviewerid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Membre de la DEVE qui a statué"/>
+        <FIELD NAME="reviewcomment" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timesubmitted" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timereviewed" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="activityid" TYPE="foreign" FIELDS="activityid" REFTABLE="ep_activity" REFFIELDS="id"/>
+        <KEY NAME="authorid" TYPE="foreign" FIELDS="authorid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="reviewerid" TYPE="foreign" FIELDS="reviewerid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="activityid-status" UNIQUE="false" FIELDS="activityid, status"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="ep_session" COMMENT="Séance du programme d'un EP, rattachée à une version de son syllabus : intitulé, nature, durée, intervenant">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="syllabusid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="title" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="kind" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="lecture" SEQUENCE="false"
+            COMMENT="lecture (cours magistral), tutorial (travaux dirigés), practical (travaux pratiques), clinical (clinique), fieldwork (terrain), project (projet), other"/>
+        <FIELD NAME="duration" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Durée en heures"/>
+        <FIELD NAME="teacherid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Intervenant, s'il a un compte"/>
+        <FIELD NAME="teachername" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Intervenant sans compte (extérieur)"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="syllabusid" TYPE="foreign" FIELDS="syllabusid" REFTABLE="ep_syllabus" REFFIELDS="id"/>
+        <KEY NAME="teacherid" TYPE="foreign" FIELDS="teacherid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+    </TABLE>
+
+    <TABLE NAME="ep_notification" COMMENT="Modèle de courriel personnalisé par la DEVE pour un événement du module ; sans ligne, le texte par défaut de la langue s'applique">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="epid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="msgkey" TYPE="char" LENGTH="30" NOTNULL="true" SEQUENCE="false"
+            COMMENT="creditdecided, proposalsubmitted, proposalreviewed, pendingreminder, supplementissued"/>
+        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"/>
+        <FIELD NAME="subject" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="body" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="epid" TYPE="foreign" FIELDS="epid" REFTABLE="ep" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="epid-msgkey" UNIQUE="true" FIELDS="epid, msgkey"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="ep_year_validation" COMMENT="Décision de la DEVE sur l'année d'étude d'un étudiant, au regard de ses minimums d'ECTS d'enseignement personnalisé">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="epid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="studyyear" TYPE="int" LENGTH="2" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="decision" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="1 année validée, 0 année non validée"/>
+        <FIELD NAME="retainedects" TYPE="number" LENGTH="10" DECIMALS="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"
+            COMMENT="ECTS retenus pour l'année au moment de la décision"/>
+        <FIELD NAME="comment" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="decidedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timedecided" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="epid" TYPE="foreign" FIELDS="epid" REFTABLE="ep" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="decidedby" TYPE="foreign" FIELDS="decidedby" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="epid-userid-studyyear" UNIQUE="true" FIELDS="epid, userid, studyyear"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="ep_supplement_category" COMMENT="Catégorie d'éléments qu'un étudiant peut demander à faire figurer au supplément au diplôme (rubrique 6.1) : engagement, distinction, certification...">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="epid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="nameen" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Libellé anglais, pour un supplément édité en anglais"/>
+        <FIELD NAME="description" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Consigne affichée à l'étudiant"/>
+        <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false"/>
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="epid" TYPE="foreign" FIELDS="epid" REFTABLE="ep" REFFIELDS="id"/>
+      </KEYS>
+    </TABLE>
+
+    <TABLE NAME="ep_supplement_item" COMMENT="Élément qu'un étudiant demande à faire figurer au supplément au diplôme, avec ses preuves (zone de fichiers supplementevidence, itemid = id) ; validé selon le circuit choisi par la DEVE">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="epid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="categoryid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="title" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="titleen" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="description" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="periodstart" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="periodend" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="-2 retiré, -1 refusé, 0 en attente, 1 validé"/>
+        <FIELD NAME="step" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="pendingrole" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="validatedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="validatetime" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="validatorcomment" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="epid" TYPE="foreign" FIELDS="epid" REFTABLE="ep" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="categoryid" TYPE="foreign" FIELDS="categoryid" REFTABLE="ep_supplement_category" REFFIELDS="id"/>
+        <KEY NAME="validatedby" TYPE="foreign" FIELDS="validatedby" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="epid-userid" UNIQUE="false" FIELDS="epid, userid"/>
+        <INDEX NAME="epid-status" UNIQUE="false" FIELDS="epid, status"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="ep_supplement_text" COMMENT="Texte d'établissement d'une rubrique fixe du supplément au diplôme (rubriques 2 à 5, 6.2, 7, 8), par langue">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="epid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="section" TYPE="char" LENGTH="30" NOTNULL="true" SEQUENCE="false" COMMENT="Clé de la rubrique (voir ep_supplement_sections())"/>
+        <FIELD NAME="lang" TYPE="char" LENGTH="5" NOTNULL="true" DEFAULT="fr" SEQUENCE="false"/>
+        <FIELD NAME="content" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="epid" TYPE="foreign" FIELDS="epid" REFTABLE="ep" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="epid-section-lang" UNIQUE="true" FIELDS="epid, section, lang"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="ep_supplement_issue" COMMENT="Supplément au diplôme émis par la DEVE pour un étudiant : numéro, empreinte, fichier PDF conservé (zone supplementissued, itemid = id)">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="epid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="number" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false" COMMENT="Numéro unique, imprimé sur le document"/>
+        <FIELD NAME="lang" TYPE="char" LENGTH="5" NOTNULL="true" DEFAULT="fr" SEQUENCE="false"/>
+        <FIELD NAME="verifycode" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"
+            COMMENT="Empreinte SHA-256 du contenu certifié (données du supplément, numéro, date) : imprimée sur le document, elle permet de vérifier qu'il n'a pas été altéré"/>
+        <FIELD NAME="filehash" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false" COMMENT="Empreinte du fichier PDF conservé"/>
+        <FIELD NAME="seal" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false"
+            COMMENT="Sceau HMAC du site sur l'émission (voir ep_supplement_seal()) : seule une émission scellée par ce site est reconnue par la vérification ; vide pour une copie restaurée ou importée"/>
+        <FIELD NAME="issuedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timeissued" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="replacedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Émission qui remplace celle-ci"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="epid" TYPE="foreign" FIELDS="epid" REFTABLE="ep" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="issuedby" TYPE="foreign" FIELDS="issuedby" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="number" UNIQUE="true" FIELDS="number"/>
+        <INDEX NAME="epid-userid" UNIQUE="false" FIELDS="epid, userid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="ep_import_log" COMMENT="Journal des imports d'une activité : catalogue, séances, crédits, paramétrage, restauration d'une archive">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="epid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="kind" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" COMMENT="catalog, sessions, credits, settings ou archive"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Auteur de l'import"/>
+        <FIELD NAME="itemcount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Lignes ou éléments traités"/>
+        <FIELD NAME="summary" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Compte rendu (JSON)"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="epid" TYPE="foreign" FIELDS="epid" REFTABLE="ep" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
     </TABLE>
   </TABLES>
 </XMLDB>

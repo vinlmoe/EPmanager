@@ -62,6 +62,7 @@ if (optional_param('save', 0, PARAM_INT) && confirm_sesskey()) {
 
 $requirements = ep_get_year_requirements($ep->id);
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('manageyearrequirements', 'mod_ep'));
 echo html_writer::link(new moodle_url('/mod/ep/administration.php', ['id' => $cm->id]), get_string('back'));

@@ -47,6 +47,24 @@ $PAGE->set_title(format_string($ep->name) . ' - ' . get_string('managecatalog', 
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
+// Période d'inscription commune aux EP du catalogue, fixée par la DEVE. Un EP qui a sa propre
+// période la garde, sauf si la DEVE choisit de l'aligner.
+if ($action === 'savewindow' && confirm_sesskey()) {
+    $parse = static function (string $value): int {
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/', $value, $m)) {
+            return 0;
+        }
+        return make_timestamp((int) $m[1], (int) $m[2], (int) $m[3], (int) $m[4], (int) $m[5]);
+    };
+    $start = $parse(optional_param('regstart', '', PARAM_RAW_TRIMMED));
+    $end = $parse(optional_param('regend', '', PARAM_RAW_TRIMMED));
+    if ($start && $end && $end <= $start) {
+        redirect($baseurl, get_string('errorregistrationrange', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+    }
+    ep_set_registration_window($ep, $start, $end, optional_param('resetown', 0, PARAM_BOOL));
+    redirect($baseurl, get_string('registrationwindowsaved', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
+}
+
 // Seuls les types non automatiques peuvent porter un EP du catalogue (voir
 // ep_get_catalogable_types()). Les libellés de tous les types restent chargés à part, pour
 // afficher correctement la ligne d'un EP créé sur un type depuis désactivé.
@@ -54,34 +72,60 @@ $types = ep_get_catalogable_types($ep->id);
 $alltypes = ep_get_types($ep->id);
 
 // Suppression : refusée dès qu'un étudiant s'y est inscrit, sinon les crédits déjà accordés
-// perdraient l'EP auquel ils se rattachent. Fermer l'EP aux inscriptions (visible = 0) est ce
+// perdraient l'EP auquel ils se rattachent. Clore ou archiver l'EP est ce
 // qu'il faut faire dans ce cas.
 if ($action === 'delete' && $activityid) {
-    require_sesskey();
     $activity = $DB->get_record('ep_activity', ['id' => $activityid, 'epid' => $ep->id], '*', MUST_EXIST);
     if ($DB->record_exists('ep_credit', ['activityid' => $activity->id])) {
-        redirect($baseurl, get_string('erroractivityinuse', 'mod_ep'), null,
-            \core\output\notification::NOTIFY_ERROR);
+        redirect(
+            $baseurl,
+            get_string('erroractivityinuse', 'mod_ep'),
+            null,
+            \core\output\notification::NOTIFY_ERROR
+        );
     }
-    $DB->delete_records('ep_activity_teacher', ['activityid' => $activity->id]);
-    $DB->delete_records('ep_activity', ['id' => $activity->id]);
-    redirect($baseurl, get_string('activitydeleted', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
+    if (optional_param('confirm', 0, PARAM_BOOL) && confirm_sesskey()) {
+        if (!ep_delete_activity($ep, $activity)) {
+            redirect($baseurl, get_string('erroractivityinuse', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+        }
+        redirect($baseurl, get_string('activitydeleted', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
+    }
+    // Suppression définitive : une page de confirmation, comme pour les types.
+    $confirmurl = new moodle_url($baseurl, [
+        'action' => 'delete', 'activityid' => $activity->id, 'confirm' => 1, 'sesskey' => sesskey(),
+    ]);
+    ep_set_secondary_page_header();
+    echo $OUTPUT->header();
+    echo $OUTPUT->heading(get_string('managecatalog', 'mod_ep'));
+    echo $OUTPUT->confirm(
+        get_string('confirmdeleteactivity', 'mod_ep', format_string($activity->name)),
+        new single_button($confirmurl, get_string('delete'), 'post', single_button::BUTTON_DANGER),
+        $baseurl
+    );
+    echo $OUTPUT->footer();
+    exit;
 }
 
-// Bascule rapide ouvert / fermé aux inscriptions.
-if ($action === 'togglevisible' && $activityid) {
+// Changement d'état rapide depuis la liste : publier, clore, archiver.
+if ($action === 'setstate' && $activityid) {
     require_sesskey();
     $activity = $DB->get_record('ep_activity', ['id' => $activityid, 'epid' => $ep->id], '*', MUST_EXIST);
-    $activity->visible = $activity->visible ? 0 : 1;
-    $activity->timemodified = time();
-    $DB->update_record('ep_activity', $activity);
+    $state = required_param('state', PARAM_ALPHA);
+    if (array_key_exists($state, ep_activity_state_options())) {
+        $DB->set_field('ep_activity', 'state', $state, ['id' => $activity->id]);
+        $DB->set_field('ep_activity', 'timemodified', time(), ['id' => $activity->id]);
+    }
     redirect($baseurl);
 }
 
 if ($action === 'edit') {
     if (empty($types)) {
-        redirect(new moodle_url('/mod/ep/types.php', ['id' => $cm->id]),
-            get_string('errornotypes', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+        redirect(
+            new moodle_url('/mod/ep/types.php', ['id' => $cm->id]),
+            get_string('errornotypes', 'mod_ep'),
+            null,
+            \core\output\notification::NOTIFY_ERROR
+        );
     }
 
     $formurl = new moodle_url($baseurl, ['action' => 'edit', 'activityid' => $activityid]);
@@ -95,7 +139,8 @@ if ($action === 'edit') {
         }
     }
 
-    $mform = new activity_form($formurl, ['types' => $types]);
+    $others = array_filter(ep_get_activities($ep->id), fn($other) => (int) $other->id !== (int) $activityid);
+    $mform = new activity_form($formurl, ['types' => $types, 'otheractivities' => $others, 'epid' => $ep->id]);
 
     if ($activity) {
         $mform->set_data([
@@ -109,10 +154,22 @@ if ($action === 'edit') {
             'maxstudyyear' => $activity->maxstudyyear,
             'capacity' => $activity->capacity,
             'sortorder' => $activity->sortorder,
-            'visible' => $activity->visible,
+            'code' => $activity->code,
+            'state' => $activity->state,
+            'registrationstart' => $activity->registrationstart,
+            'registrationend' => $activity->registrationend,
+            'datestart' => $activity->datestart,
+            'dateend' => $activity->dateend,
+            'grading' => $activity->grading,
+            'grademax' => ep_format_ects_input($activity->grademax),
+            'gradepass' => ep_format_ects_input($activity->gradepass),
+            'prerequisites' => ep_get_activity_prerequisites($activity->id),
+            'minects' => ep_format_ects_input($activity->minects),
+            'prereqblocking' => $activity->prereqblocking,
         ]);
     } else {
-        $defaulttype = ep_get_type_by_code($ep->id, EP_TYPE_ACADEMIC);
+        // Premier type qui s'acquiert par le catalogue, dans l'ordre choisi par la DEVE.
+        $defaulttype = reset($types) ?: null;
         $mform->set_data([
             'id' => $cm->id,
             'activityid' => 0,
@@ -127,35 +184,23 @@ if ($action === 'edit') {
             throw new moodle_exception('errorinvalidtype', 'mod_ep', $baseurl->out(false));
         }
 
-        $record = new stdClass();
-        $record->epid = $ep->id;
-        $record->typeid = (int) $data->typeid;
-        $record->name = $data->name;
-        $record->description = $data->description;
-        $record->ects = round((float) $data->ects, 2);
-        $record->minstudyyear = (int) $data->minstudyyear;
-        $record->maxstudyyear = (int) $data->maxstudyyear;
-        $record->capacity = max(0, (int) $data->capacity);
-        $record->sortorder = (int) $data->sortorder;
-        $record->visible = !empty($data->visible) ? 1 : 0;
-        $record->timemodified = time();
-
-        if (!empty($data->activityid)) {
-            $record->id = $data->activityid;
-            $DB->update_record('ep_activity', $record);
-            $savedid = $record->id;
-        } else {
-            $record->timecreated = time();
-            $savedid = $DB->insert_record('ep_activity', $record);
-        }
+        $record = clone $data;
+        $record->id = (int) $data->activityid;
+        $record->prerequisites = $data->prerequisites ?? [];
+        $savedid = ep_save_activity($ep, $record);
 
         // Un EP du catalogue sans responsable n'a personne pour valider ses inscriptions :
         // l'écran d'affectation suit immédiatement la création, plutôt que d'attendre que
         // quelqu'un s'aperçoive que des demandes stagnent.
-        redirect(new moodle_url('/mod/ep/activity_teachers.php', ['id' => $cm->id, 'activityid' => $savedid]),
-            get_string('activitysaved', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
+        redirect(
+            new moodle_url('/mod/ep/activity_teachers.php', ['id' => $cm->id, 'activityid' => $savedid]),
+            get_string('activitysaved', 'mod_ep'),
+            null,
+            \core\output\notification::NOTIFY_SUCCESS
+        );
     }
 
+    ep_set_secondary_page_header();
     echo $OUTPUT->header();
     echo $OUTPUT->heading(get_string('managecatalog', 'mod_ep'));
     $mform->display();
@@ -163,13 +208,51 @@ if ($action === 'edit') {
     exit;
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('managecatalog', 'mod_ep'));
 echo html_writer::link(new moodle_url('/mod/ep/administration.php', ['id' => $cm->id]), get_string('back'));
-echo html_writer::link(new moodle_url($baseurl, ['action' => 'edit']), get_string('addactivity', 'mod_ep'),
-    ['class' => 'btn btn-primary d-block mt-2 mb-3', 'style' => 'width:fit-content']);
+
+// Période d'inscription du catalogue.
+$fmt = static fn(int $t): string => $t ? userdate($t, '%Y-%m-%dT%H:%M', 99, false) : '';
+$ownwindows = $DB->count_records_select(
+    'ep_activity',
+    'epid = ? AND (registrationstart > 0 OR registrationend > 0)',
+    [$ep->id]
+);
+$windowform = html_writer::tag('h3', get_string('registrationwindow', 'mod_ep') . ' '
+    . $OUTPUT->help_icon('registrationwindow', 'mod_ep'), ['class' => 'h5']);
+$windowform .= html_writer::start_tag('form', ['method' => 'post', 'action' => $baseurl->out(false),
+    'class' => 'd-flex flex-wrap align-items-end gap-2']);
+$windowform .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+$windowform .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'action', 'value' => 'savewindow']);
+foreach (['regstart' => [(int) $ep->registrationstart, 'from'], 'regend' => [(int) $ep->registrationend, 'to']] as $name => $def) {
+    $windowform .= html_writer::label(get_string($def[1]), 'id_' . $name, true, ['class' => 'me-1 mb-0'])
+        . html_writer::empty_tag('input', ['type' => 'datetime-local', 'name' => $name, 'id' => 'id_' . $name,
+            'value' => $fmt($def[0]), 'class' => 'form-control w-auto me-2']);
+}
+if ($ownwindows) {
+    $windowform .= html_writer::div(html_writer::checkbox(
+        'resetown',
+        1,
+        false,
+        get_string('registrationwindowreset', 'mod_ep', $ownwindows)
+    ), 'me-2');
+}
+$windowform .= html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('savechanges'),
+    'class' => 'btn btn-secondary']);
+$windowform .= html_writer::end_tag('form');
+echo $OUTPUT->box($windowform, 'generalbox mt-2 mb-2');
+
+echo html_writer::link(
+    new moodle_url($baseurl, ['action' => 'edit']),
+    get_string('addactivity', 'mod_ep'),
+    ['class' => 'btn btn-primary d-block mt-2 mb-3', 'style' => 'width:fit-content']
+);
 
 $activities = ep_get_activities($ep->id);
+$takenplaces = ep_get_activities_taken_places($ep->id);
+$allteachers = ep_get_activities_teachers($ep->id);
 
 if (empty($activities)) {
     echo $OUTPUT->notification(get_string('nocatalogactivities', 'mod_ep'), 'info');
@@ -186,40 +269,68 @@ $table->head = [
     get_string('places', 'mod_ep'),
     get_string('registrations', 'mod_ep'),
     get_string('activityteachers', 'mod_ep'),
-    get_string('openforregistration', 'mod_ep'),
+    get_string('activitystate', 'mod_ep'),
     get_string('actions', 'mod_ep'),
 ];
 
 foreach ($activities as $activity) {
     $type = $alltypes[$activity->typeid] ?? null;
-    $remaining = ep_get_activity_remaining_places($activity);
+    $taken = $takenplaces[$activity->id] ?? 0;
+    $remaining = empty($activity->capacity) ? null : max(0, (int) $activity->capacity - $taken);
 
-    $togglevisibleurl = new moodle_url($baseurl,
-        ['action' => 'togglevisible', 'activityid' => $activity->id, 'sesskey' => sesskey()]);
-    $visible = html_writer::link($togglevisibleurl,
-        $activity->visible ? get_string('yes') : get_string('no'),
-        ['class' => $activity->visible ? 'badge badge-success' : 'badge badge-secondary']);
+    // État, et les passages utiles depuis la liste : publier un EP clos ou archivé, clore un EP
+    // publié, archiver un EP clos.
+    $statecell = html_writer::span(
+        ep_activity_state_options()[$activity->state] ?? s($activity->state),
+        $activity->state === EP_ACTIVITY_PUBLISHED ? 'badge badge-success' : 'badge badge-secondary'
+    );
+    $period = ep_activity_registration_label($activity);
+    if ($period !== '') {
+        $statecell .= html_writer::div($period, 'text-muted small');
+    }
+    $transitions = [
+        EP_ACTIVITY_PUBLISHED => [EP_ACTIVITY_CLOSED],
+        EP_ACTIVITY_CLOSED => [EP_ACTIVITY_PUBLISHED, EP_ACTIVITY_ARCHIVED],
+        EP_ACTIVITY_ARCHIVED => [EP_ACTIVITY_PUBLISHED],
+    ];
+    $statelinks = [];
+    foreach ($transitions[$activity->state] ?? [] as $target) {
+        $statelinks[get_string('activitystate_' . $target, 'mod_ep')] = new moodle_url($baseurl, [
+            'action' => 'setstate', 'activityid' => $activity->id, 'state' => $target, 'sesskey' => sesskey(),
+        ]);
+    }
+    if ($statelinks) {
+        $statecell .= html_writer::div(ep_render_actions($statelinks, 'btn btn-sm btn-link p-0 mr-2'), 'small');
+    }
 
-    $teachersurl = new moodle_url('/mod/ep/activity_teachers.php',
-        ['id' => $cm->id, 'activityid' => $activity->id]);
-    $teachercount = count(ep_get_activity_teachers($activity->id));
-    $teacherscell = html_writer::link($teachersurl,
-        get_string('activityteacherscount', 'mod_ep', $teachercount));
+    $teachersurl = new moodle_url(
+        '/mod/ep/activity_teachers.php',
+        ['id' => $cm->id, 'activityid' => $activity->id]
+    );
+    $teachercount = count($allteachers[$activity->id] ?? []);
+    $teacherscell = html_writer::link(
+        $teachersurl,
+        get_string('activityteacherscount', 'mod_ep', $teachercount)
+    );
     if ($teachercount === 0) {
         // Sans responsable, les inscriptions restent en attente indéfiniment : le signaler ici
         // est le seul endroit où la DEVE le verra avant que des étudiants ne s'en plaignent.
         $teacherscell .= ' ' . html_writer::span(get_string('noteacherwarning', 'mod_ep'), 'badge badge-warning');
     }
 
-    $deleteurl = new moodle_url($baseurl,
-        ['action' => 'delete', 'activityid' => $activity->id, 'sesskey' => sesskey()]);
-    $actions = ep_render_actions([
+    // Une action principale ; les autres dans le menu de la ligne.
+    $actions = ep_render_action_menu([
         get_string('edit') => new moodle_url($baseurl, ['action' => 'edit', 'activityid' => $activity->id]),
+    ], [
+        get_string('participants', 'mod_ep') => new moodle_url('/mod/ep/participants.php', [
+            'id' => $cm->id, 'activityid' => $activity->id,
+        ]),
         get_string('activityteachers', 'mod_ep') => $teachersurl,
-    ]) . html_writer::link($deleteurl, get_string('delete'), [
-        'class' => 'btn btn-sm btn-outline-danger mr-1 mb-1',
-        'onclick' => "return confirm('" . get_string('confirmdeleteactivity', 'mod_ep') . "');",
-    ]);
+        get_string('syllabus', 'mod_ep') => new moodle_url('/mod/ep/syllabus.php', [
+            'id' => $cm->id, 'activityid' => $activity->id,
+        ]),
+        get_string('delete') => new moodle_url($baseurl, ['action' => 'delete', 'activityid' => $activity->id]),
+    ], [get_string('delete')]);
 
     $table->data[] = [
         format_string($activity->name),
@@ -229,12 +340,12 @@ foreach ($activities as $activity) {
         $remaining === null
             ? get_string('unlimitedplaces', 'mod_ep')
             : get_string('placesleft', 'mod_ep', (object) ['left' => $remaining, 'total' => $activity->capacity]),
-        ep_get_activity_taken_places($activity->id),
+        $taken,
         $teacherscell,
-        $visible,
+        $statecell,
         $actions,
     ];
 }
 
-echo html_writer::table($table);
+echo html_writer::div(html_writer::table($table), 'table-responsive');
 echo $OUTPUT->footer();

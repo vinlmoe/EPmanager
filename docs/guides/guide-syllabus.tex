@@ -1,0 +1,617 @@
+% Guide des modules syllabus : mod_syllabus, mod_syllabusstaff, mod_syllabusstudent.
+% Compilation : latexmk -pdf guide-syllabus.tex
+% Captures : bash ../audit/banc/syllabus_captures.sh site-x.json syllabus.json (après syllabus_interactions.py).
+\documentclass[11pt,a4paper]{article}
+
+\newcommand{\titreguide}{Syllabus et avis des étudiants}
+\newcommand{\versionguide}{1.9}
+\newcommand{\dateguide}{novembre 2026}
+\newcommand{\versionep}{1.7.0}
+\newcommand{\versionsynthese}{1.0.0}
+
+\usepackage{guide-commun}
+\setcounter{tocdepth}{2}
+\newlist{etapes}{enumerate}{1}
+\setlist[etapes]{label=\textbf{\arabic*.}, leftmargin=*, itemsep=3pt}
+
+% La page de garde commune cite mod_ep et mod_epsynthesis : celle-ci cite les trois modules.
+\renewcommand{\pagedegarde}[2]{%
+  \begin{titlepage}
+    \centering
+    \vspace*{3cm}
+    {\Huge\bfseries \titreguide\par}
+    \vspace{0.6cm}
+    {\large #1\par}
+    \vspace{1.5cm}
+    \setlength{\fboxsep}{0pt}
+    \fcolorbox{cadre}{white}{\includegraphics[width=0.85\linewidth]{captures/#2}}
+    \vfill
+    {\large Sébastien Lefebvre\par}
+    \vspace{0.3cm}
+    {\large Version \versionguide{} -- \dateguide\par}
+    {\small Modules couverts : \texttt{mod\_syllabus}, \texttt{mod\_syllabusstaff},
+     \texttt{mod\_syllabusstudent} \versionep\par}
+  \end{titlepage}}
+
+\begin{document}
+
+\pagedegarde{La fiche de chaque module d'enseignement, sa relecture par la DEVE, et son
+avis des étudiants, année après année}{sy-etu-mes-modules}
+
+\tableofcontents
+
+\section*{Historique des versions}
+\addcontentsline{toc}{section}{Historique des versions}
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l l X@{}}
+\toprule
+\textbf{Version} & \textbf{Date} & \textbf{Modifications} \\
+\midrule
+1.0 & novembre 2026 & Première version. Captures prises sur le banc : 12 modules, 24
+enseignants, 200 étudiants, après rédaction, relecture et évaluation de tous les modules. \\
+1.1 & novembre 2026 & Référentiel de compétences : modules et cours liés aux compétences, avec
+un niveau ; matrice compétences $\times$ cours. \\
+1.2 & novembre 2026 & Les référentiels de compétences sont tenus par la DEVE dans le suivi des
+modules (création, arbre, import CSV), sans passer par l'administration du site ; la DEVE lie
+aussi les cours sans module. \\
+1.3 & novembre 2026 & Livret des syllabus d'un semestre, d'une année ou de tout le cursus ;
+progression d'une compétence le long du cursus ; matrice dans l'ordre du cursus. \\
+1.4 & novembre 2026 & Parcours simplifiés après audit : page du module résumée (« Où en est ce
+module »), brouillon sans quitter la rédaction, relecture avec retour à la liste, évaluation
+compacte avec retour à « Mes modules », période choisie dans une liste, fenêtre retirée par un
+bouton distinct. \\
+1.5 & novembre 2026 & « Avis des étudiants » au lieu d'« évaluation du module » (les modalités
+d'évaluation de la fiche restent les examens) ; avis recueillis une fois par année universitaire,
+années passées archivées et consultables, évolution des moyennes. \\
+1.6 & novembre 2026 & Captures des documents PDF : fiche d'un module, livret du cursus. \\
+1.7 & novembre 2026 & Après l'audit complet : la fenêtre d'un recueil qui a reçu des avis n'est
+plus modifiable que par la DEVE ; les suppressions se confirment sur une page dédiée. \\
+1.8 & novembre 2026 & Les fiches des EP du catalogue sont aussi des activités « Syllabus du module », gérées par mod\_ep : leurs inscrits seuls donnent leur avis. \\
+1.9 & novembre 2026 & Date de la commission de validation enregistrée à la publication (obligatoire pour un EP académique) ; PDF des fiches à valider (modules 1.7.0). \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\newpage
+% ===========================================================================
+\part{Principes}\label{part:principes}
+% ===========================================================================
+
+\section{Trois activités}
+
+\begin{description}
+  \item[Syllabus du module] (\texttt{mod\_syllabus}) une activité dans le cours de chaque module
+    d'enseignement. Elle porte la \textbf{fiche} du module (au modèle ECTS) et son
+    \textbf{avis des étudiants} du cours, recueilli chaque année.
+  \item[Suivi des modules] (\texttt{mod\_syllabusstaff}) une activité dans un cours d'équipe.
+    Chaque enseignant y retrouve les modules dont il est responsable, dans tous les cours, et
+    tous y éditent le \textbf{livret des syllabus} et suivent la \textbf{progression d'une
+    compétence} le long du cursus. La DEVE y voit tous les modules, relit les fiches, ouvre les recueils d'avis, compare les résultats
+    et tient le \textbf{référentiel commun} (types de module, questions communes, réglages).
+  \item[Mes modules] (\texttt{mod\_syllabusstudent}) une activité dans le cours de la
+    promotion. Chaque étudiant y voit les modules des cours où il est inscrit, leur fiche, et
+    les avis qu'il a à donner.
+\end{description}
+
+Les deux activités de suivi se limitent, au choix, à une catégorie de cours (sous-catégories
+comprises) ou couvrent tout le site.
+
+\section{Compétences}\label{sec:competences}
+
+Les \textbf{référentiels de compétences} sont tenus par la DEVE dans le \textbf{suivi des
+modules} (\chemin{Référentiels de compétences}) ; l'administration du site n'intervient pas.
+Un référentiel est un arbre (domaines, puis compétences, sur autant de niveaux que voulu),
+saisi à la main ou importé d'un fichier CSV. Il est commun à tout le site. Les modules et les
+cours s'y rattachent :
+\begin{itemize}
+  \item un \textbf{module} vise des compétences, avec un \textbf{niveau} : \statut{Introduite},
+    \statut{Approfondie} ou \statut{Maîtrisée} ; ses responsables les choisissent dans la page
+    \og Compétences\fg{} du module ;
+  \item un \textbf{cours sans module} (un stage, par exemple) peut viser des compétences : la
+    DEVE les lie depuis la matrice.
+\end{itemize}
+Les compétences visées figurent sur la fiche du module, et la matrice compétences $\times$
+cours montre la couverture du référentiel.
+
+\section{Qui fait quoi}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+\textbf{Rôle} & \textbf{Ce qu'il fait} \\
+\midrule
+Responsable du module & Enseignant désigné : rédige la fiche, pose ses questions
+aux étudiants, fixe la fenêtre du recueil des avis, voit les résultats (après la fermeture, sauf
+réglage contraire). \\
+DEVE & Tout : désigne les responsables, relit et publie les fiches, fixe les fenêtres en lot,
+définit les types de module et les questions communes, voit tous les résultats. \\
+Étudiant & Lit les fiches, donne son avis sur chaque module pendant sa fenêtre, une fois par
+année, anonymement. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{La fiche et ses versions}
+
+Une fiche passe par des \textbf{versions} :
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+\textbf{État} & \textbf{Signification} \\
+\midrule
+\statut{Brouillon} & En cours de rédaction ; les étudiants voient la version publiée. \\
+\statut{Soumise à la DEVE} & Attend la relecture ; ne se modifie plus. \\
+\statut{Renvoyée par la DEVE} & À reprendre, avec le commentaire de la DEVE. \\
+\statut{Publiée} & Celle que lisent les étudiants. \\
+\statut{Refusée} & Écartée par la DEVE. \\
+\statut{Remplacée} & Ancienne version publiée, gardée dans l'historique. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Si la DEVE a désactivé la relecture (référentiel), la fiche est publiée dès sa soumission.
+
+\section{L'avis des étudiants}\label{sec:principe-evaluation}
+
+L'\textbf{avis des étudiants} est l'enquête anonyme sur le module ; à ne pas confondre avec les
+\emph{modalités d'évaluation} de la fiche, qui décrivent les examens.
+\begin{itemize}
+  \item Le recueil s'ouvre à une \textbf{date} (et se ferme à une autre, facultative). À
+    l'ouverture, les étudiants du cours sont prévenus par un message.
+  \item Il a lieu \textbf{une fois par année universitaire} (de septembre à août, réglage de la
+    DEVE). Ouvrir le recueil dans une nouvelle année \textbf{archive} celui de l'année
+    précédente : ses résultats sont gardés (au-delà du seuil d'anonymat), le module repart de
+    zéro et chaque étudiant peut de nouveau répondre ; les questions de l'enseignant sont
+    reprises. Les années passées restent consultables, avec l'évolution des moyennes.
+  \item Les étudiants répondent d'abord aux \textbf{questions de la DEVE} : celles posées à
+    tous les modules, puis celles posées aux modules de leur type ; ensuite aux
+    \textbf{questions de l'enseignant}.
+  \item Formes de réponse : échelle de 1 (pas du tout d'accord) à 5 (tout à fait d'accord),
+    oui ou non, choix dans une liste, réponse libre ; chaque question peut être obligatoire.
+  \item À l'ouverture, les questions sont \textbf{figées} : celles de la DEVE sont copiées dans
+    le module. Les modifier ensuite ne change pas un recueil déjà ouvert, et les résultats
+    portent toujours sur les questions effectivement posées.
+  \item Les réponses sont \textbf{anonymes} : la réponse ne porte ni le nom de l'étudiant ni
+    l'heure (seulement le jour) ; seul le fait qu'il a répondu est noté, à part, pour qu'il ne
+    réponde qu'une fois.
+  \item Les résultats ne s'affichent qu'à partir d'un \textbf{nombre minimal de réponses}
+    (réglage de la DEVE, 3 par défaut), pour qu'on ne puisse pas deviner qui a répondu quoi.
+\end{itemize}
+
+\begin{attention}
+L'anonymat vaut pour toutes les pages et tous les exports. Un administrateur qui lirait
+directement la base de données pourrait, en rapprochant l'ordre des enregistrements, deviner
+approximativement l'auteur d'une réponse : l'accès à la base doit rester restreint, comme pour
+toute donnée sensible.
+\end{attention}
+
+\newpage
+% ===========================================================================
+\part{Étudiant}\label{part:etudiant}
+% ===========================================================================
+
+\section{Mes modules}
+
+Dans le cours de votre promotion, ouvrez l'activité \og Mes modules\fg{}. En tête, les
+\textbf{avis à donner}, le plus urgent d'abord ; en dessous, tous vos modules, rangés par
+année et période : type, crédits, responsables, et où vous en êtes de l'avis
+(\statut{Avis donné}, ouverture à venir, \statut{Terminé}).
+
+\capture{sy-etu-mes-modules}{Mes modules : avis à donner, puis tous les modules.}
+
+Le nom d'un module ouvre sa \textbf{fiche} : caractéristiques, objectifs, acquis
+d'apprentissage, contenu, méthodes, modalités d'évaluation, programme des séances et volume
+horaire, et les \textbf{compétences visées} avec leur niveau. Elle se télécharge en PDF.
+
+\capture[0.5\linewidth]{sy-pdf-fiche}{La fiche d'un module en PDF.}
+
+\capture{sy-etu-fiche}{Fiche d'un module, avec l'invitation à donner son avis.}
+
+\section{Donner son avis sur un module}
+
+\begin{etapes}
+  \item Cliquez sur \bouton{Évaluer} (dans \og Mes modules\fg{}) ou \bouton{Évaluer ce module}
+    (sur la fiche).
+  \item Répondez aux questions de la DEVE, puis à celles de l'enseignant. Les questions
+    marquées d'un astérisque sont obligatoires ; aucune réponse n'est cochée d'avance.
+  \item Cliquez sur \bouton{Envoyer mon avis}. Vous revenez à \og Mes modules\fg{} : le
+    module suivant est en tête.
+\end{etapes}
+
+\capture{sy-etu-evaluer}{Formulaire de l'avis.}
+
+Vous ne pouvez répondre qu'une fois par année, pendant la fenêtre du recueil : vérifiez vos réponses
+avant d'envoyer. Vos réponses sont anonymes (section~\ref{sec:principe-evaluation}).
+
+\newpage
+% ===========================================================================
+\part{Enseignant responsable}\label{part:enseignant}
+% ===========================================================================
+
+\section{Mes modules}
+
+L'activité \og Suivi des modules\fg{} du cours d'équipe liste les modules dont vous êtes
+responsable : état de la fiche, des avis des étudiants, nombre de réponses. Le nom d'un module ouvre sa
+page. Les modules qui vous attendent (sans fiche publiée, ou fiche renvoyée par la DEVE) sont en
+tête, surlignés.
+
+\capture{sy-ens-mes-modules}{Suivi des modules : mes modules.}
+
+La page du module s'ouvre sur \textbf{Où en est ce module} : une ligne par étape, cochée quand
+elle est faite, avec son bouton :
+\begin{itemize}
+  \item la \textbf{fiche} : version publiée, version en cours et son état, commentaire de la DEVE
+    si elle l'a renvoyée ; \bouton{Rédiger la fiche}, \bouton{Reprendre la rédaction} ou
+    \bouton{Mettre à jour la fiche} ;
+  \item les \textbf{compétences} visées ;
+  \item l'\textbf{avis des étudiants} : année universitaire, état, fenêtre, nombre de questions
+    de l'enseignant, réponses reçues, années précédentes ; \bouton{Fenêtre et questions},
+    \bouton{Résultats des avis} ;
+  \item au besoin, les caractéristiques à renseigner dans les paramètres (crédits, période,
+    année d'étude).
+\end{itemize}
+
+\capture{sy-ens-fiche}{Page du module vue par son responsable.}
+
+\section{Rédiger la fiche}
+
+\begin{etapes}
+  \item \bouton{Rédiger la fiche} (ou \bouton{Mettre à jour la fiche}) : la version en cours
+    reprend la version publiée.
+  \item Renseignez les rubriques : objectifs, acquis d'apprentissage visés, prérequis, contenu,
+    méthodes, modalités d'évaluation, seconde session, bibliographie ; la langue
+    d'enseignement et les heures de travail personnel.
+  \item Décrivez le \textbf{programme des séances} : intitulé, nature (cours magistral,
+    travaux dirigés, travaux pratiques, clinique, terrain, projet, autre), durée et intervenant
+    (un enseignant du cours, ou le nom d'un intervenant extérieur). Les séances ne sont pas
+    datées : la fiche décrit le module, pas le calendrier de l'année.
+  \item \bouton{Enregistrer le brouillon} autant que nécessaire : vous restez sur la rédaction.
+    Puis \bouton{Enregistrer et soumettre à la DEVE} (ou \bouton{Enregistrer et publier} si la
+    relecture est désactivée).
+\end{etapes}
+
+Pour être soumise, la fiche doit avoir ses objectifs, ses acquis d'apprentissage, son contenu,
+ses modalités d'évaluation, et au moins une séance (ou des heures de travail personnel) ; le
+brouillon, lui, s'enregistre à tout moment. La langue est préremplie (\og Français\fg{}).
+
+\capture{sy-ens-redaction}{Rédaction de la fiche.}
+
+\capture{sy-ens-seances}{Programme des séances.}
+
+Les caractéristiques du module (code, ECTS, période, année d'étude, type de module) se règlent
+dans les \chemin{Paramètres} de l'activité. La \textbf{période} se choisit parmi celles déjà
+utilisées dans l'école (ou se saisit) : elle range le module dans le cursus. Les \chemin{Responsables} se choisissent parmi les
+enseignants du cours ; celui qui ajoute l'activité en devient responsable.
+
+\capture[0.85\linewidth]{sy-ens-responsables}{Responsables du module.}
+
+\section{Lier le module aux compétences}
+
+\begin{etapes}
+  \item \chemin{Compétences} (onglets du module, ou le bouton de \og Où en est ce module\fg{}).
+  \item Choisissez le \textbf{référentiel} (s'il y en a plusieurs) : ses compétences s'affichent
+    en arbre, avec le niveau déjà donné.
+  \item Pour chaque compétence que le module vise, choisissez le niveau ; laissez
+    \og Non visée\fg{} pour les autres. Un domaine se vise par ses sous-compétences.
+  \item \bouton{Enregistrer les modifications} (en tête ou en bas de l'arbre).
+\end{etapes}
+
+\capture{sy-ens-competences}{Compétences visées par le module et liaison au référentiel.}
+
+Les responsables du module et la DEVE peuvent lier ; les autres enseignants du cours voient
+les compétences sans pouvoir les modifier. Si aucun référentiel n'est proposé, la DEVE n'en a
+pas encore créé.
+
+\section{Suivre une compétence le long du cursus}\label{sec:progression}
+
+\chemin{Progression d'une compétence} (suivi des modules), ou l'intitulé d'une compétence dans
+la matrice : choisissez une compétence, avec ou sans ses sous-compétences (cochée par défaut,
+utile pour un domaine). La page montre :
+\begin{itemize}
+  \item une \textbf{frise} du cursus, une colonne par période (année et semestre) : les niveaux
+    visés dans la période et le nombre de modules, la couleur suivant le niveau le plus élevé ;
+  \item des \textbf{constats} : la première période où la compétence est introduite,
+    approfondie, maîtrisée ; et des alertes quand aucun module ne la vise, quand aucun ne la
+    porte jusqu'à \statut{Maîtrisée}, quand elle est visée d'emblée au-delà de
+    \statut{Introduite}, ou introduite de nouveau après avoir été maîtrisée ;
+  \item période par période, les \textbf{modules} qui la visent, avec leur niveau (et la
+    sous-compétence visée) et ce que leur fiche publiée en dit : acquis d'apprentissage visés,
+    méthodes d'enseignement, modalités d'évaluation ;
+  \item les \textbf{cours sans module} (stages\dots) qui la visent, hors des périodes.
+\end{itemize}
+Le tout s'exporte en CSV.
+
+\capture[0.62\linewidth]{sy-ens-progression}{Progression d'une compétence : frise, constats, modules.}
+
+Les alertes sont des signaux à examiner avec les responsables : un module qui revient sur une
+compétence maîtrisée pour l'introduire auprès d'un autre public peut être voulu.
+
+\section{Éditer le livret des syllabus}\label{sec:livret}
+
+\chemin{Livret des syllabus} (suivi des modules) : choisissez le \textbf{périmètre du livret} --
+tout le cursus, une année d'étude ou une période (semestre) --, puis \bouton{Afficher}. La page liste les
+modules retenus, période par période, avec leurs crédits, leurs responsables et l'état de leur
+fiche. \bouton{Télécharger le livret (PDF)} produit :
+\begin{itemize}
+  \item une page de titre (édition, périmètre, date) et un sommaire ;
+  \item un tableau des modules et des crédits, avec le total de chaque période et du livret ;
+  \item la fiche publiée de chaque module (caractéristiques, rubriques, séances, volume horaire,
+    compétences visées), dans l'ordre du cursus, une période après l'autre.
+\end{itemize}
+Seules les fiches publiées sont éditées ; un module sans fiche publiée figure dans le tableau
+(\og Non publiée\fg{}). Les modules dont l'activité est cachée sont écartés. Le livret est gardé
+et resservi tant que rien n'a changé (fiches, responsables, compétences, date du jour).
+
+\capture{sy-deve-livret}{Livret d'une année d'étude : modules et crédits par période.}
+
+\capture{sy-pdf-livret}{Livret du cursus (PDF) : page de titre, modules et crédits, première fiche.}
+
+\section{Fiches des EP}
+
+Les EP du catalogue (activité \og Enseignement personnalisé\fg{}) ont leur fiche dans une
+activité \og Syllabus du module\fg{}, créée avec l'EP dans la section \og Fiches des EP\fg{} de
+son cours. Tout ce guide s'y applique, avec trois différences : ses responsables sont ceux de
+l'EP (tenus dans le catalogue) ; un nouvel EP passe toujours par la relecture de la DEVE, et sa
+décision fait avancer l'EP (publié, de nouveau brouillon ou archivé) ; seuls les inscrits de
+l'EP donnent leur avis et voient la fiche dans \og Mes modules\fg{}. Un lien \og L'EP au
+catalogue\fg{} ramène au catalogue.
+
+\section{Préparer le recueil des avis}
+
+\chemin{Avis des étudiants} réunit :
+\begin{itemize}
+  \item la \textbf{fenêtre} : ouverture et, au besoin, fermeture ;
+  \item les \textbf{questions de la DEVE} qui s'appliqueront à votre module (pour information) ;
+  \item \textbf{vos questions} : ajoutez-les, modifiez-les (\og Modifier\fg{} amène au
+    formulaire), réordonnez-les jusqu'à l'ouverture ; une suppression se confirme.
+\end{itemize}
+Une fois le recueil ouvert, les questions sont figées ; le message de la page dit s'il est
+ouvert ou terminé, et un bouton mène aux résultats. Dès qu'un premier avis est donné, la fenêtre
+n'est plus modifiable que par la DEVE : la page rappelle alors ses dates. Les résultats ne
+peuvent ainsi pas être lus avant la fin du recueil en le refermant puis en le rouvrant. L'an prochain, il suffit de fixer
+la nouvelle fenêtre : l'année écoulée est archivée, vos questions sont gardées et redeviennent
+modifiables jusqu'à l'ouverture.
+
+\capture{sy-ens-evaluation}{Avis des étudiants : fenêtre et questions figées.}
+
+\section{Lire les résultats}
+
+\chemin{Résultats des avis} donne le nombre de réponses sur le nombre d'étudiants (et le
+taux), un tableau des moyennes des questions à échelle, puis pour chaque question la moyenne (échelle), la répartition des réponses, ou la liste des
+réponses libres (dans l'ordre alphabétique, rien ne rappelant l'ordre des réponses). Les
+résultats s'exportent en CSV. Ils sont visibles après la fermeture du recueil, sauf si la
+DEVE les a ouverts dès l'ouverture, et seulement au-delà du nombre minimal de réponses.
+
+\capture{sy-ens-resultats}{Résultats des avis sur un module, avec l'année passée et l'évolution des moyennes.}
+
+Dès qu'une année passée existe, la page propose de choisir l'\textbf{année universitaire} et
+montre un tableau de l'\textbf{évolution des moyennes} : une ligne par question à échelle (les
+questions de la DEVE reconnues d'une année à l'autre, les vôtres par leur texte), une colonne
+par année. Les années passées restent lisibles des responsables.
+
+\newpage
+% ===========================================================================
+\part{DEVE}\label{part:deve}
+% ===========================================================================
+
+\section{Mise en place}
+
+\begin{etapes}
+  \item Dans un cours d'équipe, ajoutez une activité \og Suivi des modules\fg{} (périmètre :
+    la catégorie des cours de modules, ou tout le site). Donnez-vous le rôle
+    \og gestionnaire\fg{} dans ce cours.
+  \item Dans \chemin{Référentiel commun} : réglages, types de module, questions communes.
+  \item Dans chaque cours de module : une activité \og Syllabus du module\fg{} (ajoutée par
+    l'enseignant, ou par vous) ; vous devez y avoir le rôle \og gestionnaire\fg{} (par exemple
+    au niveau de la catégorie) pour relire et fixer les fenêtres.
+  \item Dans le cours de chaque promotion : une activité \og Mes modules\fg{}.
+\end{etapes}
+
+\section{Référentiel commun}
+
+Il vaut pour tous les modules du site.
+\begin{description}
+  \item[Réglages] relecture des fiches par la DEVE avant publication ; nombre minimal de
+    réponses pour afficher des résultats ; résultats visibles des responsables après la
+    fermeture ou dès l'ouverture.
+  \item[Types de module] (fondamental, clinique, optionnel\dots) : chaque module en porte un
+    (dans ses paramètres) ; un type porté par des modules ne se supprime pas.
+  \item[Questions communes] posées à tous les modules, ou aux modules d'un type ; forme de
+    réponse, obligation, activation, ordre.
+\end{description}
+
+\capture{sy-deve-referentiel}{Référentiel commun : réglages, types, questions.}
+
+\section{Tous les modules}
+
+\chemin{Tous les modules} liste les modules du périmètre, filtrables par nom ou code, type,
+état de la fiche et état des avis. Cochez des modules, saisissez une ouverture (et une
+fermeture), puis \bouton{Appliquer} : la même fenêtre est fixée pour tous. Les cases des cours
+où vous n'avez pas le rôle de la DEVE sont grisées. \bouton{Retirer le recueil des avis} efface la
+fenêtre des modules cochés, après confirmation. Le nom d'un module ouvre sa page.
+
+\capture{sy-deve-tous}{Tous les modules, avec la fenêtre du recueil des avis en lot.}
+
+\section{Relire les fiches}
+
+\chemin{Fiches à relire} liste les fiches soumises, avec leurs responsables et s'il s'agit
+d'une première version ou d'une mise à jour. \bouton{Relire} ouvre la version proposée ; pour
+une mise à jour, les rubriques et les séances modifiées depuis la version publiée portent la
+marque \statut{modifiée}. La décision se prend \textbf{sous la fiche} : \bouton{Publier},
+\bouton{Renvoyer aux responsables} ou \bouton{Refuser} (un commentaire est alors demandé). Les
+responsables sont prévenus, et vous revenez à la liste des fiches à relire.
+
+\capture{sy-deve-a-relire}{Fiches à relire.}
+
+\capture{sy-deve-relecture}{Relecture d'une mise à jour : rubriques et séances modifiées signalées.}
+
+\capture{sy-deve-decision}{Décision de la DEVE, sous la fiche relue.}
+
+Sous la fiche, un champ \og Date de la commission de validation\fg{} enregistre la date de la
+commission qui a approuvé la version ; elle figure alors sur la fiche et sur son PDF
+(\og Validée en commission le\fg{}). Ce champ est facultatif pour un module d'enseignement ; il
+est \textbf{obligatoire} pour la fiche d'un EP académique, dont chaque modification passe par
+la DEVE. Le bouton \bouton{PDF des fiches à valider} de la page \chemin{Fiches à relire} réunit
+en un seul document toutes les fiches soumises (version proposée), avec un récapitulatif et un
+sommaire, pour la commission.
+
+\section{Référentiels de compétences}
+
+\chemin{Référentiels de compétences} (suivi des modules) liste les référentiels.
+\begin{etapes}
+  \item \bouton{Ajouter un référentiel} : un \textbf{code} court et unique (\og REFVET\fg{}),
+    un nom, une description.
+  \item Ouvrez-le, puis ajoutez les compétences : code (\og D1.2\fg{}), intitulé, compétence
+    parente (aucune pour un domaine), description. Chaque ligne de l'arbre se modifie, reçoit
+    des sous-compétences, monte ou descend parmi ses s\oe urs, ou se supprime (après
+    confirmation). Après \og Ajouter une sous-compétence\fg{}, le formulaire reste ouvert sous
+    le même parent, avec le code suivant proposé (\og D1.3\fg{}) : il suffit de saisir
+    l'intitulé.
+  \item Ou importez un fichier \textbf{CSV} : une ligne d'en-tête, puis une ligne par
+    compétence, colonnes \og Code\fg{}, \og Code parent\fg{} (vide pour un domaine),
+    \og Intitulé\fg{}, \og Description\fg{} ; séparateur point-virgule, virgule ou tabulation.
+    L'ordre des lignes est libre (un parent peut venir après ses enfants) ; une compétence dont
+    le code existe déjà est mise à jour, ce qui permet de réimporter un fichier corrigé.
+\end{etapes}
+
+\begin{verbatim}
+Code;Code parent;Intitulé;Description
+D1;;Démarche clinique;
+D1.1;D1;Réaliser un examen clinique;Examen général et spécialisé.
+\end{verbatim}
+
+\capture{sy-deve-referentiels}{Un référentiel : l'arbre des compétences et ses actions.}
+
+Une compétence visée par un module ou un cours (elle ou une de ses sous-compétences) ne se
+supprime pas, ni le référentiel qui la contient : retirez d'abord les liens. Les codes servent
+à retrouver les compétences d'un module restauré sur un autre site : gardez-les stables.
+
+\section{Matrice des compétences}
+
+\chemin{Matrice des compétences} (suivi des modules) croise un référentiel avec les cours du périmètre :
+une ligne par compétence, une colonne par cours, dans l'ordre du cursus (année, période), les
+cours sans module liés en dernier.
+Une case porte le niveau (I, A, M), suivi de \og *\fg{} quand la compétence est visée par le
+cours lui-même (cours sans module). La dernière colonne compte les cours qui visent la
+compétence (pour un domaine : l'une de ses sous-compétences) ; une compétence qu'aucun cours ne
+vise est surlignée. Filtre par année d'étude (\og Toutes les années\fg{} par défaut), export CSV.
+Les enseignants y ont accès aussi.
+
+\capture{sy-deve-competences}{Matrice compétences $\times$ cours, avec la couverture du référentiel.}
+
+L'intitulé d'une compétence ouvre sa progression (section~\ref{sec:progression}) ; l'en-tête
+d'une colonne ouvre la page \og Compétences\fg{} du module, ou celle du cours sans module. Pour lier un cours qui n'a pas de module (un stage, par exemple), choisissez-le dans
+\og Lier un cours sans module\dots\fg{} sous la matrice, puis donnez un niveau à chaque
+compétence qu'il vise, comme pour un module. Un cours qui a un module renvoie à la page du
+module.
+
+\capture{sy-deve-cours-sans-module}{Compétences d'un cours sans module, liées par la DEVE.}
+
+\section{Résultats comparés}
+
+\chemin{Résultats des avis} donne, module par module, le nombre de réponses et la
+moyenne de chaque question commune à échelle : les mêmes questions, posées partout, se
+comparent d'un module à l'autre. Les modules sous le seuil d'anonymat n'ont pas de moyenne.
+Le nom d'un module ouvre ses résultats détaillés. Export CSV.
+
+\capture{sy-deve-resultats}{Résultats comparés des recueils terminés.}
+
+Le choix \og Année universitaire\fg{} montre une année passée : les moyennes archivées de chaque
+module, le nom du module ouvrant ses résultats de cette année-là. Le premier mois de l'année
+universitaire se règle dans le \chemin{Référentiel commun} (septembre par défaut).
+
+\newpage
+% ===========================================================================
+\part{Administrateur du site}\label{part:admin}
+% ===========================================================================
+
+\section{Installation}
+
+Copier \texttt{mod/syllabus}, \texttt{mod/syllabusstaff} et \texttt{mod/syllabusstudent} dans
+\texttt{<moodle>/mod/}, puis \texttt{php admin/cli/upgrade.php}. Moodle 4.3 ou plus récent.
+Les deux activités de suivi dépendent de \texttt{mod\_syllabus}. Une tâche planifiée,
+\texttt{mod\_syllabus\textbackslash task\textbackslash open\_evaluations} (tous les quarts
+d'heure), fige les questions des recueils qui viennent d'ouvrir et prévient les étudiants :
+le \emph{cron} doit tourner.
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+\textbf{Capacité} & \textbf{Pour qui (par défaut)} \\
+\midrule
+\texttt{mod/syllabus:view} & Tous : lire la fiche publiée \\
+\texttt{mod/syllabus:edit} & Enseignants : pouvoir être responsable \\
+\texttt{mod/syllabus:manage} & Gestionnaire (DEVE) : responsables, relecture, fenêtre,
+résultats \\
+\texttt{mod/syllabus:evaluate} & Étudiants : donner leur avis \\
+\texttt{mod/syllabusstaff:view} & Enseignants : leurs modules \\
+\texttt{mod/syllabusstaff:manageall} & Gestionnaire (DEVE) : tous les modules, référentiel
+commun, référentiels de compétences, cours sans module \\
+\texttt{mod/syllabusstudent:view} & Étudiants : leurs modules \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Les référentiels de compétences sont propres à ces modules : ils n'utilisent ni les
+compétences de Moodle ni l'administration du site, et n'ont pas besoin que celles-ci soient
+activées. Une mise à jour depuis la version 1.1.0, qui s'appuyait sur les compétences de
+Moodle, recopie les référentiels utilisés et les liens avec leur niveau ; l'ancienne table est
+ensuite supprimée, les référentiels de Moodle restent intacts.
+
+La sauvegarde Moodle du cours comprend la fiche, ses versions et les questions du module ;
+avec les données des utilisateurs, les responsables, l'avis des étudiants (réponses anonymes,
+participations et résultats archivés des années passées), et les liens aux compétences avec leur niveau (retrouvés par les identifiants
+du référentiel et de la compétence sur un autre site). La réinitialisation du cours peut
+effacer les avis : les résultats de l'année sont d'abord archivés, puis le recueil repart de
+zéro. Le référentiel commun et
+les référentiels de compétences n'appartiennent à aucun cours : ils ne sont pas sauvegardés
+avec eux (sur un autre site, importez d'abord le référentiel par CSV). Les livrets PDF sont
+gardés dans les fichiers de l'activité de suivi, un par édition, et refaits quand leur contenu
+change. Les liens d'un cours
+supprimé sont effacés avec lui.
+
+\newpage
+% ===========================================================================
+\part{Questions fréquentes}\label{part:faq}
+% ===========================================================================
+
+\begin{description}
+  \item[Un enseignant du cours ne peut pas rédiger la fiche.] Il n'est pas désigné responsable
+    (\chemin{Responsables}). Tant qu'un module n'a aucun responsable, tout enseignant du cours
+    peut le rédiger.
+  \item[Je ne peux pas soumettre ma fiche.] Les rubriques signalées sont vides : objectifs,
+    acquis d'apprentissage, contenu, modalités d'évaluation, et au moins une séance (ou des
+    heures de travail personnel). Enregistrez le brouillon et complétez-la.
+  \item[Je ne peux plus modifier mes questions.] Le recueil des avis est ouvert : les questions sont
+    figées pour que toutes les réponses portent sur les mêmes questions.
+  \item[Je ne vois pas les résultats.] Ils s'affichent après la fermeture (sauf réglage de la
+    DEVE) et à partir du nombre minimal de réponses.
+  \item[Un étudiant ne voit pas un module dans « Mes modules ».] Il n'est pas inscrit au cours
+    du module, l'activité est cachée, ou le cours est hors du périmètre de l'activité.
+  \item[La DEVE a modifié une question commune, mais l'ancienne est posée.] Le recueil de ce
+    module était déjà ouvert : il garde ses questions. La nouvelle vaudra pour les recueils
+    ouverts ensuite.
+  \item[Les réponses de l'an dernier ont disparu.] Elles sont archivées : choisissez l'année
+    dans \chemin{Résultats des avis}. Sous le seuil d'anonymat, seul leur nombre est gardé.
+  \item[La page « Compétences » du module ne propose pas de lier.] Seuls les responsables du
+    module et la DEVE lient ; les autres enseignants du cours voient les compétences.
+  \item[Aucun référentiel n'est proposé.] La DEVE n'en a pas encore créé : \chemin{Suivi des
+    modules > Référentiels de compétences}.
+  \item[Une compétence ne se supprime pas.] Elle, ou une de ses sous-compétences, est visée par
+    un module ou un cours : retirez ces liens (la matrice les montre).
+  \item[L'import CSV signale des lignes en erreur.] Une ligne sans code ou sans intitulé est
+    ignorée ; une compétence dont le code parent ne se trouve ni dans le fichier ni dans le
+    référentiel reste à la racine. Les autres lignes sont importées : corrigez le fichier et
+    réimportez-le, les compétences déjà créées sont mises à jour.
+  \item[Un module manque dans le livret.] Sa fiche n'est pas publiée (il figure alors dans le
+    tableau, sans fiche), son activité est cachée, ou son année d'étude ou sa période n'est pas
+    renseignée dans ses paramètres : il n'apparaît alors que dans l'édition \og Tout le
+    cursus\fg{}, sous \og Période non précisée\fg{}.
+  \item[La frise d'une compétence a des trous.] Aucun module de ces périodes ne la vise ; une
+    période sans aucun module dans le périmètre n'a pas de colonne.
+  \item[Peut-on savoir qui a répondu quoi ?] Non, par aucune page ni aucun export ; seul le fait
+    d'avoir répondu est noté (voir l'encadré de la section~\ref{sec:principe-evaluation}).
+\end{description}
+
+\end{document}

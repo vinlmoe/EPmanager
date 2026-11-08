@@ -60,7 +60,6 @@ if (optional_param('save', 0, PARAM_INT) && confirm_sesskey()) {
 $linked = epsynthesis_get_links($epsynthesis->id);
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($epsynthesis->name));
 echo $OUTPUT->heading(get_string('managelinks', 'mod_epsynthesis'), 3);
 echo html_writer::tag('p', get_string('managelinks_help', 'mod_epsynthesis'));
 
@@ -79,8 +78,14 @@ $table->head = [get_string('linked', 'mod_epsynthesis'), get_string('course'), g
 
 foreach ($available as $activity) {
     $checked = isset($linked[(int) $activity->epcmid]);
-    $checkbox = html_writer::checkbox('epcmid[]', $activity->epcmid, $checked, '',
-        ['id' => 'epcmid_' . $activity->epcmid]);
+    $checkbox = html_writer::checkbox(
+        'epcmid[]',
+        $activity->epcmid,
+        $checked,
+        '',
+        ['id' => 'epcmid_' . $activity->epcmid,
+            'aria-label' => format_string($activity->epname) . ' (' . format_string($activity->coursename) . ')']
+    );
 
     $coursename = format_string($activity->coursename);
     if (!$activity->coursevisible) {
@@ -89,8 +94,10 @@ foreach ($available as $activity) {
 
     $activityname = format_string($activity->epname);
     if (!$activity->visible) {
-        $activityname .= ' ' . html_writer::span(get_string('hiddenactivity', 'mod_epsynthesis'),
-            'badge badge-secondary');
+        $activityname .= ' ' . html_writer::span(
+            get_string('hiddenactivity', 'mod_epsynthesis'),
+            'badge badge-secondary'
+        );
     }
 
     $table->data[] = [$checkbox, $coursename, $activityname];

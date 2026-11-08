@@ -55,8 +55,12 @@ $PAGE->set_context($context);
 // elle-même, pas après coup.
 $credit = null;
 if ($creditid) {
-    $credit = $DB->get_record('ep_credit',
-        ['id' => $creditid, 'epid' => $ep->id, 'userid' => $USER->id], '*', MUST_EXIST);
+    $credit = $DB->get_record(
+        'ep_credit',
+        ['id' => $creditid, 'epid' => $ep->id, 'userid' => $USER->id],
+        '*',
+        MUST_EXIST
+    );
     if (!ep_student_can_cancel($credit)) {
         throw new moodle_exception('errorcreditdecided', 'mod_ep', $returnurl->out(false));
     }
@@ -65,12 +69,18 @@ if ($creditid) {
     if (!empty($credit->activityid) && $action !== 'cancel') {
         throw new moodle_exception('errorcreditnoteditable', 'mod_ep', $returnurl->out(false));
     }
+    // Déjà validée à une première étape : elle se retire encore, mais ne se modifie plus.
+    if ($action !== 'cancel' && !ep_student_can_edit($credit)) {
+        throw new moodle_exception('errorcreditdecided', 'mod_ep', $returnurl->out(false));
+    }
 }
 
 // Retrait d'une demande (déclaration comme inscription au catalogue) tant qu'elle est en attente.
 if ($action === 'cancel' && $credit) {
     require_sesskey();
-    ep_cancel_credit($credit, $USER->id, get_string('cancelledbystudent', 'mod_ep'));
+    if (!ep_cancel_credit($credit, $USER->id, get_string('cancelledbystudent', 'mod_ep'), 'student')) {
+        redirect($returnurl, get_string('errorcreditchanged', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+    }
     redirect($returnurl, get_string('requestcancelled', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
@@ -87,21 +97,37 @@ if ($credit && !isset($types[$credit->typeid])) {
     }
 }
 
+// Formats admis : ceux du type le plus permissif parmi les types déclarables (le formulaire
+// est commun à tous les types) ; un type « PDF seulement » ne reçoit donc que des PDF si tous
+// les types l'exigent.
+$accepted = ['.pdf'];
+foreach ($types as $declarable) {
+    if ($declarable->evidencetypes !== 'pdf') {
+        $accepted = ['document', 'image', 'archive'];
+    }
+}
 $fileoptions = [
     'subdirs' => 0,
     'maxfiles' => 10,
-    'accepted_types' => ['document', 'image', 'archive'],
+    'accepted_types' => $accepted,
 ];
 
 $mform = new credit_form(new moodle_url($baseurl, ['creditid' => $creditid]), [
+    'editing' => (bool) $creditid,
     'ep' => $ep,
     'types' => $types,
     'fileoptions' => $fileoptions,
 ]);
 
 $draftitemid = file_get_submitted_draft_itemid('evidence');
-file_prepare_draft_area($draftitemid, $context->id, 'mod_ep', EP_EVIDENCE_FILEAREA,
-    $credit ? $credit->id : null, $fileoptions);
+file_prepare_draft_area(
+    $draftitemid,
+    $context->id,
+    'mod_ep',
+    EP_EVIDENCE_FILEAREA,
+    $credit ? $credit->id : null,
+    $fileoptions
+);
 
 if ($credit) {
     $mform->set_data([
@@ -135,8 +161,11 @@ if ($mform->is_cancelled()) {
         $credit->name = $data->name;
         $credit->description = $data->description;
         $credit->claimedects = round((float) $data->claimedects, 2);
-        $credit->timemodified = time();
-        $DB->update_record('ep_credit', $credit);
+        // La demande a pu être tranchée pendant que l'étudiant la modifiait : rien n'est alors
+        // réécrit, et il en est averti.
+        if (!ep_update_declaration($credit)) {
+            redirect($returnurl, get_string('errorcreditchanged', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+        }
         $savedid = $credit->id;
     } else {
         $savedid = ep_create_credit($ep, $USER->id, $type, [
@@ -148,12 +177,19 @@ if ($mform->is_cancelled()) {
         ]);
     }
 
-    file_save_draft_area_files($data->evidence, $context->id, 'mod_ep', EP_EVIDENCE_FILEAREA,
-        $savedid, $fileoptions);
+    file_save_draft_area_files(
+        $data->evidence,
+        $context->id,
+        'mod_ep',
+        EP_EVIDENCE_FILEAREA,
+        $savedid,
+        $fileoptions
+    );
 
     redirect($returnurl, get_string('creditsubmitted', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('declarecredit', 'mod_ep'));
 echo html_writer::link($returnurl, get_string('back'));
@@ -163,7 +199,8 @@ echo $OUTPUT->notification(
     empty($referents)
         ? get_string('declarenoreferent', 'mod_ep')
         : get_string('declarereferent', 'mod_ep', implode(', ', array_map('fullname', $referents))),
-    empty($referents) ? 'warning' : 'info');
+    empty($referents) ? 'warning' : 'info'
+);
 
 $mform->display();
 

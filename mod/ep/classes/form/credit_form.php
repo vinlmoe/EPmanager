@@ -32,7 +32,6 @@ require_once($CFG->dirroot . '/mod/ep/locallib.php');
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class credit_form extends \moodleform {
-
     /**
      * Defines the form fields.
      */
@@ -60,14 +59,32 @@ class credit_form extends \moodleform {
         // déroutant qu'utile pour trois lignes de consigne.
         $descriptions = [];
         foreach ($types as $type) {
+            $notes = [];
             if (trim((string) $type->description) !== '') {
+                $notes[] = format_text($type->description, FORMAT_PLAIN);
+            }
+            if ((int) $type->evidence === EP_EVIDENCE_REQUIRED) {
+                $notes[] = get_string('evidence', 'mod_ep') . ' : ' . get_string('evidence_required', 'mod_ep')
+                    . ' (' . get_string('evidencetypes_' . $type->evidencetypes, 'mod_ep') . ')';
+            }
+            if ($type->maxclaimedects > 0) {
+                $notes[] = get_string('maxclaimedects', 'mod_ep') . ' : ' . ep_format_ects($type->maxclaimedects);
+            }
+            if (!empty($type->validationflow)) {
+                $notes[] = get_string('validationflow', 'mod_ep') . ' : ' . ep_flow_label($type->validationflow);
+            }
+            if ($notes) {
                 $descriptions[] = \html_writer::tag('dt', format_string($type->name))
-                    . \html_writer::tag('dd', format_text($type->description, FORMAT_PLAIN));
+                    . \html_writer::tag('dd', implode(\html_writer::empty_tag('br'), $notes));
             }
         }
         if (!empty($descriptions)) {
-            $mform->addElement('static', 'typedescriptions', '',
-                \html_writer::tag('dl', implode('', $descriptions)));
+            $mform->addElement(
+                'static',
+                'typedescriptions',
+                '',
+                \html_writer::tag('dl', implode('', $descriptions))
+            );
         }
 
         $mform->addElement('text', 'name', get_string('creditname', 'mod_ep'), ['size' => '64']);
@@ -75,13 +92,21 @@ class credit_form extends \moodleform {
         $mform->addRule('name', null, 'required', null, 'client');
         $mform->addRule('name', get_string('maximumchars', '', 255), 'maxlength', 255, 'client');
 
-        $mform->addElement('textarea', 'description', get_string('creditdescription', 'mod_ep'),
-            ['rows' => 6, 'cols' => 60]);
+        $mform->addElement(
+            'textarea',
+            'description',
+            get_string('creditdescription', 'mod_ep'),
+            ['rows' => 6, 'cols' => 60]
+        );
         $mform->setType('description', PARAM_TEXT);
         $mform->addHelpButton('description', 'creditdescription', 'mod_ep');
 
-        $mform->addElement('select', 'studyyear', get_string('studyyear', 'mod_ep'),
-            ep_studyyear_selectable_options($ep));
+        $mform->addElement(
+            'select',
+            'studyyear',
+            get_string('studyyear', 'mod_ep'),
+            ep_studyyear_selectable_options($ep)
+        );
         $mform->setDefault('studyyear', (int) $ep->currentstudyyear);
         $mform->addHelpButton('studyyear', 'studyyear', 'mod_ep');
 
@@ -93,7 +118,10 @@ class credit_form extends \moodleform {
         $mform->addElement('filemanager', 'evidence', get_string('evidencefiles', 'mod_ep'), null, $fileoptions);
         $mform->addHelpButton('evidence', 'evidencefiles', 'mod_ep');
 
-        $this->add_action_buttons();
+        $this->add_action_buttons(true, get_string(
+            empty($this->_customdata['editing']) ? 'sendrequest' : 'savechanges',
+            empty($this->_customdata['editing']) ? 'mod_ep' : 'moodle'
+        ));
     }
 
     /**
@@ -109,6 +137,21 @@ class credit_form extends \moodleform {
         $errors = parent::validation($data, $files);
         if ((float) $data['claimedects'] <= 0) {
             $errors['claimedects'] = get_string('errorpositiveects', 'mod_ep');
+        }
+        $type = $this->_customdata['types'][$data['typeid']] ?? null;
+        if ($type) {
+            if ($type->maxclaimedects > 0 && (float) $data['claimedects'] > (float) $type->maxclaimedects) {
+                $errors['claimedects'] = get_string('errormaxclaimedects', 'mod_ep', ep_format_ects($type->maxclaimedects));
+            }
+            // Justificatifs obligatoires : au moins un fichier dans la zone de brouillon.
+            if ((int) $type->evidence === EP_EVIDENCE_REQUIRED && empty($data['evidence'])) {
+                $errors['evidence'] = get_string('errorevidencerequired', 'mod_ep');
+            } else if ((int) $type->evidence === EP_EVIDENCE_REQUIRED) {
+                $info = file_get_draft_area_info($data['evidence']);
+                if (empty($info['filecount'])) {
+                    $errors['evidence'] = get_string('errorevidencerequired', 'mod_ep');
+                }
+            }
         }
         return $errors;
     }

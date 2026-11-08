@@ -51,7 +51,7 @@ et ne montre que les activités où il a toujours la capacité
 cours, ou révoquer un de ces rôles, le retire donc automatiquement de la
 synthèse — aucune synchronisation à faire.
 
-Deux écrans, comme dans `mod_ep` :
+Trois écrans, reliés par une barre de navigation commune :
 
 - **Validation** (page d'atterrissage) : ce qui attend une décision, puis la
   liste filtrable de tout le périmètre.
@@ -59,7 +59,18 @@ Deux écrans, comme dans `mod_ep` :
   référent, avec l'accès à sa situation détaillée. Être responsable d'un EP
   donne à valider des inscriptions, pas à suivre le dossier complet d'un
   étudiant : ces étudiants-là ne figurent donc pas dans le pilotage.
+- **À traiter** (`todo.php`, avec le nombre d'actions en attente dans la
+  barre de navigation et un résumé en tête de la page de validation) : les EP
+  dont il est responsable qui ont des participants en attente de sa décision,
+  ses propositions et révisions de syllabus à reprendre (brouillon, renvoyée
+  par la DEVE avec son commentaire) ou soumises à la DEVE, et les éléments du
+  supplément au diplôme de ses étudiants à l'étape « référent », qu'il peut
+  valider ou refuser directement sur cette page. Seul ce qui lui revient comme
+  responsable d'EP ou enseignant référent y figure, pas ce qu'il pourrait
+  trancher en tant que DEVE.
 
 Chaque ligne renvoie vers la page habituelle de l'activité d'origine
-(`mod/ep/validate.php`) : la décision elle-même continue de se prendre dans le
-cours de la promotion concernée.
+(`mod/ep/validate.php`, `participants.php`, `syllabus_edit.php`...) : la
+décision elle-même continue de se prendre dans le cours de la promotion
+concernée, à l'exception des éléments du supplément au diplôme, tranchés dans
+« À traiter » avec les mêmes contrôles que `mod/ep/supplement_items.php`.

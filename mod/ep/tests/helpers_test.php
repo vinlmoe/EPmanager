@@ -36,7 +36,6 @@ require_once($CFG->dirroot . '/mod/ep/locallib.php');
  * @covers     ::ep_render_progress_cells
  */
 final class helpers_test extends \advanced_testcase {
-
     /**
      * Construit un jeu de droits pré-calculés, tel que le renvoie ep_get_user_rights().
      *
@@ -149,9 +148,11 @@ final class helpers_test extends \advanced_testcase {
         $this->assertFalse(ep_rights_has_validation_scope($this->rights(['evaluateteacher' => true])));
         $this->assertTrue(ep_rights_has_validation_scope($this->rights(['validatedeve' => true])));
         $this->assertTrue(ep_rights_has_validation_scope(
-            $this->rights(['evaluateteacher' => true, 'referentids' => [42]])));
+            $this->rights(['evaluateteacher' => true, 'referentids' => [42]])
+        ));
         $this->assertTrue(ep_rights_has_validation_scope(
-            $this->rights(['evaluateteacher' => true, 'responsibleids' => [5]])));
+            $this->rights(['evaluateteacher' => true, 'responsibleids' => [5]])
+        ));
     }
 
     /**

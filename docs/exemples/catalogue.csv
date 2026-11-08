@@ -1,0 +1,4 @@
+﻿Code;Intitulé;Type;ECTS;Année min;Année max;Places;État;Ouverture des inscriptions;Fermeture des inscriptions;Responsables;Évaluation;Note maximale;Seuil;Prérequis;Objectifs;Acquis d'apprentissage;Conditions d'examen;Langue;Travail personnel
+ANA1;Anatomie comparée;academic;2;2;3;30;publié;01/09/2026;15/09/2026 18:00;prof.durand@example.com;avec note;20;10;;Situer les grandes variations anatomiques entre espèces;Décrire et comparer les appareils locomoteurs;Examen écrit de 1 h;français;20
+ANA2;Anatomie chirurgicale;academic;2,5;3;4;20;publié;01/09/2026;15/09/2026 18:00;prof.durand@example.com, prof.martin@example.com;avec note;20;12;ANA1;Préparer la pratique chirurgicale;Identifier les repères anatomiques opératoires;Épreuve pratique;français;25
+ETH1;Éthologie et bien-être;academic;1;1;6;0;brouillon;;;prof.leroy@example.com;sans note;;;;Connaître les besoins comportementaux des espèces domestiques;;Présence et rapport;anglais;10

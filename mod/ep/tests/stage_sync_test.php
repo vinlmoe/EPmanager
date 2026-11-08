@@ -35,7 +35,6 @@ require_once($CFG->dirroot . '/mod/stage/locallib.php');
  * @covers     ::ep_get_referent_students
  */
 final class stage_sync_test extends \advanced_testcase {
-
     /** @var \stdClass */
     protected $course;
 
@@ -87,8 +86,11 @@ final class stage_sync_test extends \advanced_testcase {
         global $DB;
 
         $entry = $this->getDataGenerator()->get_plugin_generator('mod_stage')->create_entry(
-            $this->stage, $this->student->id, $this->theme,
-            ['declaredduration' => $days, 'studyyear' => $studyyear]);
+            $this->stage,
+            $this->student->id,
+            $this->theme,
+            ['declaredduration' => $days, 'studyyear' => $studyyear]
+        );
 
         stage_set_entry_stagetype($entry->id, $stagetype);
         if ($validated) {
@@ -96,6 +98,86 @@ final class stage_sync_test extends \advanced_testcase {
         }
 
         return $DB->get_record('stage_entry', ['id' => $entry->id], '*', MUST_EXIST);
+    }
+
+    /**
+     * Une page ouverte peu après une synchronisation voit quand même un stage que la DEVE vient
+     * de valider : c'est le changement des stages qui déclenche le recalcul, pas l'horloge.
+     */
+    public function test_page_sync_sees_a_stage_validated_just_after_a_sync(): void {
+        global $DB;
+
+        $this->assertTrue(ep_sync_stage_credits_if_due($this->ep));
+        $entry = $this->create_stage_entry('complementaire', true, 8);
+
+        $this->assertTrue(ep_sync_stage_credits_if_due($this->ep));
+        $this->assertEquals(2, $DB->get_field('ep_credit', 'retainedects', ['sourceref' => $entry->id]));
+    }
+
+    /**
+     * La DEVE corrige la durée retenue dans « Gestion des stages » (sans événement) : la page
+     * suivante du module en tient compte.
+     */
+    public function test_page_sync_follows_a_retained_duration_corrected_afterwards(): void {
+        global $DB;
+
+        $entry = $this->create_stage_entry('complementaire', true, 8);
+        ep_sync_stage_credits_if_due($this->ep);
+        // Correction écrite directement, sans passer par une fonction de mod_stage : depuis que
+        // mod_stage n'enregistre plus que les champs de chaque étape, la modification des détails
+        // ne touche plus la durée retenue.
+        $DB->update_record('stage_entry', (object) ['id' => $entry->id, 'retainedduration' => 12]);
+
+        $this->assertTrue(ep_sync_stage_credits_if_due($this->ep));
+        $this->assertEquals(3, $DB->get_field('ep_credit', 'retainedects', ['sourceref' => $entry->id]));
+    }
+
+    /**
+     * Rien n'a changé dans les stages ni dans le barème : la page ne recalcule rien.
+     */
+    public function test_page_sync_does_nothing_when_nothing_changed(): void {
+        $this->create_stage_entry('complementaire', true, 8);
+        $this->assertTrue(ep_sync_stage_credits_if_due($this->ep));
+        $this->assertFalse(ep_sync_stage_credits_if_due($this->ep));
+    }
+
+    /**
+     * Un changement de barème du type stage est vu lui aussi.
+     */
+    public function test_page_sync_follows_a_rate_change(): void {
+        global $DB;
+
+        $entry = $this->create_stage_entry('complementaire', true, 8);
+        ep_sync_stage_credits_if_due($this->ep);
+        $type = $DB->get_record('ep_type', ['epid' => $this->ep->id, 'code' => 'stage']);
+        $DB->set_field('ep_type', 'ectsperday', 0.5, ['id' => $type->id]);
+
+        $this->assertTrue(ep_sync_stage_credits_if_due($this->ep));
+        $this->assertEquals(4, $DB->get_field('ep_credit', 'retainedects', ['sourceref' => $entry->id]));
+    }
+
+    /**
+     * La DEVE valide un stage puis, aussitôt, les années : le stage compte, sans attendre qu'une
+     * page du module ou la tâche de la nuit ait recalculé les crédits.
+     */
+    public function test_year_validation_counts_a_stage_validated_just_before(): void {
+        ep_set_year_requirement($this->ep->id, 3, 2);
+        ep_sync_stage_credits($this->ep);
+        $this->create_stage_entry('complementaire', true, 8);
+
+        $result = ep_validate_years_in_bulk($this->ep, 3, [(int) $this->student->id], get_admin()->id);
+        $this->assertSame(1, $result->validated);
+    }
+
+    /**
+     * Même chose pour le supplément au diplôme : le stage validé juste avant y figure.
+     */
+    public function test_supplement_includes_a_stage_validated_just_before(): void {
+        ep_sync_stage_credits($this->ep);
+        $this->create_stage_entry('complementaire', true, 8);
+
+        $data = ep_build_supplement($this->ep, \core_user::get_user($this->student->id));
+        $this->assertCount(1, $data->credits);
     }
 
     /**
@@ -110,12 +192,32 @@ final class stage_sync_test extends \advanced_testcase {
 
         $this->assertSame(1, $result->created);
 
-        $credit = $DB->get_record('ep_credit',
-            ['epid' => $this->ep->id, 'source' => EP_SOURCE_STAGE, 'sourceref' => $entry->id], '*', MUST_EXIST);
+        $credit = $DB->get_record(
+            'ep_credit',
+            ['epid' => $this->ep->id, 'source' => EP_SOURCE_STAGE, 'sourceref' => $entry->id],
+            '*',
+            MUST_EXIST
+        );
         $this->assertEquals(EP_STATUS_VALIDATED, $credit->status);
         $this->assertEquals(2, $credit->retainedects); // 8 jours x 0,25.
         $this->assertEquals(3, $credit->studyyear);
         $this->assertNull($credit->validatedby);
+    }
+
+    /**
+     * Une structure d'accueil au nom très long ne fait pas échouer la synchronisation : l'intitulé
+     * du crédit est borné à la taille du champ, et une nouvelle synchronisation n'y voit aucun
+     * changement.
+     */
+    public function test_long_structure_name_is_truncated(): void {
+        global $DB;
+
+        $entry = $this->create_stage_entry('complementaire', true, 8);
+        $DB->set_field('stage_entry', 'structure', str_repeat('Clinique vétérinaire & ', 11), ['id' => $entry->id]);
+        $this->assertSame(1, ep_sync_stage_credits($this->ep)->created);
+        $name = $DB->get_field('ep_credit', 'name', ['epid' => $this->ep->id, 'sourceref' => $entry->id]);
+        $this->assertSame(255, \core_text::strlen($name));
+        $this->assertSame(0, ep_sync_stage_credits($this->ep)->updated);
     }
 
     /**
@@ -128,8 +230,10 @@ final class stage_sync_test extends \advanced_testcase {
         $this->create_stage_entry('obligatoire', true, 8);
         ep_sync_stage_credits($this->ep);
 
-        $this->assertSame(0, $DB->count_records('ep_credit',
-            ['epid' => $this->ep->id, 'source' => EP_SOURCE_STAGE]));
+        $this->assertSame(0, $DB->count_records(
+            'ep_credit',
+            ['epid' => $this->ep->id, 'source' => EP_SOURCE_STAGE]
+        ));
     }
 
     /**
@@ -142,8 +246,10 @@ final class stage_sync_test extends \advanced_testcase {
         $this->create_stage_entry('complementaire', false, 8);
         ep_sync_stage_credits($this->ep);
 
-        $this->assertSame(0, $DB->count_records('ep_credit',
-            ['epid' => $this->ep->id, 'source' => EP_SOURCE_STAGE]));
+        $this->assertSame(0, $DB->count_records(
+            'ep_credit',
+            ['epid' => $this->ep->id, 'source' => EP_SOURCE_STAGE]
+        ));
     }
 
     /**
@@ -161,8 +267,12 @@ final class stage_sync_test extends \advanced_testcase {
         $result = ep_sync_stage_credits($this->ep);
 
         $this->assertSame(1, $result->updated);
-        $credit = $DB->get_record('ep_credit',
-            ['epid' => $this->ep->id, 'sourceref' => $entry->id], '*', MUST_EXIST);
+        $credit = $DB->get_record(
+            'ep_credit',
+            ['epid' => $this->ep->id, 'sourceref' => $entry->id],
+            '*',
+            MUST_EXIST
+        );
         $this->assertEquals(3, $credit->retainedects);
     }
 

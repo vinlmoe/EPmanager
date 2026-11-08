@@ -22,8 +22,6 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /** Crédit annulé (désinscription de l'étudiant, retrait par la DEVE) : état terminal, conservé. */
 define('EP_STATUS_CANCELLED', -2);
 /** Crédit refusé par le responsable de l'EP ou l'enseignant référent, avec motif. */
@@ -35,6 +33,47 @@ define('EP_STATUS_VALIDATED', 1);
 
 /** Nombre de lignes par page pour les listes paginées (DEVE / enseignants). */
 define('EP_LIST_PERPAGE', 40);
+
+/** Acquisition par inscription à un EP du catalogue, qui porte ses ECTS. */
+define('EP_ACQ_CATALOG', 'catalog');
+/** Acquisition par déclaration de l'étudiant, avec justificatifs. */
+define('EP_ACQ_DECLARATION', 'declaration');
+/** Acquisition automatique d'après les stages complémentaires validés dans mod_stage. */
+define('EP_ACQ_STAGE', 'stage');
+/** Acquisition par saisie de la DEVE (à la main ou par import), sans demande de l'étudiant. */
+define('EP_ACQ_DEVE', 'deve');
+
+/** Étape de validation : le responsable de l'EP du catalogue. */
+define('EP_ROLE_OWNER', 'owner');
+/** Étape de validation : l'enseignant référent de l'étudiant. */
+define('EP_ROLE_REFERENT', 'referent');
+/** Étape de validation : la DEVE. */
+define('EP_ROLE_DEVE', 'deve');
+/** Auteur d'un retrait : l'étudiant lui-même. */
+define('EP_ROLE_STUDENT', 'student');
+
+/** EP du catalogue en brouillon : proposition d'un enseignant, pas encore soumise. */
+define('EP_ACTIVITY_DRAFT', 'draft');
+/** EP du catalogue proposé par un enseignant, en attente de la DEVE. */
+define('EP_ACTIVITY_PROPOSED', 'proposed');
+/** EP du catalogue publié : inscriptions ouvertes, selon sa période d'inscription. */
+define('EP_ACTIVITY_PUBLISHED', 'published');
+/** EP du catalogue clos : toujours au catalogue, inscriptions closes, notes encore saisissables. */
+define('EP_ACTIVITY_CLOSED', 'closed');
+/** EP du catalogue archivé : retiré du catalogue, inscriptions conservées au dossier. */
+define('EP_ACTIVITY_ARCHIVED', 'archived');
+
+/** Évaluation sans note : validé ou non validé. */
+define('EP_GRADING_NONE', 'none');
+/** Évaluation par une note, comparée au seuil du type ou de l'EP. */
+define('EP_GRADING_GRADE', 'grade');
+
+/** Justificatifs sans objet pour ce type. */
+define('EP_EVIDENCE_NONE', 0);
+/** Justificatifs facultatifs. */
+define('EP_EVIDENCE_OPTIONAL', 1);
+/** Justificatifs obligatoires : au moins un fichier. */
+define('EP_EVIDENCE_REQUIRED', 2);
 
 /** EP académique interne : inscription à un EP du catalogue, validée par son responsable. */
 define('EP_TYPE_ACADEMIC', 'academic');
@@ -63,13 +102,32 @@ define('EP_SOURCE_DEVE', 'deve');
  */
 define('EP_EVIDENCE_FILEAREA', 'evidence');
 
+/** Zone de fichiers des preuves d'un élément du supplément au diplôme (itemid = ep_supplement_item.id). */
+define('EP_SUPPLEMENT_EVIDENCE_FILEAREA', 'supplementevidence');
+/** Zone de fichiers des suppléments au diplôme émis (itemid = ep_supplement_issue.id). */
+define('EP_SUPPLEMENT_ISSUED_FILEAREA', 'supplementissued');
+/** Zone de fichiers du cachet imprimé sur les suppléments (itemid 0). */
+define('EP_SUPPLEMENT_STAMP_FILEAREA', 'supplementstamp');
+
 /**
- * Délai minimal entre deux synchronisations des EP de type stage déclenchées par l'affichage
- * d'une page (voir ep_sync_stage_credits_if_due()) : la tâche planifiée quotidienne fait foi,
- * cette synchronisation d'opportunité ne sert qu'à ne pas afficher un décompte visiblement
- * périmé juste après une validation DEVE.
+ * Version du format d'export du paramétrage : incrémentée quand la structure change, pour
+ * qu'un fichier plus ancien soit converti ou refusé à l'import plutôt que mal lu.
  */
-define('EP_STAGE_SYNC_INTERVAL', 300);
+define('EP_SETTINGS_FORMAT', 1);
+
+/** Zone de fichiers du livret PDF du catalogue, conservé tant qu'il est à jour (itemid 0). */
+define('EP_BOOKLET_FILEAREA', 'booklet');
+
+/** Zone de fichiers du logo des documents PDF de l'activité (itemid 0). */
+define('EP_PDFLOGO_FILEAREA', 'pdflogo');
+
+/**
+ * Âge maximal d'une synchronisation des EP de type stage dont l'empreinte n'a pas changé (voir
+ * ep_sync_stage_credits_if_due()) : tout ce qui compte (stages complémentaires validés, durées,
+ * années, mobilité, barème) est dans l'empreinte et déclenche le recalcul aussitôt ; ce délai ne
+ * rattrape que ce qui n'y est pas, comme le libellé renommé d'une thématique.
+ */
+define('EP_STAGE_SYNC_INTERVAL', 3600);
 
 /**
  * Returns the list of features supported by this module.
@@ -113,6 +171,9 @@ function ep_add_instance($moduleinstance, $mform = null) {
 
     $epid = $DB->insert_record('ep', $moduleinstance);
 
+    // Catégories d'éléments du supplément au diplôme proposées par défaut.
+    ep_create_default_supplement_categories($epid);
+
     // Les six types d'enseignement personnalisé sont créés avec l'instance : la DEVE n'a plus
     // qu'à les paramétrer (plafonds, ECTS par jour de stage), sans avoir à deviner quels codes de
     // type le reste du module attend.
@@ -150,10 +211,38 @@ function ep_delete_instance($id) {
         return false;
     }
 
+    // Suppressions par paquets : une liste IN sans limite dépasse celles de MSSQL et d'Oracle.
     $activityids = $DB->get_fieldset_select('ep_activity', 'id', 'epid = ?', [$id]);
-    if ($activityids) {
-        [$insql, $inparams] = $DB->get_in_or_equal($activityids);
+    foreach (array_chunk($activityids, 500) as $chunk) {
+        [$insql, $inparams] = $DB->get_in_or_equal($chunk);
         $DB->delete_records_select('ep_activity_teacher', "activityid $insql", $inparams);
+        $DB->delete_records_select('ep_activity_prereq', "activityid $insql", $inparams);
+        $syllabusids = $DB->get_fieldset_select('ep_syllabus', 'id', "activityid $insql", $inparams);
+        foreach (array_chunk($syllabusids, 500) as $schunk) {
+            [$sinsql, $sinparams] = $DB->get_in_or_equal($schunk);
+            $DB->delete_records_select('ep_session', "syllabusid $sinsql", $sinparams);
+        }
+        $DB->delete_records_select('ep_syllabus', "activityid $insql", $inparams);
+        // Les fiches des EP (activités « Syllabus du module ») restent dans le cours, redevenues
+        // des fiches ordinaires : les supprimer ici gênerait la suppression du cours entier,
+        // qui passe aussi par elles.
+        [$sinsql, $sinparams] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'act');
+        $DB->execute(
+            "UPDATE {syllabus} SET component = '', itemid = 0 WHERE component = 'mod_ep' AND itemid $sinsql",
+            $sinparams
+        );
+    }
+    $DB->delete_records('ep_notification', ['epid' => $id]);
+    $DB->delete_records('ep_supplement_item', ['epid' => $id]);
+    $DB->delete_records('ep_supplement_issue', ['epid' => $id]);
+    $DB->delete_records('ep_supplement_category', ['epid' => $id]);
+    $DB->delete_records('ep_supplement_text', ['epid' => $id]);
+    $DB->delete_records('ep_year_validation', ['epid' => $id]);
+    $DB->delete_records('ep_import_log', ['epid' => $id]);
+    $creditids = $DB->get_fieldset_select('ep_credit', 'id', 'epid = ?', [$id]);
+    foreach (array_chunk($creditids, 500) as $chunk) {
+        [$insql, $inparams] = $DB->get_in_or_equal($chunk);
+        $DB->delete_records_select('ep_credit_decision', "creditid $insql", $inparams);
     }
     $DB->delete_records('ep_credit', ['epid' => $id]);
     $DB->delete_records('ep_activity', ['epid' => $id]);
@@ -162,6 +251,92 @@ function ep_delete_instance($id) {
     $DB->delete_records('ep', ['id' => $id]);
 
     return true;
+}
+
+/**
+ * Éléments du formulaire de réinitialisation du cours : ce qui peut être effacé pour accueillir
+ * une nouvelle promotion. Le paramétrage (types, minimums, catalogue, syllabus, supplément,
+ * courriels) est toujours conservé.
+ *
+ * @param MoodleQuickForm $mform
+ * @return void
+ */
+function ep_reset_course_form_definition(&$mform) {
+    $mform->addElement('header', 'epheader', get_string('modulenameplural', 'mod_ep'));
+    $mform->addElement('advcheckbox', 'reset_ep_credits', get_string('resetcredits', 'mod_ep'));
+    $mform->addElement('advcheckbox', 'reset_ep_years', get_string('resetyears', 'mod_ep'));
+    $mform->addElement('advcheckbox', 'reset_ep_supplement', get_string('resetsupplement', 'mod_ep'));
+    $mform->addHelpButton('reset_ep_supplement', 'resetsupplement', 'mod_ep');
+    $mform->addElement('advcheckbox', 'reset_ep_importlog', get_string('resetimportlog', 'mod_ep'));
+}
+
+/**
+ * Valeurs par défaut du formulaire de réinitialisation : les dossiers de la promotion sont
+ * effacés, les suppléments au diplôme émis (documents certifiés) et le journal des imports sont
+ * conservés sauf demande explicite.
+ *
+ * @param stdClass $course
+ * @return array
+ */
+function ep_reset_course_form_defaults($course) {
+    return ['reset_ep_credits' => 1, 'reset_ep_years' => 1, 'reset_ep_supplement' => 0, 'reset_ep_importlog' => 0];
+}
+
+/**
+ * Réinitialise les données des utilisateurs des activités du cours, selon les choix du
+ * formulaire de réinitialisation.
+ *
+ * @param stdClass $data Données du formulaire (courseid, reset_ep_*).
+ * @return array Statut, une ligne par élément effacé.
+ */
+function ep_reset_userdata($data) {
+    global $DB;
+
+    $component = get_string('modulenameplural', 'mod_ep');
+    $status = [];
+    $instances = $DB->get_records('ep', ['course' => $data->courseid], '', 'id');
+    if (!$instances) {
+        return $status;
+    }
+    $fs = get_file_storage();
+    $contexts = [];
+    foreach ($instances as $instance) {
+        $cm = get_coursemodule_from_instance('ep', $instance->id, $data->courseid, false, IGNORE_MISSING);
+        if ($cm) {
+            $contexts[$instance->id] = context_module::instance($cm->id);
+        }
+    }
+
+    if (!empty($data->reset_ep_credits)) {
+        foreach ($contexts as $epid => $context) {
+            $fs->delete_area_files($context->id, 'mod_ep', EP_EVIDENCE_FILEAREA);
+            $DB->delete_records_select('ep_credit_decision', 'creditid IN (SELECT id FROM {ep_credit} WHERE epid = ?)', [$epid]);
+            $DB->delete_records('ep_credit', ['epid' => $epid]);
+        }
+        $status[] = ['component' => $component, 'item' => get_string('resetcredits', 'mod_ep'), 'error' => false];
+    }
+    if (!empty($data->reset_ep_years)) {
+        foreach (array_keys($contexts) as $epid) {
+            $DB->delete_records('ep_year_validation', ['epid' => $epid]);
+        }
+        $status[] = ['component' => $component, 'item' => get_string('resetyears', 'mod_ep'), 'error' => false];
+    }
+    if (!empty($data->reset_ep_supplement)) {
+        foreach ($contexts as $epid => $context) {
+            $fs->delete_area_files($context->id, 'mod_ep', EP_SUPPLEMENT_EVIDENCE_FILEAREA);
+            $fs->delete_area_files($context->id, 'mod_ep', EP_SUPPLEMENT_ISSUED_FILEAREA);
+            $DB->delete_records('ep_supplement_item', ['epid' => $epid]);
+            $DB->delete_records('ep_supplement_issue', ['epid' => $epid]);
+        }
+        $status[] = ['component' => $component, 'item' => get_string('resetsupplement', 'mod_ep'), 'error' => false];
+    }
+    if (!empty($data->reset_ep_importlog)) {
+        foreach (array_keys($contexts) as $epid) {
+            $DB->delete_records('ep_import_log', ['epid' => $epid]);
+        }
+        $status[] = ['component' => $component, 'item' => get_string('resetimportlog', 'mod_ep'), 'error' => false];
+    }
+    return $status;
 }
 
 /**
@@ -185,4 +360,91 @@ function ep_user_outline($course, $user, $mod, $ep) {
     $result->info = get_string('numcredits', 'mod_ep', $count);
     $result->time = time();
     return $result;
+}
+
+// Fiche d'un EP tenue par mod_syllabus : fonctions appelées par mod_syllabus (component_callback).
+
+/**
+ * Étudiants appelés à donner leur avis sur un EP : ses inscrits (inscription en attente ou
+ * validée), et non toute la promotion du cours.
+ *
+ * @param int $itemid Identifiant de l'EP (ep_activity).
+ * @return int[]
+ */
+function mod_ep_syllabus_eligible_users($itemid) {
+    global $DB;
+
+    return array_map('intval', $DB->get_fieldset_select(
+        'ep_credit',
+        'DISTINCT userid',
+        'activityid = :activityid AND status IN (:pending, :validated)',
+        ['activityid' => $itemid, 'pending' => EP_STATUS_PENDING, 'validated' => EP_STATUS_VALIDATED]
+    ));
+}
+
+/**
+ * Un nouvel EP (brouillon ou proposé) passe toujours par la relecture de la DEVE, même si la
+ * relecture des mises à jour n'est pas exigée.
+ *
+ * @param int $itemid Identifiant de l'EP.
+ * @return bool
+ */
+function mod_ep_syllabus_review_required($itemid) {
+    global $DB;
+
+    $state = $DB->get_field('ep_activity', 'state', ['id' => $itemid]);
+    return $state === false || in_array($state, [EP_ACTIVITY_DRAFT, EP_ACTIVITY_PROPOSED], true)
+        || mod_ep_syllabus_commission_required($itemid);
+}
+
+/**
+ * La fiche d'un EP académique, et chacune de ses modifications, est validée par la DEVE avec la
+ * date de la commission qui l'a approuvée.
+ *
+ * @param int $itemid Identifiant de l'EP.
+ * @return bool
+ */
+function mod_ep_syllabus_commission_required($itemid) {
+    global $DB;
+
+    return $DB->get_field_sql(
+        "SELECT t.code
+           FROM {ep_activity} a
+           JOIN {ep_type} t ON t.id = a.typeid
+          WHERE a.id = :id",
+        ['id' => $itemid]
+    ) === EP_TYPE_ACADEMIC;
+}
+
+/**
+ * Mise à jour de la fiche d'un EP déjà publié publiée sans relecture, si la DEVE l'a choisi pour
+ * cette activité (réglage « Publication directe des mises à jour par les responsables »).
+ *
+ * @param int $itemid Identifiant de l'EP.
+ * @return bool
+ */
+function mod_ep_syllabus_review_exempt($itemid) {
+    global $DB;
+
+    return (bool) $DB->get_field_sql(
+        "SELECT e.proposalsdirectpublish
+           FROM {ep_activity} a
+           JOIN {ep} e ON e.id = a.epid
+          WHERE a.id = :id AND a.state NOT IN (:draft, :proposed)",
+        ['id' => $itemid, 'draft' => EP_ACTIVITY_DRAFT, 'proposed' => EP_ACTIVITY_PROPOSED]
+    );
+}
+
+/**
+ * Adresse de l'EP dans son catalogue, pour revenir de sa fiche.
+ *
+ * @param int $itemid Identifiant de l'EP.
+ * @return moodle_url|null
+ */
+function mod_ep_syllabus_owner_url($itemid) {
+    global $DB;
+
+    $epid = $DB->get_field('ep_activity', 'epid', ['id' => $itemid]);
+    $cm = $epid ? get_coursemodule_from_instance('ep', $epid, 0, false, IGNORE_MISSING) : null;
+    return $cm ? new moodle_url('/mod/ep/catalog.php', ['id' => $cm->id], 'ep-activity-' . (int) $itemid) : null;
 }

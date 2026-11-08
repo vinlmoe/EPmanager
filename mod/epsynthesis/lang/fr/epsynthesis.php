@@ -60,6 +60,27 @@ $string['hiddenactivity'] = 'activité masquée';
 $string['noscope'] = "Aucun étudiant ne vous est attribué comme enseignant référent et vous n'êtes responsable "
     . "d'aucun EP sur les activités liées.";
 
+$string['todo'] = 'À traiter';
+$string['todowithcount'] = 'À traiter ({$a})';
+$string['todointro'] = "Ce qui attend une action de votre part dans les activités liées, comme responsable d'EP ou "
+    . "enseignant référent, en dehors des demandes de crédits (voir Validation). Chaque ligne renvoie vers la page "
+    . "de l'activité d'origine qui permet d'agir ; les éléments du supplément se tranchent directement ici.";
+$string['todoparticipants'] = 'EP dont vous êtes responsable : participants en attente de votre décision ({$a})';
+$string['todonoparticipants'] = "Aucun participant n'attend votre décision.";
+$string['todopendingparticipants'] = 'En attente de votre décision';
+$string['todooldest'] = 'Plus ancienne demande';
+$string['todosyllabi'] = 'Propositions et révisions de syllabus à reprendre ({$a})';
+$string['todonosyllabi'] = 'Aucune proposition ni révision de syllabus à reprendre.';
+$string['todosubmitted'] = 'En attente de la DEVE ({$a})';
+$string['todosubmitted_help'] = 'Pour information : ces versions ont été soumises, la décision appartient désormais '
+    . 'à la DEVE.';
+$string['todolastchange'] = 'Dernière modification';
+$string['todosupplement'] = 'Éléments du supplément au diplôme à examiner comme référent ({$a})';
+$string['todonosupplement'] = "Aucun élément du supplément au diplôme n'attend votre décision.";
+$string['todosummary_participants'] = '{$a} participant(s) à noter ou valider dans les EP dont vous êtes responsable';
+$string['todosummary_syllabi'] = '{$a} proposition(s) ou révision(s) de syllabus à reprendre';
+$string['todosummary_supplement'] = '{$a} élément(s) du supplément au diplôme à examiner';
+
 $string['privacy:metadata'] = "Le plugin Suivi de l'enseignement personnalisé ne stocke aucune donnée "
     . "personnelle : il affiche uniquement des données déjà présentes dans les activités « Enseignement "
     . "personnalisé » liées.";

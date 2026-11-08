@@ -45,15 +45,17 @@ $rights = ep_get_user_rights($ep, $context);
 
 $isowner = (int) $credit->userid === (int) $USER->id;
 $canvalidate = ep_rights_can_validate($rights, $credit);
-if (!$isowner && !$rights->viewall && !$canvalidate) {
+if (!$isowner && !ep_rights_can_view($rights, $credit)) {
     throw new moodle_exception('nopermissions', 'error', '', get_string('creditdetail', 'mod_ep'));
 }
 
 // Écran de retour : la liste d'où l'on vient (validation, pilotage, tableau de bord étudiant) si
 // elle a été transmise, sinon la page d'accueil de l'activité.
 $backurl = $returnurlparam !== '' ? new moodle_url($returnurlparam) : new moodle_url('/mod/ep/view.php', ['id' => $cm->id]);
-$pageurl = new moodle_url('/mod/ep/validate.php',
-    ['id' => $cm->id, 'creditid' => $credit->id, 'returnurl' => $returnurlparam]);
+$pageurl = new moodle_url(
+    '/mod/ep/validate.php',
+    ['id' => $cm->id, 'creditid' => $credit->id, 'returnurl' => $returnurlparam]
+);
 
 $PAGE->set_url($pageurl);
 $PAGE->set_title(format_string($ep->name) . ' - ' . get_string('creditdetail', 'mod_ep'));
@@ -68,25 +70,60 @@ $activity = !empty($credit->activityid) ? $DB->get_record('ep_activity', ['id' =
 // (une pièce justificative peut se révéler fausse après coup). Les crédits attribués
 // automatiquement en sont exclus : ils seraient recréés à la synchronisation suivante, c'est le
 // stage d'origine qu'il faut alors reprendre dans mod_stage.
-if ($rights->validatedeve && $credit->source !== EP_SOURCE_STAGE
-        && optional_param('cancelcredit', 0, PARAM_INT) && confirm_sesskey()) {
-    ep_cancel_credit($credit, $USER->id, optional_param('validatorcomment', '', PARAM_TEXT));
+if (
+    $rights->validatedeve && $credit->source !== EP_SOURCE_STAGE
+        && optional_param('cancelcredit', 0, PARAM_INT) && confirm_sesskey()
+) {
+    // Le retrait est une action lourde (il retire des ECTS acquis) : il exige une case de
+    // confirmation explicite, contrôlée côté serveur.
+    if (!optional_param('confirmcancel', 0, PARAM_INT)) {
+        redirect($pageurl, get_string('errorconfirmcancel', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+    }
+    if (!ep_cancel_credit($credit, $USER->id, optional_param('validatorcomment', '', PARAM_TEXT), 'deve')) {
+        redirect($pageurl, get_string('errorcreditchanged', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+    }
     redirect($backurl, get_string('creditcancelled', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
+$grading = ep_credit_grading($credit, $type ?: null);
+$role = ep_rights_deciding_role($rights, $credit);
+
 if ($canvalidate && (int) $credit->status === EP_STATUS_PENDING && data_submitted() && confirm_sesskey()) {
     $comment = optional_param('validatorcomment', '', PARAM_TEXT);
-    if (optional_param('rejectcredit', '', PARAM_RAW) !== '') {
-        ep_reject_credit($credit, $USER->id, $comment);
+    if (optional_param('rejectcredit', '', PARAM_TEXT) !== '') {
+        if (!ep_reject_credit($credit, $USER->id, $comment, $role)) {
+            redirect($pageurl, get_string('errorcreditchanged', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+        }
         redirect($backurl, get_string('creditrejected', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
     }
-    if (optional_param('validatecredit', '', PARAM_RAW) !== '') {
+    if (optional_param('gradecredit', '', PARAM_TEXT) !== '' && $grading->grading === EP_GRADING_GRADE) {
+        // La note décide : au moins le seuil, le crédit est validé pour les ECTS demandés ; en
+        // dessous, il est non validé, la note étant conservée.
+        $grade = optional_param('grade', null, PARAM_FLOAT);
+        if ($grade === null || $grade < 0 || $grade > $grading->grademax) {
+            redirect(
+                $pageurl,
+                get_string('errorgradeoutofrange', 'mod_ep', ep_format_ects($grading->grademax)),
+                null,
+                \core\output\notification::NOTIFY_ERROR
+            );
+        }
+        if (!ep_grade_credit($credit, $USER->id, $grade, $comment, $role)) {
+            redirect($pageurl, get_string('errorcreditchanged', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+        }
+        $message = (int) $credit->status === EP_STATUS_VALIDATED ? 'creditvalidated' : 'creditrejected';
+        redirect($backurl, get_string($message, 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
+    }
+    if (optional_param('validatecredit', '', PARAM_TEXT) !== '') {
         $retained = optional_param('retainedects', 0, PARAM_FLOAT);
-        ep_validate_credit($credit, $USER->id, $retained, $comment);
+        if (!ep_validate_credit($credit, $USER->id, $retained, $comment, $role)) {
+            redirect($pageurl, get_string('errorcreditchanged', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+        }
         redirect($backurl, get_string('creditvalidated', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
     }
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('creditdetail', 'mod_ep'));
 echo html_writer::link($backurl, get_string('back'));
@@ -99,7 +136,9 @@ if ($activity) {
         get_string('fromcatalogactivity', 'mod_ep', (object) [
             'name' => format_string($activity->name),
             'teachers' => empty($teachers) ? '-' : implode(', ', array_map('fullname', $teachers)),
-        ]), 'text-muted mb-3');
+        ]),
+        'text-muted mb-3'
+    );
 }
 
 echo $OUTPUT->heading(get_string('evidencefiles', 'mod_ep'), 4);
@@ -115,23 +154,56 @@ if ($credit->source === EP_SOURCE_STAGE) {
 if ($canvalidate && (int) $credit->status === EP_STATUS_PENDING) {
     echo $OUTPUT->heading(get_string('decision', 'mod_ep'), 4);
 
-    // Le nombre d'ECTS retenu est proposé à la valeur demandée — celle de l'EP du catalogue, ou
-    // celle avancée par l'étudiant — et reste modifiable : le validateur peut n'en retenir
-    // qu'une partie sans avoir à refuser toute la demande.
+    // Ce que la décision produira : la DEVE tranche définitivement ; un responsable ou un référent
+    // valide son étape, et la demande passe à la suivante s'il y en a une.
+    $steps = $type ? ep_flow_steps($type->validationflow) : [];
+    $nextstep = $steps[(int) $credit->step + 1] ?? null;
+    if ($role === EP_ROLE_DEVE && count($steps) > 1) {
+        echo $OUTPUT->notification(get_string('devefinalnotice', 'mod_ep'), 'info');
+    } else if ($role !== EP_ROLE_DEVE && $nextstep !== null) {
+        echo $OUTPUT->notification(get_string('nextstepnotice', 'mod_ep', ep_role_label($nextstep)), 'info');
+    }
+    $final = $role === EP_ROLE_DEVE || $nextstep === null;
+
     echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false)]);
     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
-    echo html_writer::tag('label', get_string('retainedects', 'mod_ep'), ['for' => 'retainedects']);
-    echo html_writer::empty_tag('input', [
-        'type' => 'number', 'step' => '0.25', 'min' => 0, 'name' => 'retainedects', 'id' => 'retainedects',
-        'value' => ep_format_ects_input($credit->claimedects), 'class' => 'form-control',
-    ]);
+    if ($grading->grading === EP_GRADING_GRADE) {
+        // Crédit noté : la note décide de la validation, les ECTS retenus sont ceux demandés.
+        echo html_writer::tag('label', get_string('grade', 'mod_ep') . ' (/ ' . ep_format_ects($grading->grademax)
+            . ', ' . get_string('gradepass', 'mod_ep') . ' ' . ep_format_ects($grading->gradepass) . ')', ['for' => 'grade']);
+        echo html_writer::empty_tag('input', [
+            'type' => 'number', 'step' => '0.01', 'min' => 0, 'max' => ep_format_ects_input($grading->grademax),
+            'name' => 'grade', 'id' => 'grade', 'class' => 'form-control',
+            'value' => $credit->grade !== null ? ep_format_ects_input($credit->grade) : '',
+        ]);
+    } else {
+        // Le nombre d'ECTS retenu est proposé à la valeur demandée — celle de l'EP du catalogue,
+        // ou celle avancée par l'étudiant — et reste modifiable : le validateur peut n'en retenir
+        // qu'une partie sans avoir à refuser toute la demande.
+        echo html_writer::tag('label', get_string('retainedects', 'mod_ep'), ['for' => 'retainedects']);
+        echo html_writer::empty_tag('input', [
+            'type' => 'number', 'step' => '0.25', 'min' => 0, 'name' => 'retainedects', 'id' => 'retainedects',
+            'value' => ep_format_ects_input($credit->claimedects), 'class' => 'form-control',
+        ]);
+    }
     echo html_writer::tag('label', get_string('validatorcomment', 'mod_ep'), ['for' => 'validatorcomment']);
-    echo html_writer::tag('textarea', '',
-        ['name' => 'validatorcomment', 'id' => 'validatorcomment', 'rows' => 4, 'class' => 'form-control']);
-    echo html_writer::empty_tag('input', [
-        'type' => 'submit', 'name' => 'validatecredit', 'value' => get_string('validate', 'mod_ep'),
-        'class' => 'btn btn-primary mt-2 mr-2',
-    ]);
+    echo html_writer::tag(
+        'textarea',
+        '',
+        ['name' => 'validatorcomment', 'id' => 'validatorcomment', 'rows' => 4, 'class' => 'form-control']
+    );
+    if ($grading->grading === EP_GRADING_GRADE) {
+        echo html_writer::empty_tag('input', [
+            'type' => 'submit', 'name' => 'gradecredit', 'value' => get_string('gradeandvalidate', 'mod_ep'),
+            'class' => 'btn btn-primary mt-2 mr-2',
+        ]);
+    } else {
+        echo html_writer::empty_tag('input', [
+            'type' => 'submit', 'name' => 'validatecredit',
+            'value' => get_string($final ? 'validatefinal' : 'validatestep', 'mod_ep'),
+            'class' => 'btn btn-primary mt-2 mr-2',
+        ]);
+    }
     echo html_writer::empty_tag('input', [
         'type' => 'submit', 'name' => 'rejectcredit', 'value' => get_string('reject', 'mod_ep'),
         'class' => 'btn btn-danger mt-2',
@@ -148,12 +220,18 @@ if ($rights->validatedeve && (int) $credit->status !== EP_STATUS_CANCELLED) {
     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'cancelcredit', 'value' => 1]);
     echo html_writer::tag('label', get_string('cancelreason', 'mod_ep'), ['for' => 'cancelcomment']);
-    echo html_writer::tag('textarea', '',
-        ['name' => 'validatorcomment', 'id' => 'cancelcomment', 'rows' => 2, 'class' => 'form-control']);
+    echo html_writer::tag(
+        'textarea',
+        '',
+        ['name' => 'validatorcomment', 'id' => 'cancelcomment', 'rows' => 2, 'class' => 'form-control']
+    );
+    echo html_writer::div(
+        html_writer::checkbox('confirmcancel', 1, false, get_string('confirmcancelcredit', 'mod_ep'), ['id' => 'confirmcancel']),
+        'mt-2'
+    );
     echo html_writer::empty_tag('input', [
         'type' => 'submit', 'value' => get_string('cancelcredit', 'mod_ep'),
         'class' => 'btn btn-outline-danger mt-2',
-        'onclick' => "return confirm('" . get_string('confirmcancelcredit', 'mod_ep') . "');",
     ]);
     echo html_writer::end_tag('form');
 }

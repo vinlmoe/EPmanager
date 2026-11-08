@@ -19,7 +19,8 @@
  * liste filtrable de tout le périmètre — combiné sur toutes les activités « Enseignement
  * personnalisé » liées où l'utilisateur connecté a quelque chose à suivre. Page d'atterrissage de
  * l'activité (voir view.php, qui y redirige) ; dashboard.php la complète par le pilotage des
- * étudiants dont il est référent.
+ * étudiants dont il est référent, todo.php par le reste de ce qui attend une action de sa part
+ * (participants, syllabus, supplément au diplôme), dont le résumé figure en tête de page.
  *
  * @package   mod_epsynthesis
  * @copyright 2026 Sébastien Lefebvre
@@ -52,10 +53,11 @@ $PAGE->set_title(format_string($epsynthesis->name) . ' - ' . get_string('validat
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
+$activelinks = epsynthesis_get_active_links($epsynthesis->id, $USER->id);
+$todocounts = epsynthesis_count_todo($activelinks, $USER->id);
+
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($epsynthesis->name));
-echo html_writer::link(new moodle_url('/mod/epsynthesis/dashboard.php', ['id' => $cm->id]),
-    get_string('pilotage', 'mod_ep'));
+echo epsynthesis_render_navlinks($cm, 'entries', $todocounts);
 
 if ($epsynthesis->intro) {
     echo $OUTPUT->box(format_module_intro('epsynthesis', $epsynthesis, $cm->id), 'generalbox mod_introbox');
@@ -63,7 +65,9 @@ if ($epsynthesis->intro) {
 
 echo epsynthesis_render_managelinks_notice($epsynthesis, $cm, $context);
 
-$activelinks = epsynthesis_get_active_links($epsynthesis->id, $USER->id);
+// Page d'atterrissage : ce qui attend l'utilisateur en dehors des demandes de crédits (participants,
+// syllabus, supplément au diplôme) y est résumé, le détail étant sur todo.php.
+echo epsynthesis_render_todo_summary($cm, $todocounts);
 
 if (empty($activelinks)) {
     echo $OUTPUT->notification(get_string('noscope', 'mod_epsynthesis'), 'info');
@@ -94,16 +98,18 @@ if (empty($awaiting)) {
     foreach ($awaiting as $credit) {
         $awaitingtable->data[] = [
             format_string($credit->coursename),
-            $credit->studentfullname,
+            epsynthesis_credit_student_name($credit),
             $credit->typename,
             format_string($credit->name),
             ep_studyyear_label($credit->studyyear),
             ep_format_ects($credit->claimedects),
             userdate($credit->timecreated, get_string('strftimedatetimeshort')),
             ep_render_actions([
-                get_string('validatecredit', 'mod_ep') => new moodle_url('/mod/ep/validate.php',
+                get_string('validatecredit', 'mod_ep') => new moodle_url(
+                    '/mod/ep/validate.php',
                     ['id' => $credit->cmid, 'creditid' => $credit->id,
-                        'returnurl' => $baseurl->out_as_local_url(false)]),
+                    'returnurl' => $baseurl->out_as_local_url(false)]
+                ),
             ], 'btn btn-sm btn-primary mr-1 mb-1'),
         ];
     }
@@ -125,20 +131,21 @@ echo epsynthesis_render_list_filters($listurl, $typeoptions, [
     'search' => $search, 'typekey' => $typekey, 'status' => $filterstatus, 'studyyear' => $filteryear,
 ]);
 
-$allcredits = epsynthesis_get_filtered_credits($activelinks, [
+// Une seule requête sur toutes les promotions, triée et paginée par la base.
+[$credits, $total] = epsynthesis_get_filtered_credits($activelinks, [
     'search' => $search,
     'typefilter' => $typefilter,
     'status' => $filterstatus,
     'studyyear' => $filteryear,
-], $tsort, $tdir);
+], $tsort, $tdir, $page * EP_LIST_PERPAGE, EP_LIST_PERPAGE);
 
-if (empty($allcredits)) {
+if ($total === 0) {
     echo $OUTPUT->notification(get_string('nocredits', 'mod_ep'), 'info');
     echo $OUTPUT->footer();
     exit;
 }
 
-[$credits, $pagingbarhtml] = ep_paginate($allcredits, $page, $listurl);
+$pagingbarhtml = ep_render_paging_bar($total, $page, $listurl);
 
 $table = new html_table();
 $table->head = [
@@ -161,7 +168,7 @@ foreach ($credits as $credit) {
 
     $table->data[] = [
         format_string($credit->coursename),
-        $credit->studentfullname,
+        epsynthesis_credit_student_name($credit),
         $credit->typename,
         format_string($credit->name),
         ep_studyyear_label($credit->studyyear),
@@ -169,9 +176,11 @@ foreach ($credits as $credit) {
         (int) $credit->status === EP_STATUS_VALIDATED ? ep_format_ects($credit->retainedects) : '-',
         html_writer::span(ep_status_label($credit->status), 'badge ' . ep_status_badgeclass($credit->status)),
         ep_render_actions([
-            $label => new moodle_url('/mod/ep/validate.php',
+            $label => new moodle_url(
+                '/mod/ep/validate.php',
                 ['id' => $credit->cmid, 'creditid' => $credit->id,
-                    'returnurl' => $listurl->out_as_local_url(false)]),
+                'returnurl' => $listurl->out_as_local_url(false)]
+            ),
         ]),
     ];
 }

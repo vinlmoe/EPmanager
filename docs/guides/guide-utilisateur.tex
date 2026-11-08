@@ -1,0 +1,1087 @@
+% Guide utilisateur complet d'EP Manager (mod_ep et mod_epsynthesis) : tous les rôles.
+% Compilation : latexmk -pdf guide-utilisateur.tex
+% Captures : node captures.js <site.json> gu-... (voir l'annexe « Captures »).
+\documentclass[11pt,a4paper]{article}
+
+% Version du guide : à mettre à jour à chaque modification, avec une ligne dans l'historique.
+\newcommand{\titreguide}{Guide utilisateur}
+\newcommand{\versionguide}{1.5}
+\newcommand{\dateguide}{novembre 2026}
+\newcommand{\versionep}{1.2.0}
+\newcommand{\versionsynthese}{1.0.3}
+
+\usepackage{guide-commun}
+\setcounter{tocdepth}{2}
+
+% Étape numérotée d'une procédure, en marge de la liste.
+\newlist{etapes}{enumerate}{1}
+\setlist[etapes]{label=\textbf{\arabic*.}, leftmargin=*, itemsep=3pt}
+
+\begin{document}
+
+\pagedegarde{Étudiants, enseignants, DEVE : l'enseignement personnalisé de bout en bout, pas à
+pas}{gu-etu-tableau-de-bord}
+
+\tableofcontents
+
+\section*{Historique des versions}
+\addcontentsline{toc}{section}{Historique des versions}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l l X@{}}
+\toprule
+\textbf{Version} & \textbf{Date} & \textbf{Modifications} \\
+\midrule
+1.0 & novembre 2026 & Première version, pour EP Manager 1.0.3 : tous les rôles en un seul
+document, captures prises sur une promotion de 1\,000 étudiants. \\
+1.1 & novembre 2026 & Séances du programme sans date (EP Manager 1.0.4) ; qui valide les
+syllabus. \\
+1.2 & novembre 2026 & EP de stage recalculés dès qu'un stage change (EP Manager 1.0.5). \\
+1.3 & novembre 2026 & Captures des documents PDF : fiche d'un EP, aperçu du supplément au diplôme,
+feuille d'émargement, livret des EP. \\
+1.4 & novembre 2026 & Fiche de chaque EP tenue par une activité « Syllabus du module » (proposition en deux temps, relecture sous la fiche) ; catalogue allégé (descriptions résumées, année d'inscription choisie une fois) ; menu d'actions dans la gestion du catalogue ; émission des suppléments en un formulaire. \\
+1.5 & novembre 2026 & Période d'inscription du catalogue fixée par la DEVE ; EP académiques validés en commission, date requise à chaque publication ; PDF des fiches à valider (EP Manager 1.2.0). \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section*{Comment lire ce guide}
+\addcontentsline{toc}{section}{Comment lire ce guide}
+
+Ce guide décrit tout EP Manager, pour tous ceux qui s'en servent. Chacun peut s'en tenir à sa
+partie :
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l X r@{}}
+\toprule
+\textbf{Vous êtes} & \textbf{Lisez} & \textbf{Page} \\
+\midrule
+Tout le monde & Partie~\ref{part:principes} : principes, vocabulaire, statuts, calendrier &
+\pageref{part:principes} \\
+Étudiant & Partie~\ref{part:etudiant} & \pageref{part:etudiant} \\
+Enseignant (responsable d'EP, référent, auteur) & Partie~\ref{part:enseignant} &
+\pageref{part:enseignant} \\
+DEVE & Partie~\ref{part:deve} & \pageref{part:deve} \\
+Administrateur du site Moodle & Partie~\ref{part:admin} & \pageref{part:admin} \\
+Tout le monde, en cas de doute & Partie~\ref{part:faq} : questions fréquentes &
+\pageref{part:faq} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Les captures d'écran ont été prises sur le banc d'essai, dans une promotion de 1\,000 étudiants,
+150 enseignants et 60 EP au catalogue, après que tous les étudiants se sont inscrits, ont
+déclaré des EP et demandé des éléments de leur supplément, que leurs enseignants et la DEVE ont
+tout tranché, et que les suppléments ont été émis (voir le rapport \emph{Test des interactions
+à 1\,000 étudiants}). Les noms sont fictifs.
+
+Conventions : \chemin{Administration > Types d'EP} désigne un chemin de navigation dans
+l'interface, \bouton{Enregistrer} un bouton ou un lien, \statut{En attente} un statut affiché.
+
+\newpage
+
+% ===========================================================================
+\part{Principes}\label{part:principes}
+% ===========================================================================
+
+\section{Ce que fait EP Manager}
+
+Les enseignements personnalisés (EP) sont les crédits ECTS que chaque étudiant doit réunir, au
+fil de son cursus, en plus du tronc commun : EP du catalogue de l'école, stages
+complémentaires, engagement étudiant, expérience professionnelle, sport, enseignement suivi
+dans un autre établissement\dots{} EP Manager tient le dossier de chaque étudiant, de
+l'inscription ou de la déclaration jusqu'au supplément au diplôme :
+\begin{itemize}
+  \item l'étudiant s'inscrit aux EP du catalogue et déclare ce qu'il a fait ailleurs, avec ses
+    justificatifs ;
+  \item chaque demande suit le \textbf{circuit de validation} de son type : responsable de
+    l'EP, enseignant référent, DEVE, ou plusieurs d'entre eux l'un après l'autre ;
+  \item les ECTS validés sont comptés face aux \textbf{minimums} annuels et du cursus, dans la
+    limite des \textbf{plafonds} de chaque type ;
+  \item en fin d'année, la DEVE valide les années d'étude ; en fin de cursus, elle émet le
+    \textbf{supplément au diplôme} certifié de chaque étudiant.
+\end{itemize}
+
+\subsection{Deux activités Moodle}
+
+\begin{description}
+  \item[Enseignement personnalisé] une activité par promotion, dans le cours de la promotion
+    (celui qui porte déjà \og Gestion des stages\fg{}). C'est là que tout se passe : dossiers
+    des étudiants, catalogue, décisions, paramétrage.
+  \item[Suivi de l'enseignement personnalisé] une activité dans un cours d'équipe, qui
+    rassemble pour chaque enseignant ce qu'il a à faire dans \emph{toutes} les promotions. Elle
+    n'accorde aucun droit : elle montre et renvoie vers les activités des promotions.
+\end{description}
+
+\subsection{Qui fait quoi}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+\textbf{Rôle} & \textbf{Ce qu'il fait} \\
+\midrule
+Étudiant & S'inscrit aux EP du catalogue, déclare les autres, joint ses justificatifs, suit ses
+décisions et ses ECTS, demande des éléments pour son supplément, télécharge son supplément
+émis. \\
+Responsable d'EP & Enseignant désigné pour un EP du catalogue : inscrit ou retire des
+étudiants, note ou valide les inscrits (un par un, en lot ou par import CSV), clôt l'EP. \\
+Enseignant référent & Celui qui suit l'étudiant dans \og Gestion des stages\fg{} : tranche les
+déclarations de ses étudiants et leurs éléments du supplément, à son étape du circuit. \\
+Auteur & Tout enseignant : propose un nouvel EP, rédige son syllabus, met à jour celui des EP
+dont il est responsable. \\
+DEVE & Paramètre tout, tranche et corrige toute décision, examine les propositions, pilote la
+promotion, valide les années, émet les suppléments, importe et exporte. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Chacun ne voit que ce qui le concerne : un étudiant, son dossier ; un enseignant, ses EP et ses
+étudiants référents ; la DEVE, toute la promotion.
+
+\section{Vocabulaire}\label{sec:vocabulaire}
+
+\begin{description}
+  \item[EP] enseignement personnalisé : une ligne du dossier de l'étudiant, avec un type, une
+    année d'étude, des ECTS et un statut.
+  \item[Type d'EP] catégorie qui fixe les règles : comment l'EP arrive au dossier (mode
+    d'acquisition), qui le valide (circuit), s'il est noté, quels justificatifs il faut, quels
+    plafonds s'appliquent. Six types sont prévus d'office : académique interne, stage,
+    engagement étudiant, expérience professionnelle, sport, académique externe.
+  \item[Catalogue] les EP proposés par l'école, auxquels l'étudiant s'inscrit. Chacun a sa
+    fiche (\textbf{syllabus}), ses places, sa période d'inscription et ses responsables.
+  \item[Déclaration] EP suivi hors du catalogue, déclaré par l'étudiant avec ses justificatifs.
+  \item[Circuit de validation] suite d'une à trois étapes (responsable de l'EP, enseignant
+    référent, DEVE) par lesquelles passe une demande ; une demande validée à une étape passe
+    à la suivante ; refusée à n'importe quelle étape, elle s'arrête.
+  \item[ECTS demandés, retenus, validés] l'étudiant \emph{demande} des ECTS ; celui qui valide
+    \emph{retient} un nombre d'ECTS (au plus celui demandé) ; les ECTS \emph{validés} d'un type
+    ne \emph{comptent} que dans la limite de ses plafonds.
+  \item[Plafond] maximum d'ECTS d'un type pris en compte, sur le cursus ou par année. Au-delà,
+    les ECTS restent validés mais sont \og non retenus\fg{}.
+  \item[Minimum] nombre d'ECTS à réunir pour une année d'étude, ou sur l'ensemble du cursus.
+  \item[Élément complémentaire] activité que l'étudiant demande à faire figurer dans son
+    supplément au diplôme (rubrique 6.1) : responsabilité associative, prix, mobilité,
+    certification\dots
+  \item[Supplément au diplôme] document au modèle européen Europass qui décrit le diplôme et
+    le parcours de l'étudiant ; émis par la DEVE, numéroté et vérifiable.
+\end{description}
+
+\section{Statuts d'une demande}\label{sec:statuts}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+\textbf{Statut} & \textbf{Signification} \\
+\midrule
+\statut{En attente} & La demande attend une décision ; la page indique qui doit décider
+(\og en attente : Enseignant référent\fg{}, par exemple). L'étudiant peut encore la modifier
+(déclaration) ou la retirer. \\
+\statut{Validé} & Décision finale favorable : les ECTS retenus (et la note, pour un EP noté)
+comptent dans le bilan. \\
+\statut{Refusé} & Décision défavorable, à n'importe quelle étape, avec le commentaire de celui
+qui a décidé. Pour un EP noté, une note sous le seuil vaut refus. \\
+\statut{Retiré} & Retirée par l'étudiant (tant qu'elle était en attente), par le responsable
+ou par la DEVE. Une inscription retirée rend sa place. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Chaque décision est gardée dans l'\textbf{historique} de la demande : qui, quand, à quel titre
+(responsable, référent, DEVE), avec quelle note, quels ECTS et quel commentaire. Deux personnes
+qui tranchent la même demande au même moment ne peuvent pas l'enregistrer deux fois : la
+seconde est prévenue que la demande a changé, et rien n'est écrit.
+
+\section{Messages envoyés}\label{sec:messages}
+
+Les messages partent par les canaux choisis par chacun dans ses préférences Moodle
+(notification, courriel). Leur texte est réglé par la DEVE (section~\ref{sec:courriels}).
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}X l@{}}
+\toprule
+\textbf{Message} & \textbf{Destinataire} \\
+\midrule
+Décision finale sur une demande d'EP & L'étudiant \\
+Fiche d'EP (proposition ou mise à jour) à relire (module des fiches) & La DEVE \\
+Décision sur une proposition & L'enseignant auteur \\
+Relance hebdomadaire (le lundi) : demandes en attente depuis plus d'une semaine & Chaque
+validateur concerné \\
+Fin de l'émission groupée des suppléments & La DEVE qui l'a lancée \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Une année avec EP Manager}\label{sec:calendrier}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l X X@{}}
+\toprule
+\textbf{Moment} & \textbf{DEVE} & \textbf{Enseignants et étudiants} \\
+\midrule
+Été & Rentrée de l'activité (année suivante), règles copiées ou ajustées, catalogue mis à
+jour & Les auteurs proposent leurs nouveaux EP et mettent à jour leurs syllabus \\
+Rentrée & Publication du catalogue, périodes d'inscription & Les étudiants s'inscrivent \\
+Année & Pilotage, relances, décisions de dernière étape & Les étudiants déclarent ; les
+responsables notent leurs EP à la fin de chacun ; les référents tranchent les déclarations \\
+Fin d'année & Validation des années (jury) & Les étudiants vérifient leur bilan \\
+Fin de cursus & Éléments du supplément, émission des suppléments & Les étudiants demandent
+leurs éléments complémentaires, téléchargent leur supplément \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\newpage
+% ===========================================================================
+\part{Étudiant}\label{part:etudiant}
+% ===========================================================================
+
+\section{Votre tableau de bord}
+
+Ouvrez le cours de votre promotion, puis l'activité \og Enseignement personnalisé\fg{}. Vous
+arrivez sur \textbf{Mes enseignements personnalisés}.
+
+\capture{gu-etu-tableau-de-bord}{Tableau de bord d'un étudiant en fin d'année : années, types,
+détail des EP.}
+
+Il se lit de haut en bas :
+\begin{description}
+  \item[Synthèse] le total d'ECTS retenus, le nombre d'années validées et les ECTS encore en
+    attente de validation.
+  \item[Bilan par année d'étude] pour chaque année, le minimum exigé, les ECTS retenus, ce qui
+    reste à valider, et l'état \statut{Atteint} ou \statut{À compléter} ; le minimum de
+    cursus s'il y en a un.
+  \item[Bilan par type] pour chaque type, ses plafonds, les ECTS validés, retenus, non retenus
+    (au-delà d'un plafond) et en attente.
+  \item[Détail des enseignements personnalisés] tous vos EP, avec leur statut et leurs
+    actions : \bouton{Détail}, \bouton{Modifier} (une déclaration en attente),
+    \bouton{Retirer ma demande} (une demande en attente).
+\end{description}
+
+La barre de liens en haut de page mène au \chemin{Catalogue des EP}, à \chemin{Déclarer un
+EP} et à \chemin{Mon supplément au diplôme}.
+
+\begin{astuce}
+Seuls les ECTS \textbf{validés} comptent, et seulement dans la limite des plafonds de leur
+type. Des ECTS non retenus restent acquis : ils reviendraient au décompte si le plafond était
+relevé.
+\end{astuce}
+
+\section{S'inscrire à un EP du catalogue}\label{sec:inscription}
+
+\subsection{Trouver un EP}
+
+Le \chemin{Catalogue des EP} liste les EP ouverts à votre promotion, 40 par page, dans l'ordre
+choisi par la DEVE puis par intitulé. La zone de recherche filtre sur l'intitulé, le code et la
+description. Chaque ligne indique le type,
+les ECTS, les années concernées, les places restantes, les responsables et la période
+d'inscription.
+
+\capture{gu-etu-catalogue}{Catalogue des EP : recherche, places, inscription directe.}
+
+La description est résumée en deux lignes ; le lien \bouton{Syllabus} ouvre la fiche de l'EP :
+objectifs, acquis d'apprentissage, prérequis, contenu, méthodes, conditions d'examen et de
+seconde session, bibliographie, programme des séances avec leurs intervenants, volume horaire.
+C'est la même fiche que celle des modules d'enseignement (activité « Syllabus du module »,
+voir le guide des modules syllabus) ; elle se télécharge en PDF, et le lien \og L'EP au
+catalogue\fg{} y ramène.
+
+\capture{gu-etu-syllabus}{Fiche (syllabus) d'un EP du catalogue.}
+
+\capture{gu-pdf-syllabus}{La même fiche en PDF.}
+
+\capture[0.85\linewidth]{gu-etu-seances}{Programme des séances, tel qu'il figure sur la fiche.}
+
+\subsection{S'inscrire}
+
+\begin{etapes}
+  \item En tête du catalogue, vérifiez l'\textbf{année d'étude} au titre de laquelle vos
+    inscriptions compteront (votre année courante est proposée) ; elle vaut pour toute la page.
+  \item Sur la ligne de l'EP, cliquez sur \bouton{S'inscrire}.
+\end{etapes}
+
+L'inscription est enregistrée aussitôt, \statut{En attente} de la décision du responsable de
+l'EP ; vous restez sur la même page du catalogue pour vous inscrire à d'autres EP. Les ECTS ne
+comptent qu'une fois l'inscription validée, à la fin de l'EP.
+
+Quand l'inscription n'est pas possible, le bouton est remplacé par la raison :
+\begin{itemize}
+  \item \statut{Inscriptions fermées} : hors de la période d'inscription, ou EP clos ;
+  \item \statut{Complet} : plus de place (deux étudiants qui prennent la dernière place à la
+    même seconde ne peuvent pas l'obtenir tous les deux) ;
+  \item l'EP n'est pas ouvert à votre année d'étude ;
+  \item vous êtes déjà inscrit ;
+  \item \statut{Prérequis manquants} : l'EP exige d'avoir validé un autre EP ou un nombre
+    minimum d'ECTS. Si ces prérequis sont \textbf{bloquants}, l'inscription est refusée.
+\end{itemize}
+
+Des prérequis \textbf{non bloquants} qui manquent sont signalés en orange sous l'intitulé de
+l'EP : l'inscription reste possible, et le responsable voit le manque dans sa liste de
+participants.
+
+\subsection{Retirer une inscription}
+
+Tant que l'inscription est \statut{En attente}, \bouton{Retirer ma demande} sur votre tableau
+de bord la retire et rend la place. Une fois l'inscription tranchée, adressez-vous au
+responsable de l'EP ou à la DEVE.
+
+\section{Déclarer un EP hors catalogue}\label{sec:declarer}
+
+Engagement associatif, expérience professionnelle, sport, enseignement suivi dans un autre
+établissement\dots{} se déclarent depuis \chemin{Déclarer un EP}.
+
+\capture{gu-etu-declarer}{Déclaration d'un EP : type, intitulé, année, ECTS, justificatifs.}
+
+\begin{etapes}
+  \item Lisez le bandeau : il indique à qui la demande sera transmise (votre enseignant
+    référent, la DEVE, ou l'un puis l'autre selon le type).
+  \item Choisissez le \textbf{type} : sous la liste s'affichent, pour chaque type, son circuit
+    de validation, sa consigne et ses plafonds.
+  \item Donnez un \textbf{intitulé} et une \textbf{description} : ce que vous avez fait, où,
+    combien de temps, avec quel résultat.
+  \item Choisissez l'\textbf{année d'étude} et le nombre d'\textbf{ECTS demandés}.
+  \item Déposez vos \textbf{justificatifs} (attestation, convention, certificat\dots) par
+    glisser-déposer ou avec le sélecteur de fichiers ; ils sont obligatoires pour certains
+    types, et les formats acceptés sont rappelés sous la zone de dépôt.
+  \item Cliquez sur \bouton{Envoyer la demande}.
+\end{etapes}
+
+Votre enseignant référent est celui qui vous est attribué dans l'activité \og Gestion des
+stages\fg{} du même cours. S'il n'y en a pas, la page le signale : adressez-vous à la DEVE.
+
+\begin{attention}
+Une demande tranchée ne se modifie plus. Tant qu'elle est en attente, \bouton{Modifier} et
+\bouton{Retirer ma demande} restent possibles depuis le tableau de bord.
+\end{attention}
+
+\subsection{EP de type stage}
+
+Les stages complémentaires validés par la DEVE dans \og Gestion des stages\fg{} donnent
+automatiquement des ECTS d'EP, d'après leur durée : vous n'avez rien à déclarer. Ils
+apparaissent dans votre tableau de bord dès la validation du stage.
+
+\section{Suivre vos demandes}
+
+Le \bouton{Détail} d'un EP montre la demande telle que vous l'avez faite, vos justificatifs,
+l'étape où elle se trouve et l'\textbf{historique des décisions}.
+
+\capture{gu-etu-detail}{Détail d'un EP validé : demande, justificatifs, historique des
+décisions.}
+
+Vous recevez un message à chaque décision finale (validé ou refusé), avec le commentaire de
+celui qui a décidé. Un refus n'empêche pas de déposer une nouvelle demande mieux étayée.
+
+\section{Votre supplément au diplôme}\label{sec:etu-supplement}
+
+\subsection{Ce que montre la page}
+
+\chemin{Mon supplément au diplôme} réunit :
+\begin{itemize}
+  \item un bouton \bouton{Aperçu (non certifié)}, en français ou en anglais : le document tel
+    qu'il serait émis aujourd'hui, marqué \og APERÇU -- NON CERTIFIÉ\fg{}, avec la liste des
+    informations qui manquent encore (date de naissance, signataire\dots) ;
+  \item les EP validés qui figureront à la rubrique~4.3, avec leurs ECTS et leur note ;
+  \item vos \textbf{éléments ajoutés au supplément} (rubrique~6.1), avec leur statut ;
+  \item les \textbf{suppléments émis} par la DEVE, à télécharger.
+\end{itemize}
+
+\capture{gu-pdf-supplement}{Aperçu du supplément au diplôme (PDF, non certifié).}
+
+\capture{gu-etu-supplement}{Mon supplément au diplôme : EP retenus, éléments validés,
+supplément émis.}
+
+\subsection{Demander l'ajout d'un élément}
+
+\begin{etapes}
+  \item Cliquez sur \bouton{Demander l'ajout d'un élément}.
+  \item Choisissez la \textbf{catégorie} (responsabilités, mobilité, prix, certification\dots,
+    selon la liste de la DEVE).
+  \item Indiquez la \textbf{période} (début et fin).
+  \item Donnez l'\textbf{intitulé} en français et, si possible, en anglais : c'est lui qui
+    figurera dans le supplément édité en anglais.
+  \item Décrivez l'activité.
+  \item Déposez vos \textbf{preuves} en PDF (facultatives ou obligatoires selon le choix de la
+    DEVE).
+  \item Enregistrez.
+\end{etapes}
+
+\capture{gu-etu-supplement-element}{Demande d'un élément complémentaire du supplément.}
+
+La demande suit le circuit fixé par la DEVE (par exemple votre enseignant référent, puis la
+DEVE). Tant qu'elle est en attente, vous pouvez la modifier ou la retirer. Vos preuves sont
+conservées par l'école avec la décision.
+
+\subsection{Le supplément émis}
+
+La DEVE émet votre supplément en fin de cursus. Le PDF porte un \textbf{numéro} et un
+\textbf{code de vérification}. Toute personne à qui vous le présentez -- un employeur, une
+autre université -- peut vérifier, sans compte, sur la page \og Vérifier un supplément\fg{} de
+l'école, qu'il a bien été émis et qu'il n'a pas été modifié. Si la DEVE en émet une nouvelle
+version, l'ancienne est signalée comme remplacée.
+
+\capture[0.8\linewidth]{gu-public-verification}{Vérification publique d'un supplément : numéro
+et code reconnus.}
+
+\newpage
+% ===========================================================================
+\part{Enseignant}\label{part:enseignant}
+% ===========================================================================
+
+\section{Vos rôles et votre page de suivi}
+
+Un enseignant intervient à trois titres, qui se cumulent : \textbf{responsable} des EP du
+catalogue qui lui sont confiés, \textbf{référent} des étudiants qu'il suit en stage,
+\textbf{auteur} des EP qu'il propose. Vous ne voyez que ce qui relève de vous.
+
+\subsection{Le suivi, toutes promotions confondues}
+
+L'activité \og Suivi de l'enseignement personnalisé\fg{} de votre cours d'équipe est votre
+point d'entrée : elle rassemble ce qui vous concerne dans toutes les promotions qui y sont
+reliées. Le bouton \bouton{À traiter} affiche entre parenthèses le nombre de choses qui vous
+attendent. Trois boutons mènent à ses pages :
+\begin{description}
+  \item[À traiter] tout ce qui attend une action de votre part : les EP dont vous êtes
+    responsable avec des participants en attente (et l'ancienneté de la plus vieille demande),
+    vos propositions et révisions de syllabus à reprendre, et les éléments du supplément à
+    examiner comme référent, que vous tranchez directement sur la page.
+  \item[Validation] toutes les demandes de votre périmètre, filtrables par promotion, type,
+    statut, année et nom, avec un lien vers chacune.
+  \item[Tableau de pilotage] l'avancement de vos étudiants référents face à leurs minimums.
+\end{description}
+La DEVE y trouve en plus un lien \chemin{Administration}, qui choisit les promotions dont les
+demandes remontent ici (section~\ref{sec:synthese-admin}).
+
+\capture{gu-ens-synthese-a-traiter}{Onglet \og À traiter\fg{} : participants à noter, syllabus,
+éléments du supplément.}
+
+\capture{gu-ens-synthese-validation}{Onglet \og Validation\fg{} : toutes les demandes de votre
+périmètre.}
+
+Chaque ligne renvoie vers la page de l'activité de la promotion concernée, décrite ci-dessous.
+
+\section{Responsable d'un EP du catalogue}\label{sec:responsable}
+
+\subsection{La liste des participants}
+
+Dans l'activité de la promotion, \chemin{Validation} commence par \og Mes EP\fg{}. Le bouton
+\bouton{Participants} d'un EP ouvre sa liste : en tête, son état, sa période d'inscription,
+ses places, ses responsables et son barème ; puis un inscrit par ligne.
+
+\capture{gu-ens-participants}{Participants d'un EP noté : une note par inscrit, enregistrée
+pour toute la liste.}
+
+\subsection{Noter ou valider toute la liste}
+
+\begin{etapes}
+  \item Pour un EP \textbf{noté}, saisissez la note de chaque inscrit (virgule ou point
+    décimal) : la validation suit le seuil fixé ; une note sous le seuil vaut refus. Pour un EP
+    \textbf{sans note}, choisissez \og Validé\fg{} ou \og Non validé\fg{}.
+  \item Ajoutez au besoin un commentaire, transmis à l'étudiant.
+  \item Cliquez sur \bouton{Enregistrer les décisions}.
+\end{etapes}
+
+Une ligne laissée vide n'est pas touchée. Le message de confirmation dit combien de décisions
+ont été enregistrées, et combien de lignes avaient changé entre-temps (tranchées par quelqu'un
+d'autre) : celles-là sont laissées telles quelles.
+
+\begin{astuce}
+Si le circuit du type a une étape après la vôtre (\og responsable puis DEVE\fg{}), votre
+décision fait passer la demande à la DEVE. Sinon elle est définitive et l'étudiant est prévenu.
+Une note portée à une étape précédente n'est montrée qu'en filigrane : elle ne décide de
+l'étape courante que si vous la saisissez.
+\end{astuce}
+
+\subsection{Importer les notes}
+
+\bouton{Importer les notes (CSV)} remplit toute la liste depuis un tableur.
+\begin{etapes}
+  \item Téléchargez la liste de l'EP (\bouton{Exporter la liste (CSV)}) : elle sert de modèle.
+  \item Remplissez une ligne par étudiant, avec une ligne d'en-tête. Colonnes reconnues :
+    \og Email\fg{} ou \og Numéro d'identification\fg{} ; \og Note\fg{} (EP noté) ou
+    \og Décision\fg{} (\og validé\fg{}, \og oui\fg{}, \og 1\fg{} ou \og non validé\fg{},
+    \og non\fg{}, \og 0\fg{}, \og absent\fg{}) ; \og Commentaire\fg{}, facultatif. Séparateur
+    point-virgule, virgule ou tabulation.
+  \item Déposez le fichier : la \textbf{prévisualisation} montre, ligne par ligne, ce qui sera
+    fait (validé, refusé, corrigé, ignoré) et les erreurs (étudiant non inscrit, ligne en
+    double, note illisible).
+  \item \bouton{Confirmer l'import} applique les décisions, avec les mêmes contrôles qu'une
+    saisie à la main.
+\end{etapes}
+
+\capture{gu-ens-import-notes}{Import des notes d'un EP depuis un fichier CSV.}
+
+\subsection{Inscrire, retirer, clore}
+
+\begin{itemize}
+  \item \bouton{Inscrire des étudiants} : choisissez-les dans la liste (recherche par nom) ; ils
+    sont inscrits en attente, même après la fermeture des inscriptions. Une inscription déjà en
+    cours n'est pas doublée ; les places restent comptées.
+  \item \bouton{Retirer} : retire un inscrit en attente, avec un motif ; la place est rendue.
+  \item \bouton{Feuille d'émargement (PDF)} : la liste des inscrits à signer.
+  \item \bouton{Clore l'EP} : plus aucune inscription, l'EP reste au catalogue et ses notes
+    restent saisissables ; vous choisissez le sort des inscriptions encore en attente.
+\end{itemize}
+
+\capture[0.45\linewidth]{gu-pdf-emargement}{Feuille d'émargement (PDF).}
+
+\section{Une demande à la fois}\label{sec:demande}
+
+Le bouton \bouton{Valider} (ou \bouton{Détail}) d'une demande ouvre sa page : ce que
+l'étudiant a demandé, ses justificatifs, l'étape en cours et l'historique.
+
+\capture{gu-ens-demande}{Une demande en attente de votre décision : ECTS retenus, commentaire,
+décision.}
+
+\begin{itemize}
+  \item \bouton{Valider} (\bouton{Valider définitivement} si vous êtes la dernière étape) :
+    ajustez au besoin les \textbf{ECTS retenus} (au plus ceux demandés) ;
+  \item pour un EP noté, saisissez la note puis \bouton{Enregistrer la note} : la validation
+    suit le seuil ;
+  \item \bouton{Refuser} : le commentaire est alors indispensable à l'étudiant.
+\end{itemize}
+
+Si quelqu'un a tranché la même demande entre-temps, rien n'est enregistré et un message vous
+prévient que la demande a changé.
+
+\section{Enseignant référent}\label{sec:referent}
+
+\subsection{Les déclarations de vos étudiants}
+
+Dans \chemin{Validation}, la rubrique \og En attente de votre décision\fg{} liste les
+déclarations de vos étudiants arrivées à votre étape, de la plus ancienne à la plus récente.
+En dessous, tout votre périmètre, filtrable.
+
+\capture{gu-ens-validation}{Validation : ce qui attend votre décision, puis tout votre
+périmètre.}
+
+Pour chaque déclaration : ouvrez-la, lisez la description, ouvrez les justificatifs, puis
+validez (avec les ECTS retenus) ou refusez en expliquant pourquoi (section~\ref{sec:demande}).
+
+\subsection{Les éléments du supplément}
+
+Les éléments que vos étudiants demandent pour leur supplément arrivent dans l'onglet
+\og À traiter\fg{} du suivi et dans \chemin{Éléments de supplément à examiner} de l'activité :
+catégorie, période, intitulés, description, preuves. \bouton{Valider} transmet l'élément à
+l'étape suivante (en général la DEVE, qui décide en dernier), avec votre commentaire ;
+\bouton{Refuser} l'arrête.
+
+\capture{gu-ens-supplement-items}{Éléments du supplément à examiner, avec leurs preuves.}
+
+\subsection{La relance du lundi}
+
+Chaque lundi matin, un message rappelle à chaque validateur les demandes qui l'attendent depuis
+plus d'une semaine.
+
+\section{Proposer un EP, tenir son syllabus}\label{sec:auteur}
+
+\subsection{Proposer un nouvel EP}
+
+La fiche d'un EP est une activité \og Syllabus du module\fg{} (module \texttt{mod\_syllabus}),
+créée avec l'EP dans la section \og Fiches des EP\fg{} du cours : la même fiche, la même
+relecture et le même PDF que pour les modules d'enseignement. L'EP en garde ses responsables et
+son état au catalogue.
+
+\begin{etapes}
+  \item \chemin{Propositions et syllabus > Proposer un nouvel EP} : renseignez ses
+    caractéristiques (intitulé, type, ECTS, places, années concernées), puis \bouton{Continuer
+    vers la fiche}. L'EP est créé à l'état de brouillon, et vous en devenez responsable.
+  \item Vous arrivez sur la rédaction de sa fiche, au modèle de la fiche ECTS : objectifs,
+    acquis d'apprentissage, prérequis, contenu, méthodes, conditions d'examen et de seconde
+    session, bibliographie, langue, travail personnel.
+  \item Décrivez son \textbf{programme} : les séances, avec leur nature (cours, TD, TP,
+    clinique\dots), leur durée et leur intervenant (un enseignant du site, ou un intervenant
+    extérieur par son nom). Les séances ne sont pas datées. Le volume horaire est calculé.
+  \item \bouton{Enregistrer le brouillon} autant de fois que nécessaire, puis soumettez la fiche
+    à la DEVE : l'EP passe à l'état \og proposé\fg{}.
+\end{etapes}
+
+\capture{gu-ens-proposer}{Proposition d'un nouvel EP : ses caractéristiques, avant la fiche.}
+
+\capture{gu-ens-seances}{Programme des séances : intitulé, nature, durée, intervenant (compte du
+site ou nom d'un intervenant extérieur).}
+
+La DEVE publie la fiche (l'EP entre au catalogue), vous la renvoie avec un commentaire
+(l'EP redevient un brouillon : corrigez, puis soumettez de nouveau) ou la refuse (l'EP est
+archivé). Vous êtes prévenu de sa décision, et la proposition renvoyée apparaît dans l'onglet
+\og À traiter\fg{} du suivi.
+
+\capture{gu-ens-propositions}{Propositions et syllabus : l'état de chaque version.}
+
+\subsection{Mettre à jour un EP publié}
+
+\bouton{Proposer une mise à jour} ouvre la rédaction de la fiche, dans une \textbf{nouvelle
+version} préremplie :
+la version en vigueur reste au catalogue tant que la nouvelle n'est pas publiée. Selon le
+choix de la DEVE, la mise à jour est publiée aussitôt ou passe par sa revue. Les versions
+précédentes restent consultables.
+
+\capture{gu-ens-syllabus-edit}{Mise à jour du syllabus d'un EP publié : rubriques, puis
+programme des séances.}
+
+\subsection{Qui valide un syllabus}\label{sec:qui-valide-syllabus}
+
+C'est la \textbf{DEVE} qui valide les fiches : depuis \chemin{Propositions et syllabus}, le
+bouton \bouton{Relire} ouvre la version soumise dans la fiche, où elle la publie, la renvoie à
+son auteur avec un commentaire, ou la refuse (section~\ref{sec:propositions}). Elle le fait
+avec le droit \texttt{mod/syllabus:manage} des fiches (rôle gestionnaire dans le cours). Ni le
+référent ni un autre enseignant n'interviennent.
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}X l@{}}
+\toprule
+\textbf{Cas} & \textbf{Qui valide} \\
+\midrule
+Proposition d'un nouvel EP & Toujours la DEVE \\
+Mise à jour de la fiche d'un EP publié, par son responsable & La DEVE ; ou personne, publiée
+aussitôt, si la DEVE a coché la \og publication directe des mises à jour\fg{} ou si la
+relecture n'est pas exigée dans le référentiel commun des fiches \\
+Syllabus ou séances importés par la DEVE (CSV, paramétrage JSON) & Publiés directement \\
+\bottomrule
+\end{tabularx}
+\end{center}
+Même publiée directement, une mise à jour reste dans l'historique des versions de l'EP.
+
+\newpage
+% ===========================================================================
+\part{DEVE}\label{part:deve}
+% ===========================================================================
+
+\section{Le panneau d'administration}
+
+Tout le paramétrage se fait dans l'activité de la promotion, depuis \chemin{Administration},
+avec le rôle de la DEVE. Les pages y sont rangées par usage : règles d'attribution, catalogue,
+éditions PDF et propositions, supplément au diplôme, imports et exports, suivi.
+
+\capture{gu-deve-administration}{Panneau d'administration de l'activité.}
+
+\begin{attention}
+Par défaut, Moodle donne aussi les capacités de la DEVE au rôle \og enseignant éditeur\fg{}.
+Si les enseignants ont ce rôle dans le cours de la promotion, retirez-leur
+\texttt{mod/ep:validatedeve}, \texttt{mod/ep:manage} et \texttt{mod/ep:viewall} dans les
+permissions de l'activité, et donnez à la DEVE le rôle \og gestionnaire\fg{}.
+\end{attention}
+
+\section{Mettre en place une promotion}\label{sec:miseenplace}
+
+\begin{etapes}
+  \item Dans le cours de la promotion, ajoutez une activité \og Enseignement personnalisé\fg{}
+    et indiquez l'\textbf{année d'étude courante}.
+  \item Si une autre promotion est déjà paramétrée, copiez ses règles :
+    \chemin{Administration > Transférer le paramétrage > Copier depuis une autre activité}
+    (section~\ref{sec:transfert}). Vérifiez, puis passez à l'étape 6.
+  \item Réglez les \textbf{types} et leurs circuits (section~\ref{sec:types}).
+  \item Fixez les \textbf{minimums} (section~\ref{sec:minimums}).
+  \item Réglez le \textbf{supplément au diplôme} (section~\ref{sec:supplement-reglages}) et les
+    \textbf{courriels} (section~\ref{sec:courriels}).
+  \item Constituez le \textbf{catalogue} (section~\ref{sec:catalogue}) et publiez-le.
+  \item Dans le cours d'équipe, reliez l'activité de \og Suivi\fg{} à la nouvelle promotion
+    (section~\ref{sec:synthese-admin}).
+\end{etapes}
+
+\section{Types d'EP et circuits de validation}\label{sec:types}
+
+\chemin{Administration > Types d'EP et plafonds} liste les types de la promotion, avec leur
+mode d'acquisition, leur circuit, leur évaluation, leurs justificatifs et leurs plafonds.
+Vous pouvez en ajouter, les modifier, les réordonner, les désactiver ; un type qui porte déjà
+des EP ne se supprime pas.
+
+\capture{gu-deve-types}{Types d'EP de la promotion.}
+
+\capture{gu-deve-type-edit}{Réglage d'un type : acquisition, circuit, évaluation, justificatifs,
+plafonds.}
+
+Pour chaque type :
+\begin{description}
+  \item[Mode d'acquisition] inscription à un EP du catalogue ; déclaration par l'étudiant ;
+    automatique, d'après les stages complémentaires validés (avec un nombre d'ECTS par jour de
+    stage) ; ou saisie par la DEVE seule, à la main ou par import.
+  \item[Circuit de validation] une à trois étapes, dans l'ordre choisi parmi : responsable de
+    l'EP, enseignant référent, DEVE ; ou \og aucune\fg{} : validé d'office. La DEVE peut
+    toujours trancher à la place de l'étape en cours.
+  \item[Évaluation] sans note (validé / non validé), ou notée avec une note maximale et un seuil
+    de validation. Un EP du catalogue peut déroger à la règle de son type.
+  \item[Justificatifs] sans objet, facultatifs ou obligatoires, et les formats admis.
+  \item[Plafonds] maximum d'ECTS retenus sur le cursus et par année.
+  \item[Consigne] texte affiché à l'étudiant quand il déclare un EP de ce type.
+  \item[Supplément] le type figure ou non à la rubrique 4.3 du supplément.
+\end{description}
+
+\begin{astuce}
+Un changement de circuit vaut pour les nouvelles demandes et pour les étapes restantes des
+demandes en cours ; les décisions déjà prises restent dans l'historique. Le bouton
+\bouton{Resynchroniser les EP de type stage} recalcule aussitôt les ECTS attribués d'après les
+stages ; il n'est utile que pour vérifier le résultat, car le calcul est refait de lui-même dès
+qu'un stage ou le barème change : la DEVE peut valider un stage dans « Gestion des stages » puis,
+aussitôt, les années ou le supplément, le stage y compte.
+\end{astuce}
+
+\section{Minimums d'ECTS}\label{sec:minimums}
+
+\chemin{Administration > Minimums d'ECTS} fixe le minimum d'ECTS à valider pour chaque année
+d'étude (une année laissée à 0 n'impose rien) et, en plus, un minimum sur l'ensemble du
+cursus. Les tableaux de bord, le pilotage et la validation des années s'y réfèrent.
+
+\capture{gu-deve-minimums}{Minimums d'ECTS par année et sur le cursus.}
+
+\section{Le catalogue}\label{sec:catalogue}
+
+\subsection{Gérer les EP}
+
+\chemin{Administration > Catalogue des EP internes} liste les EP : type, ECTS, années, places
+restantes, inscrits, responsables, état ; avec, pour chacun, \bouton{Modifier} et les
+changements d'état, les autres actions (participants, responsables, fiche, suppression) étant
+rangées dans le menu de la ligne (les trois points).
+
+\capture{gu-deve-catalogue}{Catalogue des EP vu par la DEVE.}
+
+\paragraph{Période d'inscription du catalogue.} En tête de la page, la DEVE fixe la période
+pendant laquelle les étudiants s'inscrivent à tous les EP du catalogue (début et fin, date et
+heure ; une date laissée vide ne limite pas). Un EP qui a sa propre période la garde ; la case
+\og Appliquer aussi aux EP qui ont leur propre période\fg{} les aligne tous. Hors période,
+l'étudiant ne peut plus s'inscrire : seuls le \textbf{responsable de l'EP} ou la \textbf{DEVE}
+ajoutent encore un étudiant, depuis la page \bouton{Participants} de l'EP.
+
+La fiche d'un EP (\bouton{Ajouter un EP au catalogue} ou \bouton{Modifier}) réunit :
+\begin{itemize}
+  \item description, type, ECTS, années minimale et maximale, nombre de places, code, ordre
+    d'affichage ;
+  \item \textbf{état} et périodes d'\textbf{inscription} et de \textbf{déroulement} ;
+  \item \textbf{évaluation} (celle du type, ou une dérogation) ;
+  \item \textbf{prérequis} : EP à avoir validés, ECTS minimum, bloquants ou non.
+\end{itemize}
+
+\capture{gu-deve-ep-edit}{Fiche d'un EP du catalogue.}
+
+\bouton{Responsables} désigne les enseignants qui valideront les inscriptions.
+
+\capture[0.8\linewidth]{gu-deve-responsables}{Responsables d'un EP.}
+
+Les \textbf{états} d'un EP :
+\begin{itemize}
+  \item \statut{Brouillon}, \statut{Proposé} : en préparation, invisible des étudiants ;
+  \item \statut{Publié} : au catalogue ; inscriptions ouvertes pendant leur période ;
+  \item \statut{Clos} : plus d'inscription ; les inscrits restent et sont notés ;
+  \item \statut{Archivé} : hors du catalogue ; l'historique reste.
+\end{itemize}
+
+Le \bouton{Livret des EP (PDF)} rassemble les fiches de tous les EP publiés ou clos, précédées
+d'un sommaire.
+
+\capture{gu-pdf-livret}{Livret des EP : page de titre, sommaire, première fiche.}
+
+\subsection{Importer le catalogue}
+
+\chemin{Administration > Importer le catalogue (CSV)} crée ou met à jour des EP, avec leurs
+responsables, leurs prérequis et leur syllabus ; \chemin{Importer les séances des syllabus
+(CSV)} remplace leur programme. Chaque import montre d'abord une prévisualisation, puis
+s'applique sur confirmation ; un modèle se télécharge depuis la page. Les colonnes sont
+décrites dans le document \emph{Formats des imports et des exports}.
+
+\capture{gu-deve-import-catalogue}{Import du catalogue depuis un fichier CSV.}
+
+\subsection{Examiner les propositions des enseignants}\label{sec:propositions}
+
+\chemin{Propositions et syllabus} liste les fiches soumises par les enseignants.
+\bouton{Relire} ouvre la version soumise dans la fiche de l'EP (activité \og Syllabus du
+module\fg{}), avec, pour une mise à jour, les rubriques modifiées signalées ; la décision est
+sous la fiche : \bouton{Publier}, \bouton{Renvoyer à l'auteur} avec un commentaire, ou
+\bouton{Refuser}. L'auteur est prévenu, et l'EP suit la décision (publié au catalogue, de
+nouveau brouillon, ou archivé). Les fiches d'EP soumises figurent aussi dans \og Fiches à
+relire\fg{} du suivi des modules.
+
+\capture{gu-deve-propositions}{Propositions et mises à jour à examiner.}
+
+\capture{gu-deve-comparer}{Mise à jour soumise : version en vigueur, version proposée et décision.}
+
+\paragraph{EP académiques : validation en commission.} Pour publier la fiche d'un EP de type
+\og académique interne\fg{}, la DEVE indique sous la fiche la \textbf{date de la commission de
+validation} (champ obligatoire) ; la date figure ensuite sur la fiche et sur son PDF
+(\og Validée en commission le\fg{}). Chaque modification d'un EP académique passe aussi par la
+DEVE, même si la publication directe des mises à jour est permise, et sa publication porte la
+date de sa commission. Le bouton \bouton{PDF des fiches à valider} réunit en un seul document
+toutes les fiches soumises (version proposée), avec un sommaire, à remettre à la commission ;
+le même bouton existe dans \og Fiches à relire\fg{} du suivi des modules.
+
+\section{Éditions PDF et courriels}\label{sec:courriels}
+
+\chemin{Éditions PDF et propositions} règle l'en-tête, le pied de page et le logo des fiches,
+du livret, des feuilles d'émargement et du supplément, et permet aux responsables de publier
+directement les mises à jour de leurs fiches (une proposition de nouvel EP passe toujours par
+la DEVE). Les messages sur les fiches (soumise à la DEVE, décision) sont ceux du module des
+fiches.
+
+\chemin{Courriels} règle le sujet et le texte de chaque message (section~\ref{sec:messages}),
+et l'active ou non. Les variables entre accolades (\texttt{\{student\}}, \texttt{\{ep\}},
+\texttt{\{decision\}}, \texttt{\{ects\}}, \texttt{\{grade\}}, \texttt{\{comment\}},
+\texttt{\{link\}}\dots{}) sont remplacées à l'envoi ; celles de chaque message sont rappelées
+sous son texte. Un message laissé vide reprend le texte par défaut.
+
+\capture{gu-deve-courriels}{Texte des courriels et leurs variables.}
+
+\section{Suivre la promotion}\label{sec:suivi}
+
+\subsection{Validation}
+
+\chemin{Validation} montre d'abord les demandes en attente (40 par page), puis toute la
+promotion, filtrable par type, statut, année d'étude et nom. La DEVE peut :
+\begin{itemize}
+  \item trancher à n'importe quelle étape, à la place de l'étape en cours ;
+  \item \textbf{corriger} une décision finale (ECTS retenus, note), avec un commentaire gardé
+    dans l'historique ;
+  \item \textbf{retirer} une demande, même tranchée (\bouton{Retirer cet EP}), avec un
+    commentaire.
+\end{itemize}
+
+\capture{gu-deve-validation}{Validation, vue de la DEVE : toute la promotion.}
+
+\subsection{Tableau de pilotage}
+
+\chemin{Tableau de pilotage} présente l'avancement de chaque étudiant face à ses minimums,
+filtrable, avec un lien vers sa situation détaillée (le même tableau de bord que celui de
+l'étudiant).
+
+\capture{gu-deve-pilotage}{Tableau de pilotage de la promotion.}
+
+\subsection{Export CSV}
+
+\chemin{Export CSV} produit le \bouton{Bilan par étudiant} (une ligne par étudiant : ECTS par
+année et par type, minimums atteints) ou le \bouton{Détail des EP} (une ligne par EP de chaque
+étudiant, avec son statut et ses décisions), à ouvrir dans un tableur.
+
+\section{Fin d'année}\label{sec:finannee}
+
+\subsection{Valider les années}
+
+\chemin{Administration > Validation des années} présente, pour l'année d'étude choisie, le
+bilan de chaque étudiant face au minimum : ECTS retenus, minimum atteint ou non, décision déjà
+prise.
+
+\capture{gu-deve-annees}{Validation des années d'étude.}
+
+\begin{etapes}
+  \item \bouton{Valider les années atteintes} : enregistre en une fois la validation de tous
+    les étudiants qui ont atteint le minimum. Le message dit combien d'années ont été
+    validées, et combien sont restées sans décision.
+  \item Pour les autres, décidez étudiant par étudiant, après le jury : validée (dérogation,
+    avec un commentaire) ou non validée ; ou, si le jury le décide, \bouton{Déclarer non validées
+    les années non atteintes} en une fois.
+\end{etapes}
+
+Les décisions d'année figurent au supplément au diplôme.
+
+\subsection{Rentrée}
+
+\chemin{Administration > Rentrée} fait passer l'année courante de l'activité à la suivante :
+les objectifs de la nouvelle année deviennent exigibles ; les crédits, décisions et suppléments
+restent. La page rappelle d'abord combien d'étudiants n'ont pas d'année validée.
+
+La même page \textbf{transfère} le dossier d'un étudiant (EP, éléments du supplément et
+preuves, décisions d'année) vers l'activité d'une autre promotion, par exemple pour un
+redoublement. L'étudiant doit d'abord être inscrit dans le cours de destination.
+
+\capture{gu-deve-rentree}{Rentrée et transfert d'un étudiant.}
+
+\section{Le supplément au diplôme}\label{sec:supplement}
+
+\subsection{Paramétrage}\label{sec:supplement-reglages}
+
+\chemin{Administration > Supplément au diplôme : paramétrage} :
+\begin{itemize}
+  \item le \textbf{circuit} des éléments complémentaires (ajout direct, référent, DEVE, ou
+    référent puis DEVE) et l'exigence de \textbf{preuves} ;
+  \item le \textbf{préfixe} des numéros, le champ du profil qui porte la date de naissance, le
+    \textbf{cachet} ;
+  \item les \textbf{textes} des rubriques fixes du modèle Europass, en français et en anglais :
+    qualification, niveau, conditions d'accès, programme, fonction du diplôme, système
+    national, \textbf{signataire} et sa qualité ;
+  \item les \textbf{catégories} d'éléments complémentaires.
+\end{itemize}
+
+\capture{gu-deve-supplement-reglages}{Paramétrage du supplément au diplôme.}
+
+\subsection{Éléments à examiner}
+
+\chemin{Éléments de supplément à examiner} présente les demandes arrivées à l'étape de la
+DEVE, avec leurs preuves et l'avis du référent, à valider ou à refuser directement dans la
+liste ; en dessous, tous les éléments de la promotion, filtrables par statut et par nom.
+
+\capture{gu-deve-supplement-elements}{Éléments du supplément : file d'attente de la DEVE.}
+
+\subsection{Émission}
+
+\chemin{Administration > Émission des suppléments} liste les étudiants, ce qui manque encore
+à leur supplément (date de naissance, numéro d'identification, signataire) et leur supplément
+en vigueur.
+
+\capture{gu-deve-emission}{Émission des suppléments au diplôme.}
+
+\begin{itemize}
+  \item En tête du tableau, choisissez une fois la langue (français ou anglais) et, si besoin,
+    \bouton{Émettre malgré les informations manquantes} : ces choix valent pour toute la page.
+  \item Pour un étudiant : \bouton{Aperçu}, puis \bouton{Émettre le supplément} sur sa ligne.
+  \item Pour toute la promotion : \bouton{Émettre pour toute la promotion}. L'émission tourne
+    en tâche de fond ; un message vous prévient à la fin, avec le nombre de suppléments émis et
+    non émis. Sur le banc, les 1\,000 suppléments d'une promotion sont émis en quelques
+    minutes.
+  \item Une \textbf{archive ZIP} rassemble les PDF émis.
+\end{itemize}
+
+Chaque supplément émis porte un numéro unique et un code de vérification ; il est conservé ;
+une nouvelle émission remplace la précédente, qui reste vérifiable comme \og remplacée\fg{}.
+\chemin{Vérifier un supplément}, page accessible sans compte, confirme qu'un document présenté
+a bien été émis et n'a pas été modifié.
+
+\section{Imports, exports, transfert}\label{sec:transfert}
+
+\begin{description}
+  \item[Transférer le paramétrage] exporter les règles (types, minimums, supplément, courriels,
+    catalogue et syllabus) dans un fichier JSON, importer un tel fichier partie par partie, ou
+    copier directement les règles d'une autre activité que vous gérez ; le journal des imports
+    garde la trace de chacun.
+  \item[Importer des crédits (CSV)] porter au dossier des étudiants des EP suivis ailleurs, ou
+    l'historique d'un outil précédent, avec prévisualisation.
+  \item[Export complet et restauration] télécharger toute l'activité dans une archive ZIP
+    (classeur Excel lisible, paramétrage, données des étudiants, fichiers), ou restaurer une
+    telle archive dans une autre activité : ce qui existe déjà est écarté, rien n'est supprimé.
+\end{description}
+
+\capture{gu-deve-transfert}{Transfert du paramétrage et journal des imports.}
+
+\capture{gu-deve-archive}{Export complet et restauration.}
+
+La sauvegarde Moodle du cours reste l'outil de référence pour conserver une promotion ; la
+réinitialisation du cours efface, au choix, les dossiers des étudiants, les décisions d'année,
+les suppléments émis et le journal des imports, en gardant le paramétrage et le catalogue.
+
+\section{Le suivi des enseignants}\label{sec:synthese-admin}
+
+Dans le cours d'équipe, ajoutez une activité \og Suivi de l'enseignement personnalisé\fg{}, puis,
+dans son onglet \chemin{Administration}, cochez les activités \og Enseignement personnalisé\fg{}
+des promotions à faire remonter. Une promotion qui n'est plus suivie se décoche sans toucher à
+son activité. Les droits restent ceux de chaque activité de promotion.
+
+\capture{06-admin-lier-synthese}{Choix des promotions qui remontent dans le suivi.}
+
+\newpage
+% ===========================================================================
+\part{Administrateur du site}\label{part:admin}
+% ===========================================================================
+
+\section{Installation et exploitation}
+
+L'installation, la mise à niveau, les tâches planifiées, les capacités et le réglage du
+serveur sont décrits dans \texttt{mod/ep/INSTALL.md}. L'essentiel :
+\begin{itemize}
+  \item Moodle 4.3 ou plus récent, PHP 8.0 ou plus récent ; \texttt{mod\_stage} installé ;
+  \item aucun réglage d'administration du site : tout se fait dans l'activité ;
+  \item trois tâches : recalcul nocturne des EP de type stage, relance du lundi, émission
+    groupée des suppléments (tâche ad hoc : le \emph{cron} doit tourner) ;
+  \item pour une école de plusieurs milliers d'étudiants : connexions persistantes à la base,
+    APCu pour le cache applicatif, JIT et OPcache de PHP (gains mesurés dans
+    \texttt{INSTALL.md}).
+\end{itemize}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+\textbf{Capacité} & \textbf{Pour qui (par défaut)} \\
+\midrule
+\texttt{mod/ep:view} & Tous les inscrits \\
+\texttt{mod/ep:submit} & Étudiants : s'inscrire, déclarer, demander des éléments du
+supplément \\
+\texttt{mod/ep:evaluateteacher} & Enseignants : trancher ce dont ils ont la charge \\
+\texttt{mod/ep:propose} & Enseignants : proposer un EP, mettre à jour le syllabus du leur \\
+\texttt{mod/ep:validatedeve} & DEVE : trancher et corriger pour tous, valider les années \\
+\texttt{mod/ep:manage} & DEVE : paramétrage, catalogue, supplément, imports \\
+\texttt{mod/ep:viewall} & DEVE : voir tous les étudiants, exporter \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\newpage
+% ===========================================================================
+\part{Questions fréquentes}\label{part:faq}
+% ===========================================================================
+
+\section{Étudiants}
+
+\begin{description}
+  \item[Le bouton \og S'inscrire\fg{} n'apparaît pas.] La raison est écrite à sa place :
+    inscriptions fermées, EP complet, année non concernée, déjà inscrit, prérequis manquants
+    (section~\ref{sec:inscription}).
+  \item[Je me suis inscrit au mauvais EP.] Tant que l'inscription est en attente,
+    \bouton{Retirer ma demande} sur le tableau de bord.
+  \item[Mes ECTS validés ne comptent pas tous.] Le plafond du type est atteint : le bilan par
+    type les montre en \og non retenus\fg{}.
+  \item[La page de déclaration dit que je n'ai pas de référent.] Il n'est pas encore attribué
+    dans \og Gestion des stages\fg{} : prévenez la DEVE.
+  \item[Mon stage n'apparaît pas.] Seuls les stages \emph{complémentaires} validés par la DEVE
+    donnent des ECTS d'EP, et seulement si la DEVE a fixé un nombre d'ECTS par jour.
+  \item[L'aperçu du supplément signale des informations manquantes.] Date de naissance ou
+    numéro d'identification : à faire corriger dans votre profil par l'école ; signataire : la
+    DEVE le renseignera avant l'émission.
+\end{description}
+
+\section{Enseignants}
+
+\begin{description}
+  \item[Je ne vois pas un étudiant que je suis en stage.] Vérifiez dans \og Gestion des
+    stages\fg{} que vous êtes bien son enseignant référent : c'est cette attribution qui compte.
+  \item[Ma liste de participants dit que des lignes ont changé.] Quelqu'un (la DEVE, un autre
+    responsable) a tranché ces demandes pendant votre saisie : elles n'ont pas été écrasées.
+  \item[Mon import de notes signale des lignes.] Étudiant non inscrit à l'EP, ligne en double,
+    note hors barème ou décision non reconnue : la prévisualisation les liste, corrigez le
+    fichier et déposez-le de nouveau.
+  \item[Ma mise à jour de syllabus n'apparaît pas au catalogue.] Elle attend la DEVE : l'onglet
+    \og À traiter\fg{} du suivi la montre \og En attente de la DEVE\fg{}.
+\end{description}
+
+\section{DEVE}
+
+\begin{description}
+  \item[Un enseignant voit tout le monde.] Il a le rôle \og enseignant éditeur\fg{} avec les
+    capacités de la DEVE : retirez-les (section~\ref{sec:miseenplace}).
+  \item[Les EP de type stage restent à 0.] Le type stage n'a pas d'ECTS par jour : réglez-le,
+    puis \bouton{Resynchroniser les EP de type stage}.
+  \item[L'émission groupée ne se termine pas.] Elle tourne en tâche de fond : le \emph{cron}
+    du site doit tourner. Le message de fin indique les suppléments non émis faute
+    d'informations.
+  \item[Je veux reprendre les règles de l'an dernier.] \chemin{Transférer le paramétrage >
+    Copier depuis une autre activité}.
+  \item[Un étudiant redouble.] \chemin{Rentrée > Transférer un étudiant} vers l'activité de sa
+    nouvelle promotion, après l'avoir inscrit dans le cours correspondant.
+\end{description}
+
+\appendix
+\section{Aide-mémoire des pages}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}l l X@{}}
+\toprule
+\textbf{Page} & \textbf{Qui} & \textbf{Pour} \\
+\midrule
+Mes enseignements personnalisés & Étudiant & Bilan, détail, retrait \\
+Catalogue des EP & Étudiant, tous & Rechercher, lire les syllabus, s'inscrire \\
+Déclarer un EP & Étudiant & Déclarer avec justificatifs \\
+Mon supplément au diplôme & Étudiant & Aperçu, éléments, supplément émis \\
+Validation & Enseignant, DEVE & Trancher, corriger, filtrer \\
+Participants & Responsable, DEVE & Noter en lot, importer, inscrire, retirer, clore \\
+Propositions et syllabus & Enseignant, DEVE & Proposer, mettre à jour, examiner \\
+Éléments de supplément à examiner & Référent, DEVE & Trancher les éléments \\
+Tableau de pilotage & Enseignant, DEVE & Avancement face aux minimums \\
+Suivi : À traiter, Validation & Enseignant & Tout ce qui attend, toutes promotions \\
+Administration & DEVE & Tout le paramétrage (partie~\ref{part:deve}) \\
+Vérifier un supplément & Tous, sans compte & Authenticité d'un supplément \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Captures}
+
+Les captures se refont sur le banc d'essai (\texttt{docs/audit/banc}) avec
+\texttt{docs/guides/captures.js} : \texttt{node captures.js site-<promotion>.json gu-...},
+avec les variables \texttt{PERSONNEL}, \texttt{ETU}, \texttt{RESP}, \texttt{VERIF} et
+\texttt{SYNTHESE} décrites en tête du script (et \texttt{EMARGEMENT}, l'EP de la feuille
+d'émargement). Les documents PDF (\texttt{gu-pdf-...}) sont téléchargés avec la session du
+compte et leurs pages rendues en images (\texttt{pdftoppm}, \texttt{montage}). Les captures des
+propositions de syllabus et du suivi viennent des procédures de bout en bout du banc.
+
+\end{document}

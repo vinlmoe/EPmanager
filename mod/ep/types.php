@@ -15,12 +15,13 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Paramétrage par la DEVE des types d'enseignement personnalisé : leur libellé, la consigne
- * affichée à l'étudiant, le maximum d'ECTS retenu pour chacun (sur le cursus et, si besoin, par
- * année) et, pour le type stage, le barème d'ECTS par jour de stage complémentaire validé.
+ * Liste des types d'enseignement personnalisé d'une instance (DEVE) : chaque type décrit comment
+ * un EP arrive au dossier de l'étudiant, qui le valide, s'il est noté, quels justificatifs sont
+ * attendus et quels plafonds d'ECTS s'appliquent. Depuis cette page, la DEVE ajoute, réordonne,
+ * active, désactive et supprime les types ; leur paramétrage se fait dans type_edit.php.
  *
- * Les six types sont fixes (ce sont eux que le module sait traiter) : ils se paramètrent et se
- * désactivent, ils ne s'ajoutent ni ne se suppriment.
+ * Un type qui porte des EP du catalogue ou des crédits ne se supprime pas : il se désactive, sans
+ * quoi les crédits déjà accordés perdraient le type auquel ils se rattachent.
  *
  * @package   mod_ep
  * @copyright 2026 Sébastien Lefebvre
@@ -31,6 +32,7 @@ require(__DIR__ . '/../../config.php');
 require_once($CFG->dirroot . '/mod/ep/locallib.php');
 
 $id = required_param('id', PARAM_INT);
+$typeid = optional_param('typeid', 0, PARAM_INT);
 $action = optional_param('action', '', PARAM_ALPHA);
 
 $cm = get_coursemodule_from_id('ep', $id, 0, false, MUST_EXIST);
@@ -59,105 +61,163 @@ if ($action === 'sync') {
     redirect($baseurl, get_string('syncdone', 'mod_ep', $result), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
-if ($action === 'save' && data_submitted() && confirm_sesskey()) {
-    foreach (ep_get_types($ep->id) as $type) {
-        $type->name = trim(optional_param('name_' . $type->id, $type->name, PARAM_TEXT));
-        if ($type->name === '') {
-            $type->name = get_string('type_' . $type->code, 'mod_ep');
-        }
-        $type->description = optional_param('description_' . $type->id, '', PARAM_TEXT);
-        $type->enabled = optional_param('enabled_' . $type->id, 0, PARAM_INT) ? 1 : 0;
-        $type->maxects = max(0, round(optional_param('maxects_' . $type->id, 0, PARAM_FLOAT), 2));
-        $type->maxectsperyear = max(0, round(optional_param('maxectsperyear_' . $type->id, 0, PARAM_FLOAT), 2));
-        if ($type->code === EP_TYPE_STAGE) {
-            $type->ectsperday = max(0, round(optional_param('ectsperday_' . $type->id, 0, PARAM_FLOAT), 3));
-        }
-        $type->timemodified = time();
-        $DB->update_record('ep_type', $type);
-    }
-
-    // Le barème et l'activation du type stage viennent de changer : les crédits automatiques
-    // sont recalculés dans la foulée, sans quoi la page de pilotage afficherait encore l'ancien
-    // décompte jusqu'à la nuit suivante.
-    ep_sync_stage_credits($ep);
-
-    redirect($baseurl, get_string('typessaved', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
+// Les actions sur un type : le type est relu avec l'instance en condition, pour qu'un
+// identifiant d'une autre instance ne puisse pas être manipulé depuis cette page.
+$type = null;
+if ($typeid && in_array($action, ['move', 'toggle', 'delete'], true)) {
+    $type = $DB->get_record('ep_type', ['id' => $typeid, 'epid' => $ep->id], '*', MUST_EXIST);
 }
 
+if ($action === 'move' && $type) {
+    require_sesskey();
+    $dir = optional_param('dir', 'down', PARAM_ALPHA);
+    ep_move_type($type, $dir === 'up' ? -1 : 1);
+    redirect($baseurl);
+}
+
+if ($action === 'toggle' && $type) {
+    require_sesskey();
+    $type->enabled = $type->enabled ? 0 : 1;
+    $type->timemodified = time();
+    $DB->update_record('ep_type', $type);
+    // Activer ou désactiver un type stage change les crédits automatiques : les recalculer dans la
+    // foulée, sans quoi la page de pilotage afficherait encore l'ancien décompte jusqu'à la nuit.
+    if (ep_type_is_stage($type)) {
+        ep_sync_stage_credits($ep);
+    }
+    redirect(
+        $baseurl,
+        get_string($type->enabled ? 'typeenabled' : 'typedisabled', 'mod_ep'),
+        null,
+        \core\output\notification::NOTIFY_SUCCESS
+    );
+}
+
+if ($action === 'delete' && $type) {
+    if (!ep_type_is_deletable($type->id)) {
+        redirect($baseurl, get_string('errortypeinuse', 'mod_ep'), null, \core\output\notification::NOTIFY_ERROR);
+    }
+    if (optional_param('confirm', 0, PARAM_BOOL) && confirm_sesskey()) {
+        $DB->delete_records('ep_type', ['id' => $type->id]);
+        redirect($baseurl, get_string('typedeleted', 'mod_ep'), null, \core\output\notification::NOTIFY_SUCCESS);
+    }
+
+    // La suppression est définitive : elle passe par une page de confirmation plutôt que par un
+    // simple lien, même protégé par la clé de session.
+    $confirmurl = new moodle_url($baseurl, [
+        'action' => 'delete', 'typeid' => $type->id, 'confirm' => 1, 'sesskey' => sesskey(),
+    ]);
+    ep_set_secondary_page_header();
+    echo $OUTPUT->header();
+    echo $OUTPUT->heading(get_string('managetypes', 'mod_ep'));
+    echo $OUTPUT->confirm(
+        get_string('confirmdeletetype', 'mod_ep', format_string($type->name)),
+        new single_button($confirmurl, get_string('delete'), 'post', single_button::BUTTON_DANGER),
+        $baseurl
+    );
+    echo $OUTPUT->footer();
+    exit;
+}
+
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('managetypes', 'mod_ep'));
 echo html_writer::link(new moodle_url('/mod/ep/administration.php', ['id' => $cm->id]), get_string('back'));
 
 echo $OUTPUT->notification(get_string('managetypes_help', 'mod_ep'), 'info');
 
-$types = ep_get_types($ep->id);
+echo html_writer::link(
+    new moodle_url('/mod/ep/type_edit.php', ['id' => $cm->id]),
+    get_string('addtype', 'mod_ep'),
+    ['class' => 'btn btn-primary d-block mt-2 mb-3', 'style' => 'width:fit-content']
+);
 
-echo html_writer::start_tag('form', ['method' => 'post', 'action' => $baseurl->out(false)]);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'action', 'value' => 'save']);
+$types = array_values(ep_get_types($ep->id));
+$acquisitions = ep_acquisition_options();
+$evidences = ep_evidence_options();
 
-$table = new html_table();
-$table->head = [
-    get_string('type', 'mod_ep'),
-    get_string('typeattribution', 'mod_ep'),
-    get_string('enabled', 'mod_ep'),
+$head = [
+    get_string('typename', 'mod_ep'),
+    get_string('typecode', 'mod_ep'),
+    get_string('acquisition', 'mod_ep'),
+    get_string('validationflow', 'mod_ep'),
+    get_string('grading', 'mod_ep'),
+    get_string('evidence', 'mod_ep'),
     get_string('maxects', 'mod_ep'),
     get_string('maxectsperyear', 'mod_ep'),
     get_string('ectsperday', 'mod_ep'),
-    get_string('typeinstruction', 'mod_ep'),
+    get_string('insupplement', 'mod_ep'),
+    get_string('actions', 'mod_ep'),
 ];
 
-foreach ($types as $type) {
-    // Comment les ECTS de ce type arrivent : c'est ce qui distingue les types les uns des autres
-    // et ce qu'il faut avoir en tête avant de fixer un plafond.
-    if (!empty($type->autovalidate)) {
-        $attribution = html_writer::span(get_string('attributionautomatic', 'mod_ep'), 'badge badge-success');
-    } else if (!empty($type->catalog)) {
-        $attribution = html_writer::span(get_string('attributioncatalog', 'mod_ep'), 'badge badge-primary');
-    } else {
-        $attribution = html_writer::span(get_string('attributiondeclared', 'mod_ep'), 'badge badge-info');
+$rows = [];
+$last = count($types) - 1;
+foreach ($types as $index => $type) {
+    $name = format_string($type->name);
+    if (empty($type->enabled)) {
+        // Un type désactivé reste listé : il porte peut-être encore des crédits, et la DEVE doit
+        // pouvoir le réactiver ; le badge le distingue au premier coup d'œil.
+        $name .= ' ' . html_writer::span(get_string('hidden', 'mod_ep'), 'badge badge-secondary');
     }
 
-    $ectsperdaycell = '-';
-    if ($type->code === EP_TYPE_STAGE) {
-        $ectsperdaycell = html_writer::empty_tag('input', [
-            'type' => 'number', 'step' => '0.001', 'min' => 0, 'name' => 'ectsperday_' . $type->id,
-            'value' => ep_format_ects_input($type->ectsperday),
-            'class' => 'form-control',
-        ]);
+    $grading = get_string('grading_none', 'mod_ep');
+    if (ep_type_is_graded($type)) {
+        $grading = get_string('grading_grade', 'mod_ep') . ' ('
+            . get_string('gradeoutof', 'mod_ep', (object) [
+                'grade' => format_float((float) $type->gradepass, 2, true, true),
+                'max' => format_float((float) $type->grademax, 2, true, true),
+            ]) . ')';
     }
 
-    $table->data[] = [
-        html_writer::empty_tag('input', [
-            'type' => 'text', 'name' => 'name_' . $type->id, 'value' => s($type->name), 'class' => 'form-control',
-        ]),
-        $attribution,
-        html_writer::checkbox('enabled_' . $type->id, 1, (bool) $type->enabled, ''),
-        html_writer::empty_tag('input', [
-            'type' => 'number', 'step' => '0.25', 'min' => 0, 'name' => 'maxects_' . $type->id,
-            'value' => ep_format_ects_input($type->maxects), 'class' => 'form-control',
-        ]),
-        html_writer::empty_tag('input', [
-            'type' => 'number', 'step' => '0.25', 'min' => 0, 'name' => 'maxectsperyear_' . $type->id,
-            'value' => ep_format_ects_input($type->maxectsperyear), 'class' => 'form-control',
-        ]),
-        $ectsperdaycell,
-        html_writer::tag('textarea', s($type->description), [
-            'name' => 'description_' . $type->id, 'rows' => 2, 'class' => 'form-control',
-        ]),
+    // Les justificatifs n'ont de sens que pour un type déclaré ; le barème et sa portée, que pour
+    // un type stage : ailleurs, la cellule reste vide plutôt que d'afficher une valeur sans effet.
+    $evidence = '-';
+    if (ep_type_is_declarable($type)) {
+        $evidence = $evidences[(int) $type->evidence] ?? '-';
+    }
+    $ectsperday = '-';
+    if (ep_type_is_stage($type)) {
+        $ectsperday = ep_format_ects($type->ectsperday) . ' ('
+            . get_string('stagescope_' . $type->stagescope, 'mod_ep') . ')';
+    }
+
+    $actionparams = ['typeid' => $type->id, 'sesskey' => sesskey()];
+    $actions = ep_render_actions([
+        get_string('edit') => new moodle_url('/mod/ep/type_edit.php', ['id' => $cm->id, 'typeid' => $type->id]),
+        get_string('moveup', 'mod_ep') => $index > 0
+            ? new moodle_url($baseurl, $actionparams + ['action' => 'move', 'dir' => 'up']) : null,
+        get_string('movedown', 'mod_ep') => $index < $last
+            ? new moodle_url($baseurl, $actionparams + ['action' => 'move', 'dir' => 'down']) : null,
+        get_string($type->enabled ? 'disable' : 'enable') => new moodle_url($baseurl, $actionparams + ['action' => 'toggle']),
+    ]) . ep_render_actions([
+        get_string('delete') => new moodle_url($baseurl, ['action' => 'delete', 'typeid' => $type->id]),
+    ], 'btn btn-sm btn-outline-danger mr-1 mb-1', '');
+
+    $rows[] = [
+        $name,
+        s($type->code),
+        $acquisitions[$type->acquisition] ?? '-',
+        ep_flow_label($type->validationflow),
+        $grading,
+        $evidence,
+        $type->maxects > 0 ? ep_format_ects($type->maxects) : '-',
+        $type->maxectsperyear > 0 ? ep_format_ects($type->maxectsperyear) : '-',
+        $ectsperday,
+        $type->insupplement ? get_string('yes') : get_string('no'),
+        $actions,
     ];
 }
 
-echo html_writer::table($table);
-echo html_writer::empty_tag('input', [
-    'type' => 'submit', 'value' => get_string('savechanges'), 'class' => 'btn btn-primary mt-2',
-]);
-echo html_writer::end_tag('form');
+echo ep_render_paged_table($head, $rows);
 
 echo html_writer::div(
-    html_writer::link(new moodle_url($baseurl, ['action' => 'sync', 'sesskey' => sesskey()]),
-        get_string('syncstagecredits', 'mod_ep'), ['class' => 'btn btn-secondary']),
-    'mt-4');
+    html_writer::link(
+        new moodle_url($baseurl, ['action' => 'sync', 'sesskey' => sesskey()]),
+        get_string('syncstagecredits', 'mod_ep'),
+        ['class' => 'btn btn-secondary']
+    ),
+    'mt-4'
+);
 echo html_writer::tag('p', get_string('syncstagecredits_help', 'mod_ep'), ['class' => 'text-muted']);
 
 echo $OUTPUT->footer();

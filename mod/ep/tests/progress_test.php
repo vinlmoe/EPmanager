@@ -32,7 +32,6 @@ require_once($CFG->dirroot . '/mod/ep/locallib.php');
  * @covers     ::ep_filter_due_years
  */
 final class progress_test extends \advanced_testcase {
-
     /** @var \stdClass Instance de l'activité. */
     protected $ep;
 
@@ -72,9 +71,11 @@ final class progress_test extends \advanced_testcase {
 
         // Seul le type stage est attribué sans vérification d'un enseignant, et seul le type
         // académique interne passe par le catalogue.
-        $this->assertEquals(1, ep_get_type_by_code($this->ep->id, EP_TYPE_STAGE)->autovalidate);
-        $this->assertEquals(0, ep_get_type_by_code($this->ep->id, EP_TYPE_ENGAGEMENT)->autovalidate);
-        $this->assertEquals(1, ep_get_type_by_code($this->ep->id, EP_TYPE_ACADEMIC)->catalog);
+        $this->assertTrue(ep_type_is_automatic(ep_get_type_by_code($this->ep->id, EP_TYPE_STAGE)));
+        $this->assertFalse(ep_type_is_automatic(ep_get_type_by_code($this->ep->id, EP_TYPE_ENGAGEMENT)));
+        $this->assertTrue(ep_type_is_catalog(ep_get_type_by_code($this->ep->id, EP_TYPE_ACADEMIC)));
+        $this->assertSame(EP_ROLE_OWNER, ep_get_type_by_code($this->ep->id, EP_TYPE_ACADEMIC)->validationflow);
+        $this->assertSame(EP_ROLE_REFERENT, ep_get_type_by_code($this->ep->id, EP_TYPE_SPORT)->validationflow);
     }
 
     /**
@@ -140,8 +141,11 @@ final class progress_test extends \advanced_testcase {
      * son propre maximum, même si le plafond de cursus le permettrait.
      */
     public function test_yearly_cap_applies_before_the_cursus_cap(): void {
-        $this->generator->configure_type($this->ep, EP_TYPE_PROFESSIONAL,
-            ['maxectsperyear' => 2, 'maxects' => 10]);
+        $this->generator->configure_type(
+            $this->ep,
+            EP_TYPE_PROFESSIONAL,
+            ['maxectsperyear' => 2, 'maxects' => 10]
+        );
 
         $this->generator->create_validated_credit($this->ep, $this->student->id, EP_TYPE_PROFESSIONAL, 5, 2);
         $this->generator->create_validated_credit($this->ep, $this->student->id, EP_TYPE_PROFESSIONAL, 5, 3);

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="projet">
+    <description>
+        Règles de codage Moodle appliquées aux modules de ce dépôt.
+
+        Une seule exception, documentée ci-dessous. Tout le reste est le standard « moodle »
+        tel que fourni par moodlehq/moodle-cs, avertissements compris : la vérification
+        échoue au premier écart.
+    </description>
+
+    <file>mod</file>
+
+    <!-- Bibliothèque tierce redistribuée telle quelle : elle suit ses propres conventions. -->
+    <exclude-pattern>*/thirdparty/*</exclude-pattern>
+
+    <rule ref="moodle">
+        <!--
+            Le code et les commentaires de ce projet sont en français. Le sniff exige qu'un
+            commentaire commence par [A-Z0-9], un intervalle ASCII qui ne reconnaît ni les
+            capitales accentuées (« Écran », « Étudiant », « Évaluation ») ni les guillemets
+            français ouvrants. S'y conformer imposerait d'écrire « Ecran », c'est-à-dire une
+            faute d'orthographe. La règle est donc désactivée ; les autres règles de
+            commentaire (ponctuation finale, filets de séparation, blocs de documentation)
+            restent actives.
+        -->
+        <exclude name="moodle.Commenting.InlineComment.NotCapital"/>
+    </rule>
+</ruleset>

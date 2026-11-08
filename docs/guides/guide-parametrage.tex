@@ -1,0 +1,278 @@
+% Guide de paramétrage d'EP Manager (DEVE).
+% Compilation : latexmk -pdf guide-parametrage.tex
+\documentclass[11pt,a4paper]{article}
+
+% Version du guide : à mettre à jour à chaque modification, avec une ligne dans l'historique.
+\newcommand{\titreguide}{Guide de paramétrage}
+\newcommand{\versionguide}{1.3}
+\newcommand{\dateguide}{novembre 2026}
+\newcommand{\versionep}{1.2.0}
+\newcommand{\versionsynthese}{1.0.3}
+
+\usepackage{guide-commun}
+
+\begin{document}
+
+\pagedegarde{DEVE : mise en place, règles, catalogue, suivi, fin d'année, supplément au
+diplôme}{deve-administration}
+
+\tableofcontents
+
+\section*{Historique des versions}
+\addcontentsline{toc}{section}{Historique des versions}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l l X@{}}
+\toprule
+\textbf{Version} & \textbf{Date} & \textbf{Modifications} \\
+\midrule
+1.0 & novembre 2026 & Première version, pour EP Manager 1.0. \\
+1.1 & novembre 2026 & Captures refaites ; séances du programme sans date (EP Manager 1.0.4). \\
+1.2 & novembre 2026 & Fiches des EP tenues par le module des fiches ; relecture sous la fiche ; activités furtives recommandées. \\
+1.3 & novembre 2026 & Période d'inscription du catalogue fixée par la DEVE ; EP académiques validés en commission (date requise) ; PDF des fiches à valider (EP Manager 1.2.0). \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\newpage
+
+% ===========================================================================
+\section{Principe}
+
+EP Manager compte deux modules d'activité :
+\begin{itemize}
+  \item \textbf{Enseignement personnalisé} (\texttt{mod\_ep}), une activité par promotion, dans
+    le cours de la promotion qui porte déjà \og Gestion des stages\fg{} ;
+  \item \textbf{Suivi de l'enseignement personnalisé} (\texttt{mod\_epsynthesis}), dans un cours
+    d'équipe, qui rassemble pour chaque enseignant ce qu'il a à faire dans toutes les
+    promotions.
+\end{itemize}
+
+Tout le paramétrage se fait dans l'activité, depuis son \chemin{Administration}, avec le rôle
+de la DEVE (capacité \texttt{mod/ep:manage}) : aucun réglage d'administration du site n'est
+nécessaire. Les règles d'une promotion se reportent sur la suivante par une simple copie
+(section~\ref{sec:transfert}).
+
+\capture{deve-administration}{Panneau d'administration de l'activité.}
+
+\begin{attention}
+Par défaut, Moodle donne aussi les capacités de la DEVE au rôle \og enseignant éditeur\fg{}.
+Si les enseignants ont ce rôle dans le cours de la promotion, retirez-leur
+\texttt{mod/ep:validatedeve}, \texttt{mod/ep:manage} et \texttt{mod/ep:viewall} dans les
+permissions de l'activité, et donnez à la DEVE le rôle \og gestionnaire\fg{}.
+\end{attention}
+
+% ===========================================================================
+\section{Mise en place d'une promotion}
+
+\begin{enumerate}
+  \item Dans le cours de la promotion, ajoutez une activité \og Enseignement personnalisé\fg{}
+    et indiquez l'\textbf{année d'étude courante}.
+  \item Si une autre promotion est déjà paramétrée, copiez ses règles
+    (\chemin{Administration > Transférer le paramétrage > Copier depuis une autre activité}) et
+    passez à la vérification.
+  \item Sinon, définissez les types (section~\ref{sec:types}), les minimums
+    (section~\ref{sec:minimums}), le catalogue (section~\ref{sec:catalogue}) et le supplément
+    (section~\ref{sec:supplement}).
+\end{enumerate}
+
+% ===========================================================================
+\section{Types d'EP et circuits de validation}\label{sec:types}
+
+\chemin{Administration > Types d'EP et plafonds} liste les types de la promotion. Six sont
+créés d'office ; vous pouvez en ajouter, les modifier, les réordonner, les désactiver. Un type
+qui porte déjà des EP ne se supprime pas : désactivez-le.
+
+\capture{deve-types}{Types d'EP, avec leur mode d'acquisition, leur circuit et leurs
+plafonds.}
+
+Pour chaque type :
+\begin{description}
+  \item[Mode d'acquisition] comment un EP de ce type arrive au dossier de l'étudiant :
+    \begin{itemize}
+      \item \emph{inscription à un EP du catalogue}, qui porte ses ECTS et ses responsables ;
+      \item \emph{déclaration par l'étudiant}, avec justificatifs ;
+      \item \emph{automatique, d'après les stages complémentaires} validés par la DEVE dans
+        \og Gestion des stages\fg{} (ECTS par jour retenu) ;
+      \item \emph{saisie par la DEVE} seule, à la main ou par import.
+    \end{itemize}
+  \item[Circuit de validation] une à trois étapes, dans l'ordre : responsable de l'EP,
+    enseignant référent, DEVE (par exemple \og référent puis DEVE\fg{}) ; ou \og aucune\fg{} :
+    validé d'office. La DEVE peut toujours trancher à la place de l'étape en cours.
+  \item[Évaluation] sans note (validé / non validé) ou notée, avec note maximale et seuil de
+    validation. Un EP du catalogue peut déroger à la règle de son type.
+  \item[Justificatifs] sans objet, facultatifs ou obligatoires ; formats admis.
+  \item[Plafonds] maximum d'ECTS retenus sur le cursus et par année, maximum par demande.
+  \item[Consigne] texte affiché à l'étudiant quand il déclare un EP de ce type.
+  \item[Supplément] le type figure ou non dans la rubrique 4.3 du supplément au diplôme.
+\end{description}
+
+\capture{deve-type-edit}{Modification d'un type.}
+
+\begin{astuce}
+Un changement de circuit ne s'applique qu'aux nouvelles demandes et aux étapes restantes des
+demandes en cours ; les décisions déjà prises restent dans l'historique.
+\end{astuce}
+
+% ===========================================================================
+\section{Minimums d'ECTS}\label{sec:minimums}
+
+\chemin{Administration > Minimums d'ECTS} fixe le minimum d'ECTS à valider pour chaque année
+d'étude, et le minimum sur l'ensemble du cursus. Les deux se cumulent. Le tableau de bord de
+l'étudiant et le pilotage s'y réfèrent.
+
+% ===========================================================================
+\section{Catalogue des EP}\label{sec:catalogue}
+
+\chemin{Administration > Catalogue des EP internes} gère les EP auxquels les étudiants
+s'inscrivent : intitulé, code, type, ECTS, années concernées, places, périodes d'inscription et
+de déroulement, responsables, évaluation, prérequis (EP exigés, ECTS minimum, bloquants ou
+non), état.
+
+\capture{deve-catalogue}{Gestion du catalogue : états, places prises, responsables.}
+
+\paragraph{Période d'inscription du catalogue.} En tête de la page, la DEVE fixe la période
+pendant laquelle les étudiants s'inscrivent à tous les EP du catalogue (début et fin, date et
+heure ; une date laissée vide ne limite pas). Un EP qui a sa propre période la garde ; la case
+\og Appliquer aussi aux EP qui ont leur propre période\fg{} les aligne tous. Hors période,
+l'étudiant ne peut plus s'inscrire : seuls le \textbf{responsable de l'EP} ou la \textbf{DEVE}
+ajoutent encore un étudiant, depuis la page \bouton{Participants} de l'EP.
+
+Les \textbf{états} d'un EP :
+\begin{itemize}
+  \item \statut{Brouillon}, \statut{Proposé} : en préparation, invisible des étudiants ;
+  \item \statut{Publié} : au catalogue, inscriptions ouvertes pendant leur période ;
+  \item \statut{Clos} : plus d'inscription ; les inscrits restent, le responsable les note ;
+  \item \statut{Archivé} : hors du catalogue, l'historique reste.
+\end{itemize}
+
+Le catalogue peut aussi être \textbf{importé} d'un fichier CSV, avec les syllabus et les séances
+(\chemin{Administration > Importer le catalogue}) ; les formats sont décrits dans le document
+\emph{Formats des imports et des exports}.
+
+\subsection{Propositions des enseignants}
+
+Les enseignants proposent de nouveaux EP et mettent à jour la fiche des leurs. La fiche d'un EP
+est une activité \og Syllabus du module\fg{} (module des fiches), créée avec l'EP dans la
+section \og Fiches des EP\fg{} du cours. \chemin{Propositions et syllabus} liste ce qui attend
+votre examen ; \bouton{Relire} ouvre la version soumise, et la décision se prend sous la fiche :
+\bouton{Publier} (l'EP entre au catalogue, ou la nouvelle version remplace l'ancienne),
+\bouton{Renvoyer à l'auteur} avec un commentaire, ou \bouton{Refuser}. L'auteur est prévenu.
+Il faut, pour cela, le rôle gestionnaire dans le cours (droit \texttt{mod/syllabus:manage}).
+
+Pour que ces fiches n'encombrent pas la page du cours, l'administrateur du site peut autoriser
+les activités furtives (réglage \texttt{allowstealth}) : elles ne s'y affichent alors plus, et
+restent ouvertes depuis le catalogue.
+
+\capture{gu-deve-comparer}{Examen d'une version soumise : publier, renvoyer à l'auteur ou refuser.}
+
+\paragraph{EP académiques : validation en commission.} La fiche d'un EP de type
+\og académique interne\fg{} est validée par une commission : pour la publier, la DEVE indique
+la \textbf{date de la commission de validation} sous la fiche (champ obligatoire) ; la date
+figure ensuite sur la fiche (\og Validée en commission le\fg{}) et sur son PDF. Il en va de même
+de chaque modification : la mise à jour d'un EP académique passe toujours par la DEVE, même si
+la publication directe des mises à jour est permise, et sa publication porte la date de sa
+commission. Le bouton \bouton{PDF des fiches à valider} de \chemin{Propositions et syllabus}
+réunit en un seul PDF toutes les fiches soumises (version proposée), avec un sommaire, à
+remettre à la commission.
+
+Dans \chemin{Éditions PDF et propositions}, vous pouvez laisser les mises à jour des EP déjà
+publiés être publiées directement par leur responsable, et régler l'en-tête, le pied de page
+et le logo des PDF (fiches de syllabus, livret du catalogue, supplément).
+
+% ===========================================================================
+\section{Suivi de la promotion}
+
+\begin{itemize}
+  \item \chemin{Validation} : les demandes en attente (paginées), puis tout le périmètre,
+    filtrable par type, état, année et nom. La DEVE peut trancher à toute étape, corriger une
+    note, retirer une demande.
+  \item \chemin{Tableau de pilotage} : l'avancement de chaque étudiant face aux minimums, avec sa
+    situation détaillée.
+  \item \chemin{Export CSV} : l'avancement par étudiant ou la liste détaillée de tous les EP.
+  \item \chemin{Courriels} : texte des messages envoyés (décision, relance hebdomadaire des
+    validateurs, émission des suppléments), avec leurs variables ; les messages sur les fiches
+    (soumise, décision) sont ceux du module des fiches.
+\end{itemize}
+
+\capture{deve-pilotage}{Tableau de pilotage de la promotion.}
+
+% ===========================================================================
+\section{Fin d'année}
+
+\subsection{Validation des années}
+
+\chemin{Administration > Validation des années} présente, pour l'année choisie, le bilan de
+chaque étudiant face au minimum. Validez une année étudiant par étudiant (avec un commentaire
+pour une dérogation), ou en lot : \bouton{Valider les années atteintes}, puis, si le jury le
+décide, marquer les autres comme non validées.
+
+\capture{deve-validation-annees}{Validation des années d'étude.}
+
+\subsection{Rentrée et transfert}
+
+\chemin{Administration > Rentrée} fait passer l'activité à l'année suivante. La même page
+transfère le dossier d'un étudiant (EP, décisions d'année, éléments du supplément et preuves)
+vers l'activité d'une autre promotion, par exemple pour un redoublement.
+
+% ===========================================================================
+\section{Supplément au diplôme}\label{sec:supplement}
+
+\subsection{Paramétrage}
+
+\chemin{Administration > Supplément au diplôme : paramétrage} :
+\begin{itemize}
+  \item le \textbf{circuit} des éléments complémentaires demandés par les étudiants (DEVE seule,
+    ou enseignant référent puis DEVE) et l'exigence de \textbf{preuves} ;
+  \item le \textbf{préfixe} des numéros, le champ du profil qui porte la date de naissance, le
+    \textbf{cachet} imprimé ;
+  \item les \textbf{textes} des rubriques fixes du modèle Europass, en français et en anglais :
+    qualification, niveau, accès, programme, fonction du diplôme, système national, signataire
+    et qualité ;
+  \item les \textbf{catégories} d'éléments complémentaires (responsabilités, mobilité, prix,
+    certifications\dots).
+\end{itemize}
+
+\capture{deve-supplement-reglages}{Paramétrage du supplément au diplôme.}
+
+\subsection{Éléments à examiner}
+
+\chemin{Éléments de supplément à examiner} : les demandes des étudiants arrivées à votre étape,
+avec leurs preuves, à valider ou refuser ; en dessous, tous les éléments, filtrables par état.
+
+\subsection{Émission}
+
+\chemin{Administration > Émission des suppléments} liste les étudiants, ce qui manque à leur
+supplément, et leur supplément en vigueur. Pour un étudiant : \bouton{Aperçu}, puis
+\bouton{Émettre le supplément} en français ou en anglais. Pour toute la promotion (\bouton{Émettre pour toute la promotion}) : l'émission groupée tourne
+en tâche de fond et vous prévient à la fin ; une archive ZIP rassemble les PDF.
+
+\capture{deve-supplement-emission}{Émission des suppléments au diplôme.}
+
+Chaque supplément émis porte un numéro unique et un code de vérification (empreinte de son
+contenu). Il est conservé ; une nouvelle émission le remplace. \chemin{Vérifier un supplément}
+-- page accessible sans compte -- confirme qu'un document présenté a bien été émis et n'a pas
+été modifié.
+
+% ===========================================================================
+\section{Imports, exports, transfert}\label{sec:transfert}
+
+\begin{itemize}
+  \item \chemin{Transférer le paramétrage} : export JSON des règles (types, minimums,
+    supplément, courriels, catalogue et syllabus), import d'un tel fichier par parties, ou copie
+    directe depuis une autre activité que vous gérez ; journal des imports.
+  \item \chemin{Importer le catalogue}, \chemin{Importer les séances des syllabus},
+    \chemin{Importer des crédits} : fichiers CSV avec prévisualisation, modèle téléchargeable,
+    colonnes reconnues en français ou en anglais.
+  \item \chemin{Export complet et restauration} : archive ZIP de toute l'activité (classeur
+    Excel lisible, paramétrage, données des étudiants, fichiers), restaurable dans une autre
+    activité sans doublon.
+\end{itemize}
+
+\capture{deve-transfert}{Transfert du paramétrage et journal des imports.}
+
+La sauvegarde Moodle du cours reste l'outil de référence pour conserver une promotion ; la
+réinitialisation du cours efface, au choix, les dossiers des étudiants, les décisions d'année
+et les suppléments émis, en gardant le paramétrage et le catalogue.
+
+\end{document}

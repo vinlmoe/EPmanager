@@ -65,9 +65,13 @@ if ($studentid) {
     if ($restrictuserids !== null && !in_array($studentid, $restrictuserids, true)) {
         throw new moodle_exception('nopermissions', 'error', '', get_string('pilotage', 'mod_ep'));
     }
+    if (ep_count_enrolled_students($context, '', [$studentid]) !== 1) {
+        throw new moodle_exception('invaliduserid', 'error');
+    }
     $student = $DB->get_record('user', ['id' => $studentid], '*', MUST_EXIST);
     $PAGE->set_url(new moodle_url($baseurl, ['studentid' => $studentid]));
 
+    ep_set_secondary_page_header();
     echo $OUTPUT->header();
     echo $OUTPUT->heading(get_string('pilotage', 'mod_ep') . ' - ' . fullname($student));
     echo html_writer::link($baseurl, get_string('back'));
@@ -84,62 +88,62 @@ if ($studentid) {
     exit;
 }
 
+ep_set_secondary_page_header();
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($ep->name));
 echo ep_render_navlinks($ep, $cm, $context, $rights);
 
 $listurl = new moodle_url($baseurl, ['search' => $search, 'tsort' => $tsort, 'tdir' => $tdir]);
 
-$searchformurl = new moodle_url($baseurl);
-echo html_writer::start_tag('form', ['method' => 'get', 'action' => $searchformurl, 'class' => 'form-inline ep-filters mb-3']);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
-echo html_writer::empty_tag('input', [
-    'type' => 'text', 'name' => 'search', 'value' => s($search),
-    'placeholder' => get_string('searchstudent', 'mod_ep'), 'class' => 'form-control mr-2',
-]);
-echo html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('search'), 'class' => 'btn btn-secondary mr-2']);
-echo html_writer::link($searchformurl, get_string('resetfilters', 'mod_ep'), ['class' => 'btn btn-link']);
-echo html_writer::end_tag('form');
+echo $OUTPUT->render(new \mod_ep\output\list_filters($listurl, ['search', 'tsort', 'tdir', 'page'], $search));
 
-$rows = ep_get_pilotage_overview($ep, $context, $restrictuserids);
-
-if ($search !== '') {
-    $needle = core_text::strtolower($search);
-    $rows = array_filter($rows, function($row) use ($needle) {
-        return core_text::strpos(core_text::strtolower(fullname($row->user)), $needle) !== false;
-    });
-}
-
+// Tri par nom : les étudiants de la page sont lus en base, et seul leur bilan est calculé. Tri
+// sur une valeur calculée (ECTS retenus, années, demandes en attente) : le bilan de toute la
+// promotion est nécessaire, chargé en trois requêtes (voir ep_build_pilotage_rows()), puis trié
+// et découpé ici.
 $sortmap = [
-    'student' => function($row) {
-        return core_text::strtolower(fullname($row->user));
-    },
-    'retained' => function($row) {
+    'student' => null,
+    'retained' => function ($row) {
         return $row->progress->totalretained;
     },
-    'years' => function($row) {
+    'years' => function ($row) {
         return $row->progress->yearstotal > 0 ? ($row->progress->yearsdone / $row->progress->yearstotal) : -1;
     },
-    'pending' => function($row) {
+    'pending' => function ($row) {
         return $row->pendingcount;
     },
 ];
 $sortkey = array_key_exists($tsort, $sortmap) ? $tsort : 'student';
-$sortfn = $sortmap[$sortkey];
-usort($rows, function($a, $b) use ($sortfn) {
-    return $sortfn($a) <=> $sortfn($b);
-});
-if (strtoupper($tdir) === 'DESC') {
-    $rows = array_reverse($rows);
+$total = ep_count_enrolled_students($context, $search, $restrictuserids);
+if ($sortkey === 'student') {
+    $students = ep_get_enrolled_students($context, $search, $restrictuserids, $page * EP_LIST_PERPAGE, EP_LIST_PERPAGE);
+    if (strtoupper($tdir) === 'DESC') {
+        $students = ep_get_enrolled_students(
+            $context,
+            $search,
+            $restrictuserids,
+            max(0, $total - ($page + 1) * EP_LIST_PERPAGE),
+            min(EP_LIST_PERPAGE, $total - $page * EP_LIST_PERPAGE)
+        );
+        $students = array_reverse($students, true);
+    }
+    $pagerows = ep_build_pilotage_rows($ep, $students);
+} else {
+    $rows = ep_build_pilotage_rows($ep, ep_get_enrolled_students($context, $search, $restrictuserids));
+    $sortfn = $sortmap[$sortkey];
+    usort($rows, function ($a, $b) use ($sortfn) {
+        return $sortfn($a) <=> $sortfn($b);
+    });
+    if (strtoupper($tdir) === 'DESC') {
+        $rows = array_reverse($rows);
+    }
+    $pagerows = array_slice($rows, $page * EP_LIST_PERPAGE, EP_LIST_PERPAGE);
 }
+$pagingbarhtml = ep_render_paging_bar($total, $page, $listurl);
 
-if (empty($rows)) {
+if ($total === 0) {
     echo $OUTPUT->notification(get_string('nostudents', 'mod_ep'), 'info');
 } else {
-    [$pagerows, $pagingbarhtml] = ep_paginate($rows, $page, $listurl);
-
-    $table = new html_table();
-    $table->head = [
+    $head = [
         ep_sort_header(get_string('student', 'mod_ep'), 'student', $listurl, $sortkey, $tdir),
         ep_sort_header(get_string('totalretainedshort', 'mod_ep'), 'retained', $listurl, $sortkey, $tdir),
         get_string('cursusminimumshort', 'mod_ep'),
@@ -148,6 +152,7 @@ if (empty($rows)) {
         get_string('status', 'mod_ep'),
         get_string('actions', 'mod_ep'),
     ];
+    $rows = [];
     foreach ($pagerows as $row) {
         $progress = $row->progress;
         $cursuscell = $progress->mincursus > 0
@@ -163,7 +168,7 @@ if (empty($rows)) {
             ? html_writer::span($row->pendingcount, 'badge badge-info')
             : html_writer::span('0', 'text-muted');
 
-        $table->data[] = [
+        $rows[] = [
             fullname($row->user),
             ep_format_ects($progress->totalretained),
             $cursuscell,
@@ -176,8 +181,7 @@ if (empty($rows)) {
             ]),
         ];
     }
-    echo html_writer::table($table);
-    echo $pagingbarhtml;
+    echo ep_render_paged_table($head, $rows, $pagingbarhtml);
 }
 
 echo $OUTPUT->footer();

@@ -38,6 +38,12 @@ require_login($course, true, $cm);
 $context = context_module::instance($cm->id);
 require_capability('mod/ep:view', $context);
 
+$event = \mod_ep\event\course_module_viewed::create(['objectid' => $ep->id, 'context' => $context]);
+$event->add_record_snapshot('course', $course);
+$event->add_record_snapshot('ep', $ep);
+$event->trigger();
+(new completion_info($course))->set_module_viewed($cm);
+
 $rights = ep_get_user_rights($ep, $context);
 
 if ($rights->viewall || ep_rights_has_validation_scope($rights)) {
@@ -53,12 +59,8 @@ $PAGE->set_context($context);
 // que la DEVE a validé le stage correspondant, sans attendre la tâche planifiée de la nuit.
 ep_sync_stage_credits_if_due($ep);
 
+// Le nom et la description de l'activité sont affichés par l'en-tête d'activité de Moodle.
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($ep->name));
-
-if ($ep->intro) {
-    echo $OUTPUT->box(format_module_intro('ep', $ep, $cm->id), 'generalbox mod_introbox', 'epintro');
-}
 
 echo ep_render_navlinks($ep, $cm, $context, $rights);
 

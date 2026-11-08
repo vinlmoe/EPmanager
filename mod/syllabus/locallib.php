@@ -1,0 +1,2710 @@
+<?php
+// This file is part of Moodle - http://moodle.org/
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * Fonctions internes de mod_syllabus : droits, versions de la fiche, référentiel commun (types de
+ * module, questions communes, réglages), évaluation par les étudiants et ses résultats, listes
+ * pour les activités de synthèse (mod_syllabusstaff, mod_syllabusstudent).
+ *
+ * @package   mod_syllabus
+ * @copyright 2026 Sébastien Lefebvre
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+defined('MOODLE_INTERNAL') || die();
+
+require_once($CFG->dirroot . '/mod/syllabus/lib.php');
+
+// Réglages communs au site, tenus par la DEVE depuis mod_syllabusstaff.
+
+/**
+ * Réglages communs, avec leur valeur par défaut.
+ *
+ * @return array nom => valeur par défaut
+ */
+function syllabus_setting_defaults(): array {
+    return [
+        // Les versions soumises par les responsables passent par la DEVE avant d'être publiées.
+        'reviewrequired' => 1,
+        // Nombre minimal de réponses pour afficher les résultats d'une évaluation (anonymat).
+        'resultsthreshold' => 3,
+        // Les responsables voient les résultats : après la fermeture (afterclose) ou dès l'ouverture.
+        'teacherresults' => 'afterclose',
+        // Premier mois de l'année universitaire : les avis des étudiants sont recueillis par année.
+        'yearstartmonth' => 9,
+    ];
+}
+
+/**
+ * Valeur d'un réglage commun.
+ *
+ * @param string $name
+ * @return mixed
+ */
+function syllabus_setting(string $name) {
+    $value = get_config('mod_syllabus', $name);
+    return $value === false ? (syllabus_setting_defaults()[$name] ?? null) : $value;
+}
+
+/**
+ * Enregistre les réglages communs.
+ *
+ * @param stdClass $data
+ * @return void
+ */
+function syllabus_save_settings(stdClass $data): void {
+    set_config('reviewrequired', empty($data->reviewrequired) ? 0 : 1, 'mod_syllabus');
+    set_config('resultsthreshold', max(1, min(50, (int) ($data->resultsthreshold ?? 3))), 'mod_syllabus');
+    set_config('teacherresults', ($data->teacherresults ?? '') === 'always' ? 'always' : 'afterclose', 'mod_syllabus');
+    if (isset($data->yearstartmonth)) {
+        set_config('yearstartmonth', max(1, min(12, (int) $data->yearstartmonth)), 'mod_syllabus');
+    }
+}
+
+/**
+ * Année universitaire d'une date (« 2026-2027 »), selon le premier mois de l'année réglé par la
+ * DEVE (septembre par défaut).
+ *
+ * @param int $time
+ * @return string
+ */
+function syllabus_academic_year(int $time): string {
+    $start = (int) syllabus_setting('yearstartmonth');
+    $date = usergetdate($time, core_date::get_server_timezone());
+    $first = (int) $date['mon'] >= $start ? (int) $date['year'] : (int) $date['year'] - 1;
+    return $start === 1 ? (string) $first : $first . '-' . ($first + 1);
+}
+
+// Mise en forme.
+
+/**
+ * Nombre décimal à la française, sans zéros inutiles (2,5 ; 3).
+ *
+ * @param float|string|null $value
+ * @return string
+ */
+function syllabus_format_number($value): string {
+    return format_float((float) $value, 2, true, true);
+}
+
+/**
+ * Libellé d'une année d'étude.
+ *
+ * @param int $year
+ * @return string
+ */
+function syllabus_studyyear_label($year): string {
+    return (int) $year > 0 ? get_string('studyyear_n', 'mod_syllabus', (int) $year) : '-';
+}
+
+/**
+ * Années d'étude proposées.
+ *
+ * @return array
+ */
+function syllabus_studyyear_options(): array {
+    $options = [0 => get_string('studyyear_none', 'mod_syllabus')];
+    for ($year = 1; $year <= 6; $year++) {
+        $options[$year] = get_string('studyyear_n', 'mod_syllabus', $year);
+    }
+    return $options;
+}
+
+/**
+ * Rubriques de la fiche, dans l'ordre du modèle ECTS.
+ *
+ * @return array champ => libellé
+ */
+function syllabus_text_fields(): array {
+    $fields = [];
+    foreach (['objectives', 'outcomes', 'prerequisitestext', 'content', 'methods', 'assessment', 'resit', 'bibliography'] as $f) {
+        $fields[$f] = get_string('field_' . $f, 'mod_syllabus');
+    }
+    return $fields;
+}
+
+/**
+ * Natures de séance.
+ *
+ * @return array code => libellé
+ */
+function syllabus_session_kind_options(): array {
+    $kinds = [];
+    foreach (['lecture', 'tutorial', 'practical', 'clinical', 'fieldwork', 'project', 'other'] as $kind) {
+        $kinds[$kind] = get_string('sessionkind_' . $kind, 'mod_syllabus');
+    }
+    return $kinds;
+}
+
+/**
+ * Libellé d'un statut de version.
+ *
+ * @param string $status
+ * @return string
+ */
+function syllabus_status_label(string $status): string {
+    return get_string('status_' . $status, 'mod_syllabus');
+}
+
+// Droits.
+
+/**
+ * Droits de l'utilisateur sur un module.
+ *
+ * Rédiger la fiche, poser les questions et voir les résultats revient aux responsables désignés
+ * (syllabus_teacher) qui ont mod/syllabus:edit, et à la DEVE (mod/syllabus:manage). Tant qu'aucun
+ * responsable n'est désigné, tout titulaire de mod/syllabus:edit peut rédiger : le module ne
+ * reste pas orphelin.
+ *
+ * @param stdClass $syllabus
+ * @param context $context
+ * @param int|null $userid
+ * @return stdClass {canview, isteacher, canedit, canmanage, canevaluate, canseeresults}
+ */
+function syllabus_get_rights(stdClass $syllabus, context $context, ?int $userid = null): stdClass {
+    global $DB, $USER;
+
+    $userid = $userid ?? (int) $USER->id;
+    $canmanage = has_capability('mod/syllabus:manage', $context, $userid);
+    $haseditcap = has_capability('mod/syllabus:edit', $context, $userid);
+    $isteacher = $DB->record_exists('syllabus_teacher', ['syllabusid' => $syllabus->id, 'userid' => $userid]);
+    $orphan = !$isteacher && !$DB->record_exists('syllabus_teacher', ['syllabusid' => $syllabus->id]);
+    $canedit = $canmanage || ($haseditcap && ($isteacher || $orphan));
+
+    $state = syllabus_eval_state($syllabus);
+    $teacherresults = $state === SYLLABUS_EVAL_CLOSED
+        || ($state === SYLLABUS_EVAL_OPEN && syllabus_setting('teacherresults') === 'always');
+    return (object) [
+        'canview' => has_capability('mod/syllabus:view', $context, $userid),
+        'isteacher' => $isteacher && $haseditcap,
+        'canedit' => $canedit,
+        'canmanage' => $canmanage,
+        'canevaluate' => has_capability('mod/syllabus:evaluate', $context, $userid, false),
+        'canseeresults' => $canmanage || ($isteacher && $haseditcap && $teacherresults),
+    ];
+}
+
+/**
+ * Verrou d'une instance : écritures concurrentes sur ses versions, ses questions et ses réponses.
+ *
+ * @param int $syllabusid
+ * @return \core\lock\lock
+ */
+function syllabus_get_lock(int $syllabusid) {
+    $lock = \core\lock\lock_config::get_lock_factory('mod_syllabus')->get_lock('syllabus-' . $syllabusid, 30);
+    if (!$lock) {
+        throw new moodle_exception('errorbusy', 'mod_syllabus');
+    }
+    return $lock;
+}
+
+// Responsables.
+
+/**
+ * Responsables d'un module.
+ *
+ * @param int $syllabusid
+ * @return array userid => stdClass user
+ */
+function syllabus_get_teachers(int $syllabusid): array {
+    global $DB;
+
+    $fields = \core_user\fields::for_name()->get_sql('u', false, '', '', false)->selects;
+    return $DB->get_records_sql(
+        "SELECT u.id, u.email, $fields
+           FROM {syllabus_teacher} t
+           JOIN {user} u ON u.id = t.userid AND u.deleted = 0
+          WHERE t.syllabusid = :syllabusid
+       ORDER BY u.lastname, u.firstname",
+        ['syllabusid' => $syllabusid]
+    );
+}
+
+/**
+ * Responsables de plusieurs modules, en une requête.
+ *
+ * @param int[] $syllabusids
+ * @return array syllabusid => userid => stdClass user
+ */
+function syllabus_get_teachers_bulk(array $syllabusids): array {
+    global $DB;
+
+    $result = array_fill_keys($syllabusids, []);
+    if (!$syllabusids) {
+        return $result;
+    }
+    $fields = \core_user\fields::for_name()->get_sql('u', false, '', '', false)->selects;
+    [$insql, $params] = $DB->get_in_or_equal($syllabusids, SQL_PARAMS_NAMED);
+    $rs = $DB->get_recordset_sql(
+        "SELECT t.id AS linkid, t.syllabusid, u.id, $fields
+           FROM {syllabus_teacher} t
+           JOIN {user} u ON u.id = t.userid AND u.deleted = 0
+          WHERE t.syllabusid $insql
+       ORDER BY u.lastname, u.firstname",
+        $params
+    );
+    foreach ($rs as $row) {
+        $result[(int) $row->syllabusid][(int) $row->id] = $row;
+    }
+    $rs->close();
+    return $result;
+}
+
+/**
+ * Personnes qui peuvent être désignées responsables : inscrits au cours avec mod/syllabus:edit,
+ * hors la DEVE.
+ *
+ * @param context_module $context
+ * @return array userid => stdClass user
+ */
+function syllabus_potential_teachers(context_module $context): array {
+    global $DB;
+    $users = get_enrolled_users($context, 'mod/syllabus:edit', 0, 'u.*', 'u.lastname, u.firstname', 0, 0, true);
+    // La DEVE (gestionnaire) n'est pas proposée, sauf si elle est déjà responsable de ce module.
+    $current = $DB->get_fieldset_select('syllabus_teacher', 'userid', 'syllabusid = ?', [$context->instanceid > 0
+        ? (int) $DB->get_field('course_modules', 'instance', ['id' => $context->instanceid]) : 0]);
+    foreach (array_keys(get_users_by_capability($context, 'mod/syllabus:manage', 'u.id')) as $managerid) {
+        if (isset($users[$managerid]) && !in_array($managerid, array_map('intval', $current), true)) {
+            unset($users[$managerid]);
+        }
+    }
+    return $users;
+}
+
+/**
+ * Remplace la liste des responsables. Seuls ceux qui peuvent l'être sont retenus.
+ *
+ * @param stdClass $syllabus
+ * @param context_module $context
+ * @param int[] $userids
+ * @return int Nombre de responsables enregistrés.
+ */
+function syllabus_set_teachers(stdClass $syllabus, context_module $context, array $userids): int {
+    global $DB;
+
+    $allowed = syllabus_potential_teachers($context);
+    $wanted = array_values(array_intersect(array_unique(array_map('intval', $userids)), array_keys($allowed)));
+    $current = $DB->get_records_menu('syllabus_teacher', ['syllabusid' => $syllabus->id], '', 'userid, id');
+    $transaction = $DB->start_delegated_transaction();
+    foreach ($current as $userid => $id) {
+        if (!in_array((int) $userid, $wanted, true)) {
+            $DB->delete_records('syllabus_teacher', ['id' => $id]);
+        }
+    }
+    foreach ($wanted as $userid) {
+        if (!isset($current[$userid])) {
+            $DB->insert_record('syllabus_teacher', ['syllabusid' => $syllabus->id, 'userid' => $userid, 'timecreated' => time()]);
+        }
+    }
+    $transaction->allow_commit();
+    return count($wanted);
+}
+
+// Versions de la fiche.
+
+/**
+ * Version publiée (celle que lisent les étudiants), ou null.
+ *
+ * @param int $syllabusid
+ * @return stdClass|null
+ */
+function syllabus_get_published(int $syllabusid): ?stdClass {
+    global $DB;
+    $records = $DB->get_records(
+        'syllabus_version',
+        ['syllabusid' => $syllabusid, 'status' => SYLLABUS_STATUS_PUBLISHED],
+        'version DESC',
+        '*',
+        0,
+        1
+    );
+    return $records ? reset($records) : null;
+}
+
+/**
+ * Versions publiées de plusieurs modules, en une requête.
+ *
+ * @param int[] $syllabusids
+ * @return array syllabusid => version publiée (les modules sans fiche publiée n'y sont pas)
+ */
+function syllabus_get_published_bulk(array $syllabusids): array {
+    global $DB;
+    if (!$syllabusids) {
+        return [];
+    }
+    [$insql, $params] = $DB->get_in_or_equal(array_values($syllabusids), SQL_PARAMS_NAMED);
+    $params['status'] = SYLLABUS_STATUS_PUBLISHED;
+    $published = [];
+    // Tri par version : la plus récente l'emporte si une ancienne était restée publiée.
+    foreach ($DB->get_records_select('syllabus_version', "syllabusid $insql AND status = :status", $params, 'version ASC') as $v) {
+        $published[(int) $v->syllabusid] = $v;
+    }
+    return $published;
+}
+
+/**
+ * Version de travail : brouillon, soumise ou renvoyée. Une seule à la fois.
+ *
+ * @param int $syllabusid
+ * @return stdClass|null
+ */
+function syllabus_get_working(int $syllabusid): ?stdClass {
+    global $DB;
+    [$insql, $params] = $DB->get_in_or_equal(
+        [SYLLABUS_STATUS_DRAFT, SYLLABUS_STATUS_SUBMITTED, SYLLABUS_STATUS_RETURNED],
+        SQL_PARAMS_NAMED
+    );
+    $records = $DB->get_records_select(
+        'syllabus_version',
+        "syllabusid = :syllabusid AND status $insql",
+        $params + ['syllabusid' => $syllabusid],
+        'version DESC',
+        '*',
+        0,
+        1
+    );
+    return $records ? reset($records) : null;
+}
+
+/**
+ * Toutes les versions d'un module, la plus récente en tête.
+ *
+ * @param int $syllabusid
+ * @return array
+ */
+function syllabus_get_versions(int $syllabusid): array {
+    global $DB;
+    return $DB->get_records('syllabus_version', ['syllabusid' => $syllabusid], 'version DESC');
+}
+
+/**
+ * Séances d'une version, dans l'ordre.
+ *
+ * @param int $versionid
+ * @return array
+ */
+function syllabus_get_sessions(int $versionid): array {
+    global $DB;
+    return $DB->get_records('syllabus_session', ['versionid' => $versionid], 'sortorder ASC, id ASC');
+}
+
+/**
+ * Remplace les séances d'une version : une séance sans intitulé est ignorée, une durée négative
+ * ramenée à zéro, un intervenant désigné par son compte l'emporte sur un nom libre.
+ *
+ * @param int $versionid
+ * @param array $sessions Tableaux {title, kind, duration, teacherid, teachername}.
+ * @return int Nombre de séances enregistrées.
+ */
+function syllabus_set_sessions(int $versionid, array $sessions): int {
+    global $DB;
+
+    $DB->delete_records('syllabus_session', ['versionid' => $versionid]);
+    $kinds = syllabus_session_kind_options();
+    $count = 0;
+    foreach ($sessions as $session) {
+        $session = (array) $session;
+        $title = trim((string) ($session['title'] ?? ''));
+        if ($title === '') {
+            continue;
+        }
+        $teacherid = !empty($session['teacherid']) ? (int) $session['teacherid'] : null;
+        $count++;
+        $DB->insert_record('syllabus_session', (object) [
+            'versionid' => $versionid,
+            'sortorder' => $count * 10,
+            'title' => core_text::substr($title, 0, 255),
+            'kind' => isset($kinds[$session['kind'] ?? '']) ? $session['kind'] : 'other',
+            'duration' => max(0, round((float) ($session['duration'] ?? 0), 2)),
+            'teacherid' => $teacherid,
+            'teachername' => $teacherid ? '' : core_text::substr(trim((string) ($session['teachername'] ?? '')), 0, 255),
+            'timecreated' => time(),
+        ]);
+    }
+    return $count;
+}
+
+/**
+ * Volume horaire : par nature de séance, séances, travail personnel, total.
+ *
+ * @param array $sessions
+ * @param float|string $personalhours
+ * @return stdClass {bykind, sessions, personal, total}
+ */
+function syllabus_hours(array $sessions, $personalhours = 0.0): stdClass {
+    $bykind = [];
+    $total = 0.0;
+    foreach ($sessions as $session) {
+        $bykind[$session->kind] = ($bykind[$session->kind] ?? 0) + (float) $session->duration;
+        $total += (float) $session->duration;
+    }
+    $personal = max(0.0, (float) $personalhours);
+    return (object) ['bykind' => $bykind, 'sessions' => round($total, 2), 'personal' => round($personal, 2),
+        'total' => round($total + $personal, 2)];
+}
+
+/**
+ * Version de travail, créée au besoin : copie de la version publiée (rubriques et séances), ou
+ * fiche vide pour un module qui n'en a pas encore.
+ *
+ * @param stdClass $syllabus
+ * @param int $userid Auteur.
+ * @return stdClass
+ */
+function syllabus_start_working(stdClass $syllabus, int $userid): stdClass {
+    global $DB;
+
+    $lock = syllabus_get_lock((int) $syllabus->id);
+    try {
+        $working = syllabus_get_working((int) $syllabus->id);
+        if ($working) {
+            return $working;
+        }
+        $published = syllabus_get_published((int) $syllabus->id);
+        $last = (int) $DB->get_field('syllabus_version', 'MAX(version)', ['syllabusid' => $syllabus->id]);
+        $now = time();
+        $record = (object) [
+            'syllabusid' => $syllabus->id, 'version' => $last + 1, 'status' => SYLLABUS_STATUS_DRAFT,
+            'language' => '', 'personalhours' => 0, 'authorid' => $userid, 'timecreated' => $now, 'timemodified' => $now,
+        ];
+        foreach (array_keys(syllabus_text_fields()) as $field) {
+            $record->$field = $published ? $published->$field : '';
+        }
+        if ($published) {
+            $record->language = $published->language;
+            $record->personalhours = $published->personalhours;
+        }
+        $transaction = $DB->start_delegated_transaction();
+        $record->id = $DB->insert_record('syllabus_version', $record);
+        if ($published) {
+            syllabus_set_sessions((int) $record->id, array_map(fn($s) => (array) $s, syllabus_get_sessions((int) $published->id)));
+        }
+        $transaction->allow_commit();
+        return $DB->get_record('syllabus_version', ['id' => $record->id], '*', MUST_EXIST);
+    } finally {
+        $lock->release();
+    }
+}
+
+/**
+ * Enregistre la version de travail (rubriques, langue, travail personnel, séances). Une version
+ * soumise ne se modifie plus : elle attend la DEVE.
+ *
+ * @param stdClass $version
+ * @param stdClass $data
+ * @param array|null $sessions null pour garder les séances.
+ * @param int $userid
+ * @return void
+ */
+function syllabus_save_working(stdClass $version, stdClass $data, ?array $sessions, int $userid): void {
+    global $DB;
+
+    if (!in_array($version->status, [SYLLABUS_STATUS_DRAFT, SYLLABUS_STATUS_RETURNED], true)) {
+        throw new moodle_exception('errornotdraft', 'mod_syllabus');
+    }
+    $record = (object) ['id' => $version->id, 'authorid' => $userid, 'timemodified' => time(),
+        'status' => SYLLABUS_STATUS_DRAFT];
+    foreach (array_keys(syllabus_text_fields()) as $field) {
+        if (property_exists($data, $field)) {
+            $record->$field = trim((string) $data->$field);
+        }
+    }
+    if (property_exists($data, 'language')) {
+        $record->language = core_text::substr(trim((string) $data->language), 0, 50);
+    }
+    if (property_exists($data, 'personalhours')) {
+        $record->personalhours = max(0, round((float) $data->personalhours, 2));
+    }
+    $transaction = $DB->start_delegated_transaction();
+    $DB->update_record('syllabus_version', $record);
+    if ($sessions !== null) {
+        syllabus_set_sessions((int) $version->id, $sessions);
+    }
+    $transaction->allow_commit();
+}
+
+/**
+ * Soumet la version de travail : publiée aussitôt si la DEVE ne relit pas les syllabus
+ * (réglage commun « reviewrequired »), sinon transmise à la DEVE.
+ *
+ * @param stdClass $syllabus
+ * @param stdClass $cm
+ * @param stdClass $version
+ * @param int $userid
+ * @return string 'published' ou 'submitted'
+ */
+function syllabus_submit(stdClass $syllabus, $cm, stdClass $version, int $userid): string {
+    global $DB;
+
+    if (!in_array($version->status, [SYLLABUS_STATUS_DRAFT, SYLLABUS_STATUS_RETURNED], true)) {
+        throw new moodle_exception('errornotdraft', 'mod_syllabus');
+    }
+    // Le module gestionnaire peut imposer la relecture (nouvel EP, toujours vu par la DEVE) ou en
+    // dispenser (mise à jour d'un EP publié, si la DEVE l'a choisi pour son catalogue).
+    $required = syllabus_owner_callback($syllabus, 'review_required', false)
+        || (syllabus_setting('reviewrequired') && !syllabus_owner_callback($syllabus, 'review_exempt', false));
+    if (!$required) {
+        syllabus_publish($syllabus, $version, $userid, '');
+        syllabus_trigger_version_event('version_reviewed', $syllabus, $version, $userid, ['decision' => 'publish']);
+        return 'published';
+    }
+    $DB->update_record('syllabus_version', (object) ['id' => $version->id, 'status' => SYLLABUS_STATUS_SUBMITTED,
+        'timesubmitted' => time(), 'timemodified' => time()]);
+    syllabus_trigger_version_event('version_submitted', $syllabus, $version, $userid);
+    syllabus_notify_submitted($syllabus, $cm, $userid);
+    return 'submitted';
+}
+
+/**
+ * Publie une version : elle remplace la version publiée, qui reste dans l'historique.
+ *
+ * @param stdClass $syllabus
+ * @param stdClass $version
+ * @param int $reviewerid
+ * @param string $comment
+ * @param int $commissiondate Date de la commission de validation (0 : non renseignée).
+ * @return void
+ */
+function syllabus_publish(
+    stdClass $syllabus,
+    stdClass $version,
+    int $reviewerid,
+    string $comment,
+    int $commissiondate = 0
+): void {
+    global $DB;
+
+    $lock = syllabus_get_lock((int) $syllabus->id);
+    try {
+        $transaction = $DB->start_delegated_transaction();
+        $DB->set_field_select(
+            'syllabus_version',
+            'status',
+            SYLLABUS_STATUS_SUPERSEDED,
+            'syllabusid = ? AND status = ? AND id <> ?',
+            [$syllabus->id, SYLLABUS_STATUS_PUBLISHED, $version->id]
+        );
+        $DB->update_record('syllabus_version', (object) [
+            'id' => $version->id, 'status' => SYLLABUS_STATUS_PUBLISHED, 'reviewerid' => $reviewerid,
+            'reviewcomment' => $comment, 'timereviewed' => time(), 'timemodified' => time(), 'commissiondate' => $commissiondate,
+            'timesubmitted' => !empty($version->timesubmitted) ? $version->timesubmitted : time(),
+        ]);
+        $transaction->allow_commit();
+    } finally {
+        $lock->release();
+    }
+}
+
+/**
+ * Décision de la DEVE sur une version soumise : publier, renvoyer à l'auteur (commentaire
+ * obligatoire), refuser.
+ *
+ * @param stdClass $syllabus
+ * @param stdClass $cm
+ * @param stdClass $version
+ * @param int $reviewerid
+ * @param string $decision publish, return, reject
+ * @param string $comment
+ * @param int $commissiondate Date de la commission de validation (publication).
+ * @return bool False si la version n'était plus soumise (décidée entre-temps).
+ */
+function syllabus_review(
+    stdClass $syllabus,
+    $cm,
+    stdClass $version,
+    int $reviewerid,
+    string $decision,
+    string $comment,
+    int $commissiondate = 0
+): bool {
+    global $DB;
+
+    $current = $DB->get_field('syllabus_version', 'status', ['id' => $version->id]);
+    if ($current !== SYLLABUS_STATUS_SUBMITTED) {
+        return false;
+    }
+    if ($decision === 'publish') {
+        if (!$commissiondate && syllabus_commission_required($syllabus)) {
+            throw new moodle_exception('errorcommissionrequired', 'mod_syllabus');
+        }
+        syllabus_publish($syllabus, $version, $reviewerid, $comment, $commissiondate);
+    } else {
+        $status = $decision === 'return' ? SYLLABUS_STATUS_RETURNED : SYLLABUS_STATUS_REJECTED;
+        $DB->update_record('syllabus_version', (object) ['id' => $version->id, 'status' => $status,
+            'reviewerid' => $reviewerid, 'reviewcomment' => $comment, 'timereviewed' => time(), 'timemodified' => time()]);
+    }
+    syllabus_trigger_version_event('version_reviewed', $syllabus, $version, $reviewerid, ['decision' => $decision]);
+    syllabus_notify_reviewed($syllabus, $cm, $version, $decision, $comment);
+    return true;
+}
+
+// Référentiel commun : types de module.
+
+/**
+ * Types de module.
+ *
+ * @return array id => stdClass
+ */
+function syllabus_get_types(): array {
+    global $DB;
+    return $DB->get_records('syllabus_type', null, 'sortorder ASC, name ASC');
+}
+
+/**
+ * Types en liste de choix, avec « aucun ».
+ *
+ * @return array
+ */
+function syllabus_type_options(): array {
+    $options = [0 => get_string('notype', 'mod_syllabus')];
+    foreach (syllabus_get_types() as $type) {
+        $options[$type->id] = format_string($type->name);
+    }
+    return $options;
+}
+
+/**
+ * Crée ou renomme un type.
+ *
+ * @param string $name
+ * @param int $id 0 pour créer.
+ * @return int
+ */
+function syllabus_save_type(string $name, int $id = 0): int {
+    global $DB;
+
+    $name = core_text::substr(trim($name), 0, 255);
+    if ($name === '') {
+        throw new moodle_exception('errorname', 'mod_syllabus');
+    }
+    if ($id) {
+        $DB->update_record('syllabus_type', (object) ['id' => $id, 'name' => $name, 'timemodified' => time()]);
+        return $id;
+    }
+    $order = (int) $DB->get_field_sql('SELECT MAX(sortorder) FROM {syllabus_type}');
+    return (int) $DB->insert_record('syllabus_type', (object) ['name' => $name, 'sortorder' => $order + 10,
+        'timecreated' => time(), 'timemodified' => time()]);
+}
+
+/**
+ * Supprime un type : refusé s'il est porté par un module ou visé par des questions communes.
+ *
+ * @param int $id
+ * @return bool
+ */
+function syllabus_delete_type(int $id): bool {
+    global $DB;
+
+    if (
+        $DB->record_exists('syllabus', ['typeid' => $id])
+            || $DB->record_exists('syllabus_question', ['syllabusid' => 0, 'typeid' => $id])
+    ) {
+        return false;
+    }
+    $DB->delete_records('syllabus_type', ['id' => $id]);
+    return true;
+}
+
+// Questions d'évaluation.
+
+/**
+ * Formes de question.
+ *
+ * @return array code => libellé
+ */
+function syllabus_question_kinds(): array {
+    $kinds = [];
+    foreach (['scale', 'yesno', 'choice', 'text'] as $kind) {
+        $kinds[$kind] = get_string('questionkind_' . $kind, 'mod_syllabus');
+    }
+    return $kinds;
+}
+
+/**
+ * Choix d'une question à choix, un par ligne non vide.
+ *
+ * @param stdClass $question
+ * @return string[]
+ */
+function syllabus_question_options(stdClass $question): array {
+    $lines = preg_split('/\R/', (string) ($question->options ?? ''));
+    return array_values(array_filter(array_map('trim', $lines), fn($line) => $line !== ''));
+}
+
+/**
+ * Questions communes définies par la DEVE.
+ *
+ * @param bool $onlyenabled
+ * @return array id => stdClass
+ */
+function syllabus_get_common_questions(bool $onlyenabled = false): array {
+    global $DB;
+    $conditions = ['syllabusid' => 0];
+    if ($onlyenabled) {
+        $conditions['enabled'] = 1;
+    }
+    return $DB->get_records('syllabus_question', $conditions, 'origin ASC, typeid ASC, sortorder ASC, id ASC');
+}
+
+/**
+ * Questions communes qui s'appliquent à un module : celles de tous les modules, puis celles de
+ * son type.
+ *
+ * @param stdClass $syllabus
+ * @return array
+ */
+function syllabus_applicable_common_questions(stdClass $syllabus): array {
+    $all = [];
+    $bytype = [];
+    foreach (syllabus_get_common_questions(true) as $question) {
+        if ($question->origin === 'common') {
+            $all[] = $question;
+        } else if ($question->origin === 'type' && (int) $question->typeid === (int) $syllabus->typeid && $syllabus->typeid) {
+            $bytype[] = $question;
+        }
+    }
+    return array_merge($all, $bytype);
+}
+
+/**
+ * Questions propres à un module : celles de l'enseignant et, une fois l'évaluation figée, les
+ * copies des questions communes.
+ *
+ * @param int $syllabusid
+ * @param string|null $origin Pour ne lire qu'une origine.
+ * @return array id => stdClass
+ */
+function syllabus_get_module_questions(int $syllabusid, ?string $origin = null): array {
+    global $DB;
+    $conditions = ['syllabusid' => $syllabusid];
+    if ($origin !== null) {
+        $conditions['origin'] = $origin;
+    }
+    return $DB->get_records('syllabus_question', $conditions, 'sortorder ASC, id ASC');
+}
+
+/**
+ * Questions de l'évaluation d'un module, dans l'ordre de passation : communes, de type, puis de
+ * l'enseignant. Avant que l'évaluation soit figée, les questions communes sont lues en direct.
+ *
+ * @param stdClass $syllabus
+ * @return array Liste de stdClass (id, origin, kind, text, options, required). Les questions
+ *     communes non figées ont un id négatif : elles ne peuvent pas recevoir de réponse.
+ */
+function syllabus_evaluation_questions(stdClass $syllabus): array {
+    if (!empty($syllabus->evalfrozen)) {
+        return array_values(syllabus_get_module_questions((int) $syllabus->id));
+    }
+    $questions = [];
+    foreach (syllabus_applicable_common_questions($syllabus) as $common) {
+        $copy = clone $common;
+        $copy->id = -$common->id;
+        $questions[] = $copy;
+    }
+    return array_merge($questions, array_values(syllabus_get_module_questions((int) $syllabus->id, 'teacher')));
+}
+
+/**
+ * Enregistre une question. Une question commune (syllabusid 0) a pour origine « common » ou
+ * « type » ; une question de module, « teacher ». Les questions d'un module figé ne changent
+ * plus.
+ *
+ * @param stdClass $data {id?, syllabusid, origin, typeid, kind, text, options, required, enabled}
+ * @return int
+ */
+function syllabus_save_question(stdClass $data): int {
+    global $DB;
+
+    $syllabusid = (int) ($data->syllabusid ?? 0);
+    if ($syllabusid && $DB->get_field('syllabus', 'evalfrozen', ['id' => $syllabusid])) {
+        throw new moodle_exception('errorfrozen', 'mod_syllabus');
+    }
+    $kinds = syllabus_question_kinds();
+    $origin = $syllabusid ? 'teacher' : (($data->origin ?? 'common') === 'type' ? 'type' : 'common');
+    $record = (object) [
+        'syllabusid' => $syllabusid,
+        'origin' => $origin,
+        'typeid' => $origin === 'type' ? (int) ($data->typeid ?? 0) : 0,
+        'kind' => isset($kinds[$data->kind ?? '']) ? $data->kind : 'scale',
+        'text' => trim((string) ($data->text ?? '')),
+        'options' => trim((string) ($data->options ?? '')),
+        'required' => empty($data->required) ? 0 : 1,
+        'enabled' => isset($data->enabled) ? (empty($data->enabled) ? 0 : 1) : 1,
+        'timemodified' => time(),
+    ];
+    if ($record->text === '') {
+        throw new moodle_exception('errorquestiontext', 'mod_syllabus');
+    }
+    if ($record->kind === 'choice' && count(syllabus_question_options($record)) < 2) {
+        throw new moodle_exception('errorchoices', 'mod_syllabus');
+    }
+    if ($origin === 'type' && !$record->typeid) {
+        throw new moodle_exception('errortype', 'mod_syllabus');
+    }
+    if (!empty($data->id)) {
+        $existing = $DB->get_record('syllabus_question', ['id' => $data->id], '*', MUST_EXIST);
+        if ((int) $existing->syllabusid !== $syllabusid) {
+            throw new moodle_exception('invalidrecord', 'error');
+        }
+        $record->id = $existing->id;
+        $DB->update_record('syllabus_question', $record);
+        return (int) $existing->id;
+    }
+    $record->sortorder = (int) $DB->get_field_sql(
+        'SELECT MAX(sortorder) FROM {syllabus_question} WHERE syllabusid = ?',
+        [$syllabusid]
+    ) + 10;
+    $record->timecreated = time();
+    return (int) $DB->insert_record('syllabus_question', $record);
+}
+
+/**
+ * Supprime une question (d'un module non figé, ou commune : les copies figées restent).
+ *
+ * @param int $id
+ * @param int $syllabusid 0 pour une question commune.
+ * @return void
+ */
+function syllabus_delete_question(int $id, int $syllabusid): void {
+    global $DB;
+    if ($syllabusid && $DB->get_field('syllabus', 'evalfrozen', ['id' => $syllabusid])) {
+        throw new moodle_exception('errorfrozen', 'mod_syllabus');
+    }
+    $DB->delete_records('syllabus_question', ['id' => $id, 'syllabusid' => $syllabusid]);
+}
+
+/**
+ * Monte ou descend une question parmi celles de même rattachement.
+ *
+ * @param int $id
+ * @param int $syllabusid
+ * @param int $direction -1 pour monter, 1 pour descendre.
+ * @return void
+ */
+function syllabus_move_question(int $id, int $syllabusid, int $direction): void {
+    global $DB;
+    if ($syllabusid && $DB->get_field('syllabus', 'evalfrozen', ['id' => $syllabusid])) {
+        throw new moodle_exception('errorfrozen', 'mod_syllabus');
+    }
+    $question = $DB->get_record('syllabus_question', ['id' => $id, 'syllabusid' => $syllabusid], '*', MUST_EXIST);
+    $siblings = array_values($DB->get_records('syllabus_question', ['syllabusid' => $syllabusid, 'origin' => $question->origin,
+        'typeid' => $question->typeid], 'sortorder ASC, id ASC'));
+    $index = array_search((int) $id, array_map(fn($q) => (int) $q->id, $siblings), true);
+    $other = $siblings[$index + $direction] ?? null;
+    if ($index === false || !$other) {
+        return;
+    }
+    $transaction = $DB->start_delegated_transaction();
+    $DB->set_field('syllabus_question', 'sortorder', $other->sortorder, ['id' => $question->id]);
+    $DB->set_field('syllabus_question', 'sortorder', $question->sortorder, ['id' => $other->id]);
+    if ((int) $other->sortorder === (int) $question->sortorder) {
+        $DB->set_field('syllabus_question', 'sortorder', $question->sortorder + $direction, ['id' => $question->id]);
+    }
+    $transaction->allow_commit();
+}
+
+// Évaluation.
+
+/**
+ * État de l'évaluation d'un module.
+ *
+ * @param stdClass $syllabus
+ * @param int|null $now
+ * @return string SYLLABUS_EVAL_*
+ */
+function syllabus_eval_state(stdClass $syllabus, ?int $now = null): string {
+    $now = $now ?? time();
+    if (empty($syllabus->evalopen)) {
+        return SYLLABUS_EVAL_NONE;
+    }
+    if ($now < (int) $syllabus->evalopen) {
+        return SYLLABUS_EVAL_UPCOMING;
+    }
+    if (!empty($syllabus->evalclose) && $now >= (int) $syllabus->evalclose) {
+        return SYLLABUS_EVAL_CLOSED;
+    }
+    return SYLLABUS_EVAL_OPEN;
+}
+
+/**
+ * Fige les questions d'une évaluation ouverte : les questions communes du moment sont copiées
+ * dans le module (avec leur origine), et plus aucune question ne se modifie. Les réponses portent
+ * ainsi sur des questions qui ne changeront plus, même si la DEVE modifie ensuite les siennes.
+ *
+ * @param stdClass $syllabus Mis à jour (evalfrozen).
+ * @return bool Vrai si les questions viennent d'être figées.
+ */
+function syllabus_freeze_questions(stdClass $syllabus): bool {
+    global $DB;
+
+    if (!empty($syllabus->evalfrozen)) {
+        return false;
+    }
+    $lock = syllabus_get_lock((int) $syllabus->id);
+    try {
+        $current = $DB->get_record('syllabus', ['id' => $syllabus->id], '*', MUST_EXIST);
+        if (!empty($current->evalfrozen)) {
+            $syllabus->evalfrozen = 1;
+            return false;
+        }
+        $transaction = $DB->start_delegated_transaction();
+        $order = 0;
+        foreach (syllabus_applicable_common_questions($current) as $common) {
+            $order += 10;
+            $copy = clone $common;
+            unset($copy->id);
+            $copy->syllabusid = $syllabus->id;
+            $copy->sourceid = $common->id;
+            $copy->sortorder = $order;
+            $copy->timecreated = time();
+            $DB->insert_record('syllabus_question', $copy);
+        }
+        // Les questions de l'enseignant passent après les questions communes.
+        foreach (syllabus_get_module_questions((int) $syllabus->id, 'teacher') as $question) {
+            $order += 10;
+            $DB->set_field('syllabus_question', 'sortorder', $order, ['id' => $question->id]);
+        }
+        $DB->set_field('syllabus', 'evalfrozen', 1, ['id' => $syllabus->id]);
+        $transaction->allow_commit();
+        $syllabus->evalfrozen = 1;
+        return true;
+    } finally {
+        $lock->release();
+    }
+}
+
+/**
+ * L'étudiant a-t-il déjà répondu ?
+ *
+ * @param int $syllabusid
+ * @param int $userid
+ * @return bool
+ */
+function syllabus_has_responded(int $syllabusid, int $userid): bool {
+    global $DB;
+    return $DB->record_exists('syllabus_participant', ['syllabusid' => $syllabusid, 'userid' => $userid]);
+}
+
+/**
+ * Raison pour laquelle l'étudiant ne peut pas évaluer le module maintenant, ou null s'il le peut.
+ *
+ * @param stdClass $syllabus
+ * @param context_module $context
+ * @param int $userid
+ * @return string|null Identifiant de chaîne.
+ */
+function syllabus_evaluation_problem(stdClass $syllabus, context_module $context, int $userid): ?string {
+    if (!has_capability('mod/syllabus:evaluate', $context, $userid, false)) {
+        return 'evalnotallowed';
+    }
+    // Fiche d'un EP : seuls ses inscrits donnent leur avis, pas toute la promotion.
+    $eligible = syllabus_owner_eligible($syllabus);
+    if ($eligible !== null && !isset($eligible[$userid])) {
+        return 'evalnotallowed';
+    }
+    $state = syllabus_eval_state($syllabus);
+    if ($state === SYLLABUS_EVAL_NONE) {
+        return 'evalnone';
+    }
+    if ($state === SYLLABUS_EVAL_UPCOMING) {
+        return 'evalupcoming';
+    }
+    if ($state === SYLLABUS_EVAL_CLOSED) {
+        return 'evalclosed';
+    }
+    if (syllabus_has_responded((int) $syllabus->id, $userid)) {
+        return 'evaldone';
+    }
+    return null;
+}
+
+/**
+ * Enregistre la réponse d'un étudiant, anonyme : la réponse ne porte aucun identifiant ni heure ;
+ * seule sa participation est notée, pour qu'il ne réponde pas deux fois. Participation et
+ * réponse sont écrites ensemble, sous le verrou du module.
+ *
+ * @param stdClass $syllabus
+ * @param context_module $context
+ * @param int $userid
+ * @param array $answers questionid => valeur (int ou texte)
+ * @return array Erreurs par questionid (vide si la réponse est enregistrée).
+ */
+function syllabus_submit_response(stdClass $syllabus, context_module $context, int $userid, array $answers): array {
+    global $DB;
+
+    $problem = syllabus_evaluation_problem($syllabus, $context, $userid);
+    if ($problem !== null) {
+        throw new moodle_exception($problem, 'mod_syllabus');
+    }
+    syllabus_freeze_questions($syllabus);
+    $questions = syllabus_get_module_questions((int) $syllabus->id);
+
+    $rows = [];
+    $errors = [];
+    foreach ($questions as $question) {
+        $raw = $answers[$question->id] ?? null;
+        $raw = is_string($raw) ? trim($raw) : $raw;
+        $empty = $raw === null || $raw === '';
+        if ($empty) {
+            if ($question->required) {
+                $errors[$question->id] = get_string('required');
+            }
+            continue;
+        }
+        $row = (object) ['questionid' => $question->id, 'value' => null, 'textvalue' => null];
+        if ($question->kind === 'text') {
+            $row->textvalue = core_text::substr((string) $raw, 0, 5000);
+        } else {
+            $value = (int) $raw;
+            $max = match ($question->kind) {
+                'scale' => 5,
+                'yesno' => 1,
+                default => count(syllabus_question_options($question)) - 1,
+            };
+            $min = $question->kind === 'scale' ? 1 : 0;
+            if ((string) $value !== (string) $raw || $value < $min || $value > $max) {
+                $errors[$question->id] = get_string('errorvalue', 'mod_syllabus');
+                continue;
+            }
+            $row->value = $value;
+        }
+        $rows[] = $row;
+    }
+    if ($errors) {
+        return $errors;
+    }
+
+    $lock = syllabus_get_lock((int) $syllabus->id);
+    try {
+        if (syllabus_has_responded((int) $syllabus->id, $userid)) {
+            throw new moodle_exception('evaldone', 'mod_syllabus');
+        }
+        $transaction = $DB->start_delegated_transaction();
+        $DB->insert_record('syllabus_participant', (object) ['syllabusid' => $syllabus->id, 'userid' => $userid]);
+        $responseid = $DB->insert_record('syllabus_response', (object) ['syllabusid' => $syllabus->id,
+            'daysubmitted' => usergetmidnight(time(), core_date::get_server_timezone())]);
+        foreach ($rows as $row) {
+            $row->responseid = $responseid;
+            $DB->insert_record('syllabus_answer', $row);
+        }
+        $transaction->allow_commit();
+    } finally {
+        $lock->release();
+    }
+    // Événement anonyme : le journal ne le montre qu'aux détenteurs de moodle/site:viewanonymousevents.
+    // Sans cela, l'heure de l'avis, rapprochée de l'évolution des résultats, désignerait son auteur.
+    \mod_syllabus\event\evaluation_submitted::create(['objectid' => $syllabus->id, 'context' => $context,
+        'anonymous' => 1])->trigger();
+    return [];
+}
+
+/**
+ * Nombre de réponses.
+ *
+ * @param int $syllabusid
+ * @return int
+ */
+function syllabus_count_responses(int $syllabusid): int {
+    global $DB;
+    return $DB->count_records('syllabus_participant', ['syllabusid' => $syllabusid]);
+}
+
+/**
+ * Nombre d'étudiants appelés à répondre : inscrits actifs du cours qui peuvent évaluer.
+ *
+ * @param context_module $context
+ * @return int
+ */
+function syllabus_count_eligible(context_module $context): int {
+    global $DB;
+
+    $syllabus = $DB->get_record_sql('SELECT s.id, s.component, s.itemid FROM {syllabus} s
+                                       JOIN {course_modules} cm ON cm.instance = s.id
+                                      WHERE cm.id = ?', [$context->instanceid]);
+    $eligible = $syllabus ? syllabus_owner_eligible($syllabus) : null;
+    if ($eligible === null) {
+        return count_enrolled_users($context, 'mod/syllabus:evaluate', 0, true);
+    }
+    $enrolled = get_enrolled_users($context, 'mod/syllabus:evaluate', 0, 'u.id', null, 0, 0, true);
+    return count(array_intersect_key($enrolled, $eligible));
+}
+
+/**
+ * Résultats agrégés d'une évaluation. Sous le seuil d'anonymat (réglage commun), seul le nombre
+ * de réponses est donné. Les réponses libres sont triées par ordre alphabétique : rien ne
+ * rappelle l'ordre, donc le moment, des réponses.
+ *
+ * @param stdClass $syllabus
+ * @return stdClass {responses, threshold, shown, questions: [{question, count, mean, distribution, labels, texts}]}
+ */
+function syllabus_get_results(stdClass $syllabus): stdClass {
+    global $DB;
+
+    $responses = syllabus_count_responses((int) $syllabus->id);
+    $threshold = (int) syllabus_setting('resultsthreshold');
+    $result = (object) ['responses' => $responses, 'threshold' => $threshold, 'shown' => $responses >= $threshold,
+        'questions' => []];
+    $questions = syllabus_evaluation_questions($syllabus);
+    if (!$result->shown) {
+        foreach ($questions as $question) {
+            $result->questions[] = (object) ['question' => $question, 'count' => 0];
+        }
+        return $result;
+    }
+    $answers = [];
+    $rs = $DB->get_recordset_sql(
+        "SELECT a.id, a.questionid, a.value, a.textvalue
+           FROM {syllabus_answer} a
+           JOIN {syllabus_response} r ON r.id = a.responseid
+          WHERE r.syllabusid = ?",
+        [$syllabus->id]
+    );
+    foreach ($rs as $answer) {
+        $answers[(int) $answer->questionid][] = $answer;
+    }
+    $rs->close();
+
+    foreach ($questions as $question) {
+        $list = $answers[(int) $question->id] ?? [];
+        $entry = (object) ['question' => $question, 'count' => count($list), 'mean' => null, 'distribution' => [],
+            'labels' => [], 'texts' => []];
+        if ($question->kind === 'text') {
+            $entry->texts = array_map(fn($a) => (string) $a->textvalue, $list);
+            core_collator::asort($entry->texts);
+            $entry->texts = array_values($entry->texts);
+        } else {
+            if ($question->kind === 'scale') {
+                $entry->labels = [1 => '1', 2 => '2', 3 => '3', 4 => '4', 5 => '5'];
+            } else if ($question->kind === 'yesno') {
+                $entry->labels = [1 => get_string('yes'), 0 => get_string('no')];
+            } else {
+                $entry->labels = syllabus_question_options($question);
+            }
+            $entry->distribution = array_fill_keys(array_keys($entry->labels), 0);
+            $sum = 0;
+            foreach ($list as $answer) {
+                $value = (int) $answer->value;
+                if (array_key_exists($value, $entry->distribution)) {
+                    $entry->distribution[$value]++;
+                }
+                $sum += $value;
+            }
+            if ($question->kind === 'scale' && $list) {
+                $entry->mean = round($sum / count($list), 2);
+            }
+        }
+        $result->questions[] = $entry;
+    }
+    return $result;
+}
+
+// Messages.
+
+/**
+ * Prévient la DEVE (titulaires de mod/syllabus:manage dans le module) qu'un syllabus attend sa
+ * revue.
+ *
+ * @param stdClass $syllabus
+ * @param stdClass $cm
+ * @param int $authorid
+ * @return void
+ */
+function syllabus_notify_submitted(stdClass $syllabus, $cm, int $authorid): void {
+    $context = context_module::instance($cm->id);
+    $url = new moodle_url('/mod/syllabus/view.php', ['id' => $cm->id, 'show' => 'working']);
+    $a = (object) ['module' => format_string($syllabus->name), 'url' => $url->out(false)];
+    foreach (get_users_by_capability($context, 'mod/syllabus:manage', 'u.*') as $recipient) {
+        syllabus_send_message(
+            'syllabussubmitted',
+            $recipient,
+            get_string('msgsubmitted_subject', 'mod_syllabus', $a),
+            get_string('msgsubmitted_body', 'mod_syllabus', $a),
+            $url,
+            $syllabus->course
+        );
+    }
+}
+
+/**
+ * Prévient les responsables de la décision de la DEVE.
+ *
+ * @param stdClass $syllabus
+ * @param stdClass $cm
+ * @param stdClass $version
+ * @param string $decision
+ * @param string $comment
+ * @return void
+ */
+function syllabus_notify_reviewed(stdClass $syllabus, $cm, stdClass $version, string $decision, string $comment): void {
+    $url = new moodle_url('/mod/syllabus/view.php', ['id' => $cm->id]);
+    $a = (object) ['module' => format_string($syllabus->name), 'decision' => get_string('decision_' . $decision, 'mod_syllabus'),
+        'comment' => $comment, 'url' => $url->out(false)];
+    foreach (array_keys(syllabus_get_teachers((int) $syllabus->id)) as $teacherid) {
+        $teacher = core_user::get_user($teacherid);
+        syllabus_send_message(
+            'syllabusreviewed',
+            $teacher,
+            get_string('msgreviewed_subject', 'mod_syllabus', $a),
+            get_string('msgreviewed_body', 'mod_syllabus', $a),
+            $url,
+            $syllabus->course
+        );
+    }
+}
+
+/**
+ * Annonce l'ouverture de l'évaluation aux étudiants qui peuvent y répondre.
+ *
+ * @param stdClass $syllabus
+ * @param stdClass $cm
+ * @return int Nombre de messages envoyés.
+ */
+function syllabus_notify_evaluation_open(stdClass $syllabus, $cm): int {
+    global $DB;
+
+    $context = context_module::instance($cm->id);
+    $url = new moodle_url('/mod/syllabus/evaluate.php', ['id' => $cm->id]);
+    $a = (object) ['module' => format_string($syllabus->name), 'url' => $url->out(false),
+        'close' => $syllabus->evalclose ? userdate($syllabus->evalclose) : get_string('noclose', 'mod_syllabus')];
+    $count = 0;
+    // Ceux qui ont déjà répondu, lus en une fois plutôt qu'une requête par étudiant.
+    $responded = array_flip($DB->get_fieldset_select('syllabus_participant', 'userid', 'syllabusid = ?', [$syllabus->id]));
+    $eligible = syllabus_owner_eligible($syllabus);
+    foreach (get_enrolled_users($context, 'mod/syllabus:evaluate', 0, 'u.*', null, 0, 0, true) as $student) {
+        if (isset($responded[(int) $student->id]) || ($eligible !== null && !isset($eligible[(int) $student->id]))) {
+            continue;
+        }
+        syllabus_send_message(
+            'evaluationopen',
+            $student,
+            get_string('msgopen_subject', 'mod_syllabus', $a),
+            get_string('msgopen_body', 'mod_syllabus', $a),
+            $url,
+            $syllabus->course
+        );
+        $count++;
+    }
+    return $count;
+}
+
+/**
+ * Envoi d'un message du module.
+ *
+ * @param string $provider
+ * @param stdClass $recipient
+ * @param string $subject
+ * @param string $body Texte brut.
+ * @param moodle_url $url
+ * @param int $courseid
+ * @return void
+ */
+function syllabus_send_message(
+    string $provider,
+    stdClass $recipient,
+    string $subject,
+    string $body,
+    moodle_url $url,
+    int $courseid
+): void {
+    $message = new \core\message\message();
+    $message->component = 'mod_syllabus';
+    $message->name = $provider;
+    $message->userfrom = core_user::get_noreply_user();
+    $message->userto = $recipient;
+    $message->subject = $subject;
+    $message->fullmessage = $body;
+    $message->fullmessageformat = FORMAT_PLAIN;
+    $message->fullmessagehtml = format_text($body, FORMAT_PLAIN);
+    $message->smallmessage = $subject;
+    $message->notification = 1;
+    $message->contexturl = $url->out(false);
+    $message->contexturlname = $subject;
+    $message->courseid = $courseid;
+    message_send($message);
+}
+
+// Listes pour les activités de synthèse.
+
+/**
+ * Modules (instances avec leur module de cours et leur cours), filtrés. Les modules supprimés ou
+ * en cours de suppression sont écartés.
+ *
+ * @param array $filters categoryid (avec sous-catégories), teacherid, courseids, typeid, search, status (de version,
+ *     ou nopublished), evalstate (SYLLABUS_EVAL_*), syllabusids
+ * @param int $limitfrom
+ * @param int $limitnum
+ * @return array [lignes, total]
+ */
+function syllabus_list_instances(array $filters = [], int $limitfrom = 0, int $limitnum = 0): array {
+    global $DB;
+
+    $where = ['cm.deletioninprogress = 0'];
+    $params = ['modname' => 'syllabus'];
+    if (!empty($filters['categoryid'])) {
+        $category = core_course_category::get((int) $filters['categoryid'], IGNORE_MISSING, true);
+        if ($category) {
+            $where[] = '(cc.id = :catid OR ' . $DB->sql_like('cc.path', ':catpath') . ')';
+            $params['catid'] = $category->id;
+            $params['catpath'] = $category->path . '/%';
+        }
+    }
+    if (!empty($filters['teacherid'])) {
+        $where[] = 'EXISTS (SELECT 1 FROM {syllabus_teacher} st WHERE st.syllabusid = s.id AND st.userid = :teacherid)';
+        $params['teacherid'] = (int) $filters['teacherid'];
+    }
+    if (isset($filters['courseids'])) {
+        if (!$filters['courseids']) {
+            return [[], 0];
+        }
+        [$insql, $inparams] = $DB->get_in_or_equal(array_values($filters['courseids']), SQL_PARAMS_NAMED, 'crs');
+        $where[] = "s.course $insql";
+        $params += $inparams;
+    }
+    if (!empty($filters['syllabusids'])) {
+        [$insql, $inparams] = $DB->get_in_or_equal(array_values($filters['syllabusids']), SQL_PARAMS_NAMED, 'syl');
+        $where[] = "s.id $insql";
+        $params += $inparams;
+    }
+    if (!empty($filters['typeid'])) {
+        $where[] = 's.typeid = :typeid';
+        $params['typeid'] = (int) $filters['typeid'];
+    }
+    if (!empty($filters['search'])) {
+        $like = [];
+        foreach (['s.name', 's.code', 'c.fullname', 'c.shortname'] as $i => $field) {
+            $like[] = $DB->sql_like($field, ':search' . $i, false, false);
+            $params['search' . $i] = '%' . $DB->sql_like_escape($filters['search']) . '%';
+        }
+        $where[] = '(' . implode(' OR ', $like) . ')';
+    }
+    if (!empty($filters['evalstate'])) {
+        $params['now1'] = $params['now2'] = $params['now3'] = $params['now4'] = time();
+        $where[] = match ($filters['evalstate']) {
+            SYLLABUS_EVAL_NONE => 's.evalopen = 0',
+            SYLLABUS_EVAL_UPCOMING => 's.evalopen > :now1',
+            SYLLABUS_EVAL_OPEN => 's.evalopen > 0 AND s.evalopen <= :now2 AND (s.evalclose = 0 OR s.evalclose > :now3)',
+            default => 's.evalopen > 0 AND s.evalclose > 0 AND s.evalclose <= :now4',
+        };
+    }
+    if (!empty($filters['status'])) {
+        if ($filters['status'] === 'nopublished') {
+            $where[] = "NOT EXISTS (SELECT 1 FROM {syllabus_version} v WHERE v.syllabusid = s.id AND v.status = 'published')";
+        } else {
+            $where[] = 'EXISTS (SELECT 1 FROM {syllabus_version} v WHERE v.syllabusid = s.id AND v.status = :vstatus)';
+            $params['vstatus'] = $filters['status'];
+        }
+    }
+    $from = "FROM {syllabus} s
+             JOIN {modules} m ON m.name = :modname
+             JOIN {course_modules} cm ON cm.module = m.id AND cm.instance = s.id
+             JOIN {course} c ON c.id = s.course
+             JOIN {course_categories} cc ON cc.id = c.category
+            WHERE " . implode(' AND ', $where);
+    $total = $DB->count_records_sql("SELECT COUNT(1) $from", $params);
+    $rows = $DB->get_records_sql(
+        "SELECT s.*, cm.id AS cmid, cm.visible AS cmvisible, c.fullname AS coursename, c.shortname AS courseshortname,
+                cc.name AS categoryname
+         $from
+         ORDER BY c.fullname, s.name, s.id",
+        $params,
+        $limitfrom,
+        $limitnum
+    );
+    return [$rows, $total];
+}
+
+/**
+ * Indicateurs de plusieurs modules, en quelques requêtes : versions (publiée, de travail),
+ * réponses à l'évaluation.
+ *
+ * @param int[] $syllabusids
+ * @return array syllabusid => stdClass {published, working, responses}
+ */
+function syllabus_get_overview(array $syllabusids): array {
+    global $DB;
+
+    $result = [];
+    foreach ($syllabusids as $id) {
+        $result[$id] = (object) ['published' => null, 'working' => null, 'responses' => 0];
+    }
+    if (!$syllabusids) {
+        return $result;
+    }
+    [$insql, $params] = $DB->get_in_or_equal($syllabusids, SQL_PARAMS_NAMED);
+    $rs = $DB->get_recordset_select('syllabus_version', "syllabusid $insql AND status IN ('published', 'draft', 'submitted', "
+        . "'returned')", $params, 'version ASC', 'id, syllabusid, version, status, timesubmitted, timemodified');
+    foreach ($rs as $version) {
+        $key = $version->status === SYLLABUS_STATUS_PUBLISHED ? 'published' : 'working';
+        $result[(int) $version->syllabusid]->$key = $version;
+    }
+    $rs->close();
+    $counts = $DB->get_records_sql_menu("SELECT syllabusid, COUNT(1) FROM {syllabus_participant} WHERE syllabusid $insql "
+        . 'GROUP BY syllabusid', $params);
+    foreach ($counts as $id => $count) {
+        $result[(int) $id]->responses = (int) $count;
+    }
+    return $result;
+}
+
+// Pages.
+
+/**
+ * Amorce d'une page de l'activité, après require_login() : cours, instance, contexte, droits.
+ *
+ * @param stdClass $cm Module de cours.
+ * @param string $path Chemin de la page (/mod/syllabus/x.php).
+ * @param array $params Paramètres de l'adresse de la page, en plus de id.
+ * @return array [cm, course, syllabus, context, rights]
+ */
+function syllabus_page_init($cm, string $path, array $params = []): array {
+    global $DB, $PAGE;
+
+    $course = get_course($cm->course);
+    $syllabus = $DB->get_record('syllabus', ['id' => $cm->instance], '*', MUST_EXIST);
+    $context = context_module::instance($cm->id);
+    require_capability('mod/syllabus:view', $context);
+    $PAGE->set_url(new moodle_url($path, ['id' => $cm->id] + $params));
+    // Onglets du navigateur distincts : le nom de la page, puis celui du module.
+    $titles = ['edit' => 'editsyllabus', 'evaluation' => 'evaluation', 'evaluate' => 'evaluatemodule', 'results' => 'results',
+        'competencies' => 'competencies', 'teachers' => 'teachers'];
+    $page = basename($path, '.php');
+    $PAGE->set_title(isset($titles[$page]) ? get_string($titles[$page], 'mod_syllabus') . moodle_page::TITLE_SEPARATOR
+        . format_string($syllabus->name) : format_string($syllabus->name));
+    $PAGE->set_heading(format_string($course->fullname));
+    $PAGE->set_context($context);
+    return [$cm, $course, $syllabus, $context, syllabus_get_rights($syllabus, $context)];
+}
+
+/**
+ * Badge d'état de l'évaluation.
+ *
+ * @param stdClass $syllabus
+ * @return string HTML
+ */
+function syllabus_eval_badge(stdClass $syllabus): string {
+    $state = syllabus_eval_state($syllabus);
+    $classes = [SYLLABUS_EVAL_NONE => 'badge-secondary', SYLLABUS_EVAL_UPCOMING => 'badge-info',
+        SYLLABUS_EVAL_OPEN => 'badge-success', SYLLABUS_EVAL_CLOSED => 'badge-dark'];
+    return html_writer::span(get_string('evalstate_' . $state, 'mod_syllabus'), 'badge ' . $classes[$state]);
+}
+
+/**
+ * Fenêtre d'évaluation en clair.
+ *
+ * @param stdClass $syllabus
+ * @return string
+ */
+function syllabus_eval_window_label(stdClass $syllabus): string {
+    if (empty($syllabus->evalopen)) {
+        return get_string('evalnowindow', 'mod_syllabus');
+    }
+    $format = get_string('strftimedatetimeshort', 'langconfig');
+    $a = (object) ['open' => userdate($syllabus->evalopen, $format),
+        'close' => $syllabus->evalclose ? userdate($syllabus->evalclose, $format) : get_string('noclose', 'mod_syllabus')];
+    return get_string('evalwindow', 'mod_syllabus', $a);
+}
+
+/**
+ * Fenêtre du recueil réservée à la DEVE : dès qu'un avis a été donné, un responsable ne peut plus
+ * la déplacer. Il pourrait sinon la fermer pour lire les résultats puis la rouvrir, ou ouvrir le
+ * recueil dans une autre année pour archiver en cours de route celui qui a commencé.
+ *
+ * @param stdClass $syllabus
+ * @param context $context Contexte du module.
+ * @return bool
+ */
+function syllabus_window_locked(stdClass $syllabus, context $context): bool {
+    return !has_capability('mod/syllabus:manage', $context) && !empty($syllabus->id)
+        && syllabus_count_responses((int) $syllabus->id) > 0;
+}
+
+/**
+ * Fixe la fenêtre d'évaluation d'un module.
+ *
+ * @param stdClass $syllabus Mis à jour.
+ * @param int $open 0 pour aucune évaluation.
+ * @param int $close 0 pour sans fin.
+ * @return void
+ */
+function syllabus_set_window(stdClass $syllabus, int $open, int $close): void {
+    global $DB;
+
+    if ($close && (!$open || $close <= $open)) {
+        throw new moodle_exception('errorcloseafteropen', 'mod_syllabus');
+    }
+    $year = syllabus_prepare_window($syllabus, $open);
+    $DB->update_record('syllabus', (object) ['id' => $syllabus->id, 'evalopen' => $open, 'evalclose' => $close,
+        'evalyear' => $year, 'timemodified' => time()]);
+    $syllabus->evalopen = $open;
+    $syllabus->evalclose = $close;
+    $syllabus->evalyear = $year;
+}
+
+/**
+ * Les avis sont recueillis une fois par année universitaire. Une ouverture dans une autre année
+ * que celle du recueil en cours archive d'abord celui-ci (s'il a des réponses ou des questions
+ * figées) : le module repart de zéro, les résultats passés restent consultables.
+ *
+ * @param stdClass $syllabus Instance (mise à jour si le recueil est archivé).
+ * @param int $open Nouvelle ouverture (0 : pas de recueil).
+ * @return string Année universitaire du recueil à enregistrer.
+ */
+function syllabus_prepare_window(stdClass $syllabus, int $open): string {
+    $current = (string) ($syllabus->evalyear ?? '');
+    if (!$open) {
+        return $current;
+    }
+    $year = syllabus_academic_year($open);
+    if ($current !== '' && $current !== $year && !empty($syllabus->id)) {
+        $cm = get_coursemodule_from_instance('syllabus', $syllabus->id, 0, false, MUST_EXIST);
+        syllabus_archive_evaluation($syllabus, context_module::instance($cm->id));
+    }
+    return $year;
+}
+
+/**
+ * Archive le recueil d'avis en cours d'un module : ses résultats agrégés (comme la page des
+ * résultats les montre, rien sous le seuil d'anonymat) sont gardés avec leur année, puis les
+ * réponses, les participations et les copies figées des questions communes sont effacées. Les
+ * questions de l'enseignant restent pour l'année suivante. Sans réponse, rien n'est archivé : les
+ * questions sont seulement défigées.
+ *
+ * @param stdClass $syllabus Instance (mise à jour : questions défigées, plus de réponse).
+ * @param context_module $context
+ * @return int|null Identifiant de l'archive, ou null s'il n'y avait rien à archiver.
+ */
+function syllabus_archive_evaluation(stdClass $syllabus, context_module $context): ?int {
+    global $DB;
+
+    $lock = syllabus_get_lock((int) $syllabus->id);
+    try {
+        $current = $DB->get_record('syllabus', ['id' => $syllabus->id], '*', MUST_EXIST);
+        $responses = syllabus_count_responses((int) $current->id);
+        if (!$responses) {
+            // Rien à garder : les questions figées sans réponse sont simplement défigées.
+            if (!empty($current->evalfrozen)) {
+                $DB->delete_records_select('syllabus_question', "syllabusid = ? AND origin <> 'teacher'", [$current->id]);
+                $DB->update_record('syllabus', (object) ['id' => $current->id, 'evalfrozen' => 0, 'evalnotified' => 0]);
+                $syllabus->evalfrozen = 0;
+                $syllabus->evalnotified = 0;
+            }
+            return null;
+        }
+        $results = syllabus_get_results($current);
+        $questions = [];
+        foreach ($results->questions as $entry) {
+            $q = $entry->question;
+            $questions[] = ['question' => ['text' => (string) $q->text, 'kind' => (string) $q->kind,
+                'origin' => (string) $q->origin, 'sourceid' => (int) ($q->sourceid ?? 0), 'options' => (string) ($q->options ?? ''),
+                'required' => (int) ($q->required ?? 0)],
+                'count' => (int) $entry->count, 'mean' => $entry->mean ?? null,
+                'distribution' => $entry->distribution ?? [], 'labels' => $entry->labels ?? [], 'texts' => $entry->texts ?? []];
+        }
+        $transaction = $DB->start_delegated_transaction();
+        $archiveid = (int) $DB->insert_record('syllabus_evalarchive', (object) [
+            'syllabusid' => $current->id,
+            'evalyear' => $current->evalyear !== '' ? $current->evalyear
+                : syllabus_academic_year((int) ($current->evalopen ?: time())),
+            'evalopen' => (int) $current->evalopen, 'evalclose' => (int) $current->evalclose,
+            'responses' => $responses, 'eligible' => syllabus_count_eligible($context),
+            // Sous le seuil, seul le nombre de réponses est gardé : rien qui permette de les relire.
+            'results' => $results->shown ? json_encode(
+                ['threshold' => $results->threshold, 'questions' => $questions],
+                JSON_UNESCAPED_UNICODE
+            ) : null,
+            'timecreated' => time(),
+        ]);
+        $responseids = $DB->get_fieldset_select('syllabus_response', 'id', 'syllabusid = ?', [$current->id]);
+        if ($responseids) {
+            [$insql, $params] = $DB->get_in_or_equal($responseids);
+            $DB->delete_records_select('syllabus_answer', "responseid $insql", $params);
+        }
+        $DB->delete_records('syllabus_response', ['syllabusid' => $current->id]);
+        $DB->delete_records('syllabus_participant', ['syllabusid' => $current->id]);
+        $DB->delete_records_select('syllabus_question', "syllabusid = ? AND origin <> 'teacher'", [$current->id]);
+        $DB->update_record('syllabus', (object) ['id' => $current->id, 'evalfrozen' => 0, 'evalnotified' => 0]);
+        $transaction->allow_commit();
+        $syllabus->evalfrozen = 0;
+        $syllabus->evalnotified = 0;
+        return $archiveid;
+    } finally {
+        $lock->release();
+    }
+}
+
+/**
+ * Archives des avis d'un module, de la plus ancienne à la plus récente.
+ *
+ * @param int $syllabusid
+ * @return array id => stdClass
+ */
+function syllabus_get_archives(int $syllabusid): array {
+    global $DB;
+    return $DB->get_records('syllabus_evalarchive', ['syllabusid' => $syllabusid], 'evalyear ASC, timecreated ASC');
+}
+
+/**
+ * Résultats d'une archive, sous la forme de syllabus_get_results().
+ *
+ * @param stdClass $archive
+ * @return stdClass {responses, threshold, shown, questions: [{question, count, mean, distribution, labels, texts}]}
+ */
+function syllabus_archive_results(stdClass $archive): stdClass {
+    $data = $archive->results ? json_decode($archive->results, true) : null;
+    $result = (object) ['responses' => (int) $archive->responses, 'threshold' => (int) ($data['threshold'] ?? 0),
+        'shown' => (bool) $data, 'questions' => []];
+    foreach ($data['questions'] ?? [] as $entry) {
+        $result->questions[] = (object) ['question' => (object) $entry['question'], 'count' => (int) $entry['count'],
+            'mean' => $entry['mean'], 'distribution' => (array) $entry['distribution'], 'labels' => (array) $entry['labels'],
+            'texts' => (array) $entry['texts']];
+    }
+    return $result;
+}
+
+/**
+ * Évolution des moyennes d'un module d'une année à l'autre : une ligne par question à échelle
+ * (les questions communes reconnues par leur origine, celles de l'enseignant par leur texte), une
+ * colonne par année.
+ *
+ * @param array $years Année => résultats (syllabus_get_results() ou syllabus_archive_results()).
+ * @return array Lignes {text, means: [année => moyenne|null]}
+ */
+function syllabus_results_evolution(array $years): array {
+    $rows = [];
+    foreach ($years as $year => $results) {
+        foreach ($results->questions as $entry) {
+            $question = $entry->question;
+            if ($question->kind !== 'scale' || ($entry->mean ?? null) === null) {
+                continue;
+            }
+            $key = !empty($question->sourceid) ? 's' . $question->sourceid : 't' . core_text::strtolower(trim($question->text));
+            $rows[$key] = $rows[$key] ?? (object) ['text' => $question->text, 'means' => array_fill_keys(array_keys($years), null)];
+            $rows[$key]->means[$year] = $entry->mean;
+        }
+    }
+    return array_values($rows);
+}
+
+/**
+ * Moyennes des questions communes à échelle des modules donnés, pour une année passée (archives).
+ *
+ * @param int[] $syllabusids
+ * @param string $year
+ * @return array syllabusid => {responses, means: [sourceid => moyenne], archiveid}
+ */
+function syllabus_archived_means(array $syllabusids, string $year): array {
+    global $DB;
+    if (!$syllabusids) {
+        return [];
+    }
+    [$insql, $params] = $DB->get_in_or_equal($syllabusids, SQL_PARAMS_NAMED);
+    $params['year'] = $year;
+    $means = [];
+    // La dernière archive de l'année l'emporte (une réinitialisation peut en avoir fait deux).
+    foreach (
+        $DB->get_records_select(
+            'syllabus_evalarchive',
+            "syllabusid $insql AND evalyear = :year",
+            $params,
+            'timecreated ASC'
+        ) as $archive
+    ) {
+        $entry = ['responses' => (int) $archive->responses, 'means' => [], 'archiveid' => (int) $archive->id];
+        foreach (syllabus_archive_results($archive)->questions as $result) {
+            if ($result->question->kind === 'scale' && !empty($result->question->sourceid) && $result->mean !== null) {
+                $entry['means'][(int) $result->question->sourceid] = $result->mean;
+            }
+        }
+        $means[(int) $archive->syllabusid] = $entry;
+    }
+    return $means;
+}
+
+/**
+ * Tableau de questions d'évaluation.
+ *
+ * @param array $questions
+ * @param callable|null $actions function(stdClass $question, int $index, int $count): string
+ * @param bool $withscope Affiche à quoi s'applique la question (questions communes).
+ * @return string HTML
+ */
+function syllabus_render_questions(array $questions, ?callable $actions = null, bool $withscope = false): string {
+    if (!$questions) {
+        return html_writer::tag('p', get_string('noquestions', 'mod_syllabus'), ['class' => 'text-muted']);
+    }
+    $kinds = syllabus_question_kinds();
+    $types = $withscope ? syllabus_get_types() : [];
+    $table = new html_table();
+    $table->head = ['#', get_string('questiontext', 'mod_syllabus'), get_string('questionkind', 'mod_syllabus'),
+        get_string('questionrequired', 'mod_syllabus')];
+    if ($withscope) {
+        $table->head[] = get_string('questionscope', 'mod_syllabus');
+        $table->head[] = get_string('questionenabled', 'mod_syllabus');
+    }
+    if ($actions) {
+        $table->head[] = get_string('actions');
+    }
+    $questions = array_values($questions);
+    foreach ($questions as $index => $question) {
+        $text = format_string($question->text);
+        if ($question->kind === 'choice') {
+            $text .= html_writer::div(s(implode(' / ', syllabus_question_options($question))), 'small text-muted');
+        }
+        $row = [$index + 1, $text, $kinds[$question->kind] ?? s($question->kind),
+            $question->required ? get_string('yes') : get_string('no')];
+        if ($withscope) {
+            $row[] = $question->origin === 'type'
+                ? get_string('scope_typeof', 'mod_syllabus', format_string($types[$question->typeid]->name ?? '?'))
+                : get_string('scope_common', 'mod_syllabus');
+            $row[] = $question->enabled ? get_string('yes') : get_string('no');
+        }
+        if ($actions) {
+            $row[] = $actions($question, $index, count($questions));
+        }
+        $table->data[] = $row;
+    }
+    return html_writer::table($table);
+}
+
+/**
+ * Catégories de cours, pour borner une activité de synthèse : 0 = tout le site.
+ *
+ * @return array id => nom complet
+ */
+function syllabus_category_options(): array {
+    return [0 => get_string('allcategories', 'mod_syllabus')] + core_course_category::make_categories_list();
+}
+
+/**
+ * Moyennes des questions communes à échelle, par module : une colonne par question commune,
+ * comparable d'un module à l'autre puisque chaque copie figée garde sa question d'origine
+ * (sourceid). Seuls les modules qui atteignent le seuil d'anonymat ont des moyennes.
+ *
+ * @param int[] $syllabusids
+ * @return array syllabusid => sourceid => moyenne
+ */
+function syllabus_common_means(array $syllabusids): array {
+    global $DB;
+
+    if (!$syllabusids) {
+        return [];
+    }
+    $threshold = (int) syllabus_setting('resultsthreshold');
+    [$insql, $params] = $DB->get_in_or_equal($syllabusids, SQL_PARAMS_NAMED);
+    $counts = $DB->get_records_sql_menu("SELECT syllabusid, COUNT(1) FROM {syllabus_participant} WHERE syllabusid $insql "
+        . 'GROUP BY syllabusid', $params);
+    $shown = array_keys(array_filter($counts, fn($count) => (int) $count >= $threshold));
+    if (!$shown) {
+        return [];
+    }
+    [$insql, $params] = $DB->get_in_or_equal($shown, SQL_PARAMS_NAMED);
+    $rs = $DB->get_recordset_sql(
+        "SELECT q.syllabusid, q.sourceid, AVG(1.0 * a.value) AS mean
+           FROM {syllabus_question} q
+           JOIN {syllabus_answer} a ON a.questionid = q.id
+          WHERE q.syllabusid $insql AND q.sourceid > 0 AND q.kind = 'scale'
+       GROUP BY q.syllabusid, q.sourceid",
+        $params
+    );
+    $means = [];
+    foreach ($rs as $row) {
+        $means[(int) $row->syllabusid][(int) $row->sourceid] = round((float) $row->mean, 2);
+    }
+    $rs->close();
+    return $means;
+}
+
+// Compétences. Le référentiel est propre au module, commun au site et tenu par la DEVE dans le
+// suivi des modules (mod_syllabusstaff) : référentiels (syllabus_framework), compétences en arbre
+// (syllabus_comp). Un module, ou un cours sans module, vise des compétences avec un niveau
+// (syllabus_complink).
+
+/** Compétence introduite. */
+define('SYLLABUS_LEVEL_INTRODUCED', 1);
+/** Compétence approfondie. */
+define('SYLLABUS_LEVEL_DEVELOPED', 2);
+/** Compétence maîtrisée. */
+define('SYLLABUS_LEVEL_MASTERED', 3);
+
+/**
+ * Niveaux de contribution.
+ *
+ * @param bool $withnone Avec « non visée » (0).
+ * @return array niveau => libellé
+ */
+function syllabus_competency_levels(bool $withnone = false): array {
+    $levels = $withnone ? [0 => get_string('level_0', 'mod_syllabus')] : [];
+    foreach ([SYLLABUS_LEVEL_INTRODUCED, SYLLABUS_LEVEL_DEVELOPED, SYLLABUS_LEVEL_MASTERED] as $level) {
+        $levels[$level] = get_string('level_' . $level, 'mod_syllabus');
+    }
+    return $levels;
+}
+
+/**
+ * Référentiels.
+ *
+ * @return array id => stdClass
+ */
+function syllabus_get_frameworks(): array {
+    global $DB;
+    return $DB->get_records('syllabus_framework', null, 'sortorder ASC, name ASC');
+}
+
+/**
+ * Crée ou modifie un référentiel ; son code est unique.
+ *
+ * @param stdClass $data {id?, name, idnumber, description}
+ * @return int
+ */
+function syllabus_save_framework(stdClass $data): int {
+    global $DB;
+
+    $record = (object) [
+        'name' => core_text::substr(trim((string) ($data->name ?? '')), 0, 255),
+        'idnumber' => core_text::substr(trim((string) ($data->idnumber ?? '')), 0, 100),
+        'description' => trim((string) ($data->description ?? '')),
+        'timemodified' => time(),
+    ];
+    if ($record->name === '' || $record->idnumber === '') {
+        throw new moodle_exception('errorcompetencyfields', 'mod_syllabus');
+    }
+    $id = (int) ($data->id ?? 0);
+    $other = $DB->get_field('syllabus_framework', 'id', ['idnumber' => $record->idnumber]);
+    if ($other && (int) $other !== $id) {
+        throw new moodle_exception('errorduplicatecode', 'mod_syllabus', '', s($record->idnumber));
+    }
+    if ($id) {
+        $record->id = $id;
+        $DB->update_record('syllabus_framework', $record);
+        return $id;
+    }
+    $record->sortorder = (int) $DB->get_field_sql('SELECT MAX(sortorder) FROM {syllabus_framework}') + 10;
+    $record->timecreated = time();
+    return (int) $DB->insert_record('syllabus_framework', $record);
+}
+
+/**
+ * Supprime un référentiel et ses compétences : refusé si l'une est visée par un module ou un cours.
+ *
+ * @param int $id
+ * @return bool
+ */
+function syllabus_delete_framework(int $id): bool {
+    global $DB;
+
+    if (
+        $DB->record_exists_sql('SELECT 1 FROM {syllabus_complink} l JOIN {syllabus_comp} c ON c.id = l.compid
+                                 WHERE c.frameworkid = ?', [$id])
+    ) {
+        return false;
+    }
+    $DB->delete_records('syllabus_comp', ['frameworkid' => $id]);
+    $DB->delete_records('syllabus_framework', ['id' => $id]);
+    return true;
+}
+
+/**
+ * Compétences d'un référentiel, dans l'ordre de l'arbre, avec leur profondeur.
+ *
+ * @param int $frameworkid
+ * @return array id => stdClass {id, idnumber, name, description, parentid, sortorder, depth, isleaf}
+ */
+function syllabus_get_framework_tree(int $frameworkid): array {
+    global $DB;
+
+    $all = $DB->get_records(
+        'syllabus_comp',
+        ['frameworkid' => $frameworkid],
+        'sortorder ASC, id ASC',
+        'id, idnumber, name, description, parentid, sortorder'
+    );
+    $children = [];
+    foreach ($all as $competency) {
+        $children[(int) $competency->parentid][] = $competency;
+    }
+    $tree = [];
+    $walk = function (int $parentid, int $depth) use (&$walk, &$tree, $children) {
+        foreach ($children[$parentid] ?? [] as $competency) {
+            $competency->depth = $depth;
+            $competency->isleaf = empty($children[(int) $competency->id]);
+            $tree[(int) $competency->id] = $competency;
+            $walk((int) $competency->id, $depth + 1);
+        }
+    };
+    $walk(0, 0);
+    return $tree;
+}
+
+/**
+ * Identifiants d'une compétence et de toutes ses descendantes.
+ *
+ * @param int $id
+ * @return int[]
+ */
+function syllabus_comp_subtree(int $id): array {
+    global $DB;
+    $ids = [$id];
+    $frontier = [$id];
+    while ($frontier) {
+        [$insql, $params] = $DB->get_in_or_equal($frontier);
+        $frontier = array_map('intval', $DB->get_fieldset_select('syllabus_comp', 'id', "parentid $insql", $params));
+        $ids = array_merge($ids, $frontier);
+    }
+    return $ids;
+}
+
+/**
+ * Crée ou modifie une compétence : code unique dans le référentiel, parent du même référentiel
+ * et qui n'en descend pas.
+ *
+ * @param stdClass $data {id?, frameworkid, parentid, idnumber, name, description}
+ * @return int
+ */
+function syllabus_save_comp(stdClass $data): int {
+    global $DB;
+
+    $id = (int) ($data->id ?? 0);
+    $frameworkid = (int) $data->frameworkid;
+    $record = (object) [
+        'frameworkid' => $frameworkid,
+        'parentid' => (int) ($data->parentid ?? 0),
+        'idnumber' => core_text::substr(trim((string) ($data->idnumber ?? '')), 0, 100),
+        'name' => core_text::substr(trim((string) ($data->name ?? '')), 0, 255),
+        'description' => trim((string) ($data->description ?? '')),
+        'timemodified' => time(),
+    ];
+    if ($record->name === '' || $record->idnumber === '') {
+        throw new moodle_exception('errorcompetencyfields', 'mod_syllabus');
+    }
+    $other = $DB->get_field('syllabus_comp', 'id', ['frameworkid' => $frameworkid, 'idnumber' => $record->idnumber]);
+    if ($other && (int) $other !== $id) {
+        throw new moodle_exception('errorduplicatecode', 'mod_syllabus', '', s($record->idnumber));
+    }
+    if ($record->parentid) {
+        $parent = $DB->get_record('syllabus_comp', ['id' => $record->parentid], 'id, frameworkid', MUST_EXIST);
+        if ((int) $parent->frameworkid !== $frameworkid || ($id && in_array($record->parentid, syllabus_comp_subtree($id), true))) {
+            throw new moodle_exception('errorparent', 'mod_syllabus');
+        }
+    }
+    if ($id) {
+        $current = $DB->get_record('syllabus_comp', ['id' => $id], '*', MUST_EXIST);
+        if ((int) $current->frameworkid !== $frameworkid) {
+            throw new moodle_exception('invalidrecord', 'error');
+        }
+        $record->id = $id;
+        if ((int) $current->parentid !== $record->parentid) {
+            $record->sortorder = syllabus_next_comp_order($frameworkid, $record->parentid);
+        }
+        $DB->update_record('syllabus_comp', $record);
+        return $id;
+    }
+    $record->sortorder = syllabus_next_comp_order($frameworkid, $record->parentid);
+    $record->timecreated = time();
+    return (int) $DB->insert_record('syllabus_comp', $record);
+}
+
+/**
+ * Rang d'une nouvelle compétence parmi ses sœurs.
+ *
+ * @param int $frameworkid
+ * @param int $parentid
+ * @return int
+ */
+function syllabus_next_comp_order(int $frameworkid, int $parentid): int {
+    global $DB;
+    return (int) $DB->get_field_sql(
+        'SELECT MAX(sortorder) FROM {syllabus_comp} WHERE frameworkid = ? AND parentid = ?',
+        [$frameworkid, $parentid]
+    ) + 10;
+}
+
+/**
+ * Supprime une compétence et ses descendantes : refusé si l'une d'elles est visée.
+ *
+ * @param int $id
+ * @return bool
+ */
+function syllabus_delete_comp(int $id): bool {
+    global $DB;
+    $ids = syllabus_comp_subtree($id);
+    [$insql, $params] = $DB->get_in_or_equal($ids);
+    if ($DB->record_exists_select('syllabus_complink', "compid $insql", $params)) {
+        return false;
+    }
+    $DB->delete_records_select('syllabus_comp', "id $insql", $params);
+    return true;
+}
+
+/**
+ * Monte ou descend une compétence parmi ses sœurs.
+ *
+ * @param int $id
+ * @param int $direction -1 ou 1.
+ * @return void
+ */
+function syllabus_move_comp(int $id, int $direction): void {
+    global $DB;
+    $comp = $DB->get_record('syllabus_comp', ['id' => $id], '*', MUST_EXIST);
+    $siblings = array_values($DB->get_records('syllabus_comp', ['frameworkid' => $comp->frameworkid,
+        'parentid' => $comp->parentid], 'sortorder ASC, id ASC', 'id, sortorder'));
+    $index = array_search($id, array_map(fn($s) => (int) $s->id, $siblings), true);
+    $other = $index === false ? null : ($siblings[$index + $direction] ?? null);
+    if (!$other) {
+        return;
+    }
+    // Rangs renumérotés : deux sœurs de même rang ne s'échangeraient pas.
+    $order = array_map(fn($s) => (int) $s->id, $siblings);
+    [$order[$index], $order[$index + $direction]] = [$order[$index + $direction], $order[$index]];
+    foreach ($order as $rank => $siblingid) {
+        $DB->set_field('syllabus_comp', 'sortorder', ($rank + 1) * 10, ['id' => $siblingid]);
+    }
+}
+
+/**
+ * Import CSV des compétences d'un référentiel. Colonnes reconnues par leur intitulé : « Code »
+ * (obligatoire), « Code parent », « Intitulé » (obligatoire), « Description » ; séparateur
+ * point-virgule, virgule ou tabulation. Une compétence est créée, ou mise à jour si son code
+ * existe déjà ; un parent peut figurer plus loin dans le fichier.
+ *
+ * @param int $frameworkid
+ * @param string $content
+ * @return stdClass {created, updated, errors}
+ */
+function syllabus_import_comps(int $frameworkid, string $content): stdClass {
+    global $DB;
+
+    $result = (object) ['created' => 0, 'updated' => 0, 'errors' => []];
+    $content = preg_replace('/^\xEF\xBB\xBF/', '', $content);
+    $lines = array_values(array_filter(preg_split('/\R/', $content), fn($l) => trim($l) !== ''));
+    if (!$lines) {
+        $result->errors[] = get_string('importempty', 'mod_syllabus');
+        return $result;
+    }
+    $separator = array_reduce([';', "\t", ','], fn($best, $s) => substr_count($lines[0], $s) > substr_count($lines[0], $best)
+        ? $s : $best, ';');
+    $aliases = ['idnumber' => ['code', 'idnumber', 'id'], 'parent' => ['codeparent', 'parent', 'parentidnumber'],
+        'name' => ['intitule', 'nom', 'name', 'shortname', 'competence'], 'description' => ['description']];
+    $normalise = fn($s) => preg_replace('/[^a-z]/', '', core_text::strtolower(core_text::specialtoascii(trim($s))));
+    $columns = [];
+    foreach (str_getcsv($lines[0], $separator) as $index => $header) {
+        foreach ($aliases as $key => $names) {
+            if (in_array($normalise($header), $names, true)) {
+                $columns[$key] = $index;
+            }
+        }
+    }
+    if (!isset($columns['idnumber'], $columns['name'])) {
+        $result->errors[] = get_string('importcolumns', 'mod_syllabus');
+        return $result;
+    }
+    $rows = [];
+    foreach (array_slice($lines, 1) as $n => $line) {
+        $cells = str_getcsv($line, $separator);
+        $value = fn($key) => isset($columns[$key]) ? trim((string) ($cells[$columns[$key]] ?? '')) : '';
+        if ($value('idnumber') === '' || $value('name') === '') {
+            $result->errors[] = get_string('importline', 'mod_syllabus', $n + 2);
+            continue;
+        }
+        $rows[] = ['idnumber' => $value('idnumber'), 'parent' => $value('parent'), 'name' => $value('name'),
+            'description' => $value('description'), 'line' => $n + 2];
+    }
+    $transaction = $DB->start_delegated_transaction();
+    // Première passe : chaque compétence existe (à la racine si elle est nouvelle) ; seconde passe :
+    // chacune est rattachée à son parent, qui existe désormais quel que soit l'ordre du fichier.
+    $ids = $DB->get_records_menu('syllabus_comp', ['frameworkid' => $frameworkid], '', 'idnumber, id');
+    foreach ($rows as $row) {
+        $id = (int) ($ids[$row['idnumber']] ?? 0);
+        $data = (object) ['id' => $id, 'frameworkid' => $frameworkid, 'idnumber' => $row['idnumber'], 'name' => $row['name'],
+            'description' => $row['description'], 'parentid' => $id ? (int) $DB->get_field(
+                'syllabus_comp',
+                'parentid',
+                ['id' => $id]
+            ) : 0];
+        $ids[$row['idnumber']] = syllabus_save_comp($data);
+        $id ? $result->updated++ : $result->created++;
+    }
+    foreach ($rows as $row) {
+        $parentid = $row['parent'] === '' ? 0 : (int) ($ids[$row['parent']] ?? -1);
+        if ($parentid < 0) {
+            $result->errors[] = get_string('importparent', 'mod_syllabus', (object) ['line' => $row['line'],
+                'parent' => s($row['parent'])]);
+            continue;
+        }
+        $current = $DB->get_record('syllabus_comp', ['id' => $ids[$row['idnumber']]]);
+        if ((int) $current->parentid !== $parentid) {
+            try {
+                $current->parentid = $parentid;
+                syllabus_save_comp($current);
+            } catch (moodle_exception $e) {
+                $result->errors[] = get_string('importline', 'mod_syllabus', $row['line']) . ' ' . $e->getMessage();
+            }
+        }
+    }
+    $transaction->allow_commit();
+    return $result;
+}
+
+/**
+ * Compétences visées par un module, avec leur référentiel et leur niveau.
+ *
+ * @param stdClass $syllabus
+ * @return array compid => stdClass {id, idnumber, name, frameworkid, framework, level}
+ */
+function syllabus_get_module_competencies(stdClass $syllabus): array {
+    return syllabus_get_links((int) $syllabus->course, (int) $syllabus->id);
+}
+
+/**
+ * Compétences visées par un module (syllabusid) ou par un cours sans module (syllabusid 0).
+ *
+ * @param int $courseid
+ * @param int $syllabusid
+ * @return array compid => stdClass {id, idnumber, name, frameworkid, framework, level}
+ */
+function syllabus_get_links(int $courseid, int $syllabusid): array {
+    global $DB;
+    return $DB->get_records_sql(
+        "SELECT c.id, c.idnumber, c.name, c.frameworkid, f.name AS framework, l.level
+           FROM {syllabus_complink} l
+           JOIN {syllabus_comp} c ON c.id = l.compid
+           JOIN {syllabus_framework} f ON f.id = c.frameworkid
+          WHERE l.courseid = :courseid AND l.syllabusid = :syllabusid
+       ORDER BY f.sortorder, f.name, c.idnumber",
+        ['courseid' => $courseid, 'syllabusid' => $syllabusid]
+    );
+}
+
+/**
+ * Le module visé peut-il être lié aux compétences par l'utilisateur ? Ceux qui rédigent sa fiche.
+ *
+ * @param stdClass $rights Voir syllabus_get_rights().
+ * @return bool
+ */
+function syllabus_can_link_competencies(stdClass $rights): bool {
+    return $rights->canedit || $rights->canmanage;
+}
+
+/**
+ * Compétences d'un référentiel visées par un module ou par un cours sans module, avec leur
+ * niveau (0 : non visée). Seules les compétences de ce référentiel sont touchées.
+ *
+ * @param int $courseid
+ * @param int $syllabusid 0 pour un lien au cours.
+ * @param int $frameworkid
+ * @param array $levels compid => niveau
+ * @return stdClass {added, updated, removed}
+ */
+function syllabus_set_links(int $courseid, int $syllabusid, int $frameworkid, array $levels): stdClass {
+    global $DB;
+
+    $result = (object) ['added' => 0, 'updated' => 0, 'removed' => 0];
+    $valid = array_keys(syllabus_competency_levels());
+    $current = $DB->get_records_menu(
+        'syllabus_complink',
+        ['courseid' => $courseid, 'syllabusid' => $syllabusid],
+        '',
+        'compid, level'
+    );
+    $now = time();
+    $transaction = $DB->start_delegated_transaction();
+    foreach (array_keys(syllabus_get_framework_tree($frameworkid)) as $compid) {
+        $level = (int) ($levels[$compid] ?? 0);
+        $level = in_array($level, $valid, true) ? $level : 0;
+        $was = (int) ($current[$compid] ?? 0);
+        if ($level === $was) {
+            continue;
+        }
+        $conditions = ['courseid' => $courseid, 'syllabusid' => $syllabusid, 'compid' => $compid];
+        if (!$level) {
+            $DB->delete_records('syllabus_complink', $conditions);
+            $result->removed++;
+        } else if ($was) {
+            $DB->set_field('syllabus_complink', 'level', $level, $conditions);
+            $DB->set_field('syllabus_complink', 'timemodified', $now, $conditions);
+            $result->updated++;
+        } else {
+            $DB->insert_record('syllabus_complink', (object) ($conditions + ['level' => $level, 'timecreated' => $now,
+                'timemodified' => $now]));
+            $result->added++;
+        }
+    }
+    $transaction->allow_commit();
+    return $result;
+}
+
+/**
+ * Matrice d'un référentiel : pour chaque cours, les compétences visées par son module ou par le
+ * cours lui-même, au niveau le plus haut.
+ *
+ * @param int $frameworkid
+ * @param int[] $courseids
+ * @return array courseid => compid => stdClass {level, coursewide (lien au cours sans module)}
+ */
+function syllabus_competency_matrix(int $frameworkid, array $courseids): array {
+    global $DB;
+
+    $matrix = array_fill_keys($courseids, []);
+    if (!$courseids) {
+        return $matrix;
+    }
+    [$insql, $params] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED);
+    $params['fw'] = $frameworkid;
+    $rs = $DB->get_recordset_sql(
+        "SELECT l.id, l.courseid, l.syllabusid, l.compid, l.level
+           FROM {syllabus_complink} l
+           JOIN {syllabus_comp} c ON c.id = l.compid AND c.frameworkid = :fw
+          WHERE l.courseid $insql",
+        $params
+    );
+    foreach ($rs as $row) {
+        $cell = $matrix[(int) $row->courseid][(int) $row->compid] ?? null;
+        if (!$cell || (int) $row->level > $cell->level) {
+            $matrix[(int) $row->courseid][(int) $row->compid] = (object) ['level' => (int) $row->level,
+                'coursewide' => !(int) $row->syllabusid];
+        }
+    }
+    $rs->close();
+    return $matrix;
+}
+
+/**
+ * Liste des compétences visées, groupées par référentiel, avec leur niveau.
+ *
+ * @param array $competencies Voir syllabus_get_links().
+ * @return string HTML
+ */
+function syllabus_render_competencies(array $competencies): string {
+    if (!$competencies) {
+        return html_writer::tag('p', get_string('nocompetencies', 'mod_syllabus'), ['class' => 'text-muted']);
+    }
+    $levels = syllabus_competency_levels();
+    $table = new html_table();
+    $table->attributes = ['class' => 'generaltable syllabus-competencies', 'border' => '1', 'cellpadding' => '4'];
+    $table->head = [get_string('framework', 'mod_syllabus'), get_string('competency', 'mod_syllabus'),
+        get_string('level', 'mod_syllabus')];
+    foreach ($competencies as $competency) {
+        $table->data[] = [format_string($competency->framework), format_string($competency->name) . ' ('
+            . s($competency->idnumber) . ')', $levels[(int) $competency->level] ?? '-'];
+    }
+    return html_writer::table($table);
+}
+
+/**
+ * Formulaire de liaison aux compétences d'un référentiel : l'arbre, un niveau par compétence.
+ *
+ * @param moodle_url $action
+ * @param int $frameworkid
+ * @param array $linked compid => stdClass (level)
+ * @return string HTML
+ */
+function syllabus_render_link_form(moodle_url $action, int $frameworkid, array $linked): string {
+    $submit = html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('savechanges'),
+        'class' => 'btn btn-primary']);
+    // Le bouton est aussi en tête : l'arbre peut compter des dizaines de lignes.
+    $html = html_writer::start_tag('form', ['method' => 'post', 'action' => $action->out(false)])
+        . html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()])
+        . html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'save', 'value' => 1])
+        . html_writer::div($submit, 'mb-2');
+    $table = new html_table();
+    $table->attributes['class'] = 'generaltable syllabus-competency-tree';
+    $table->head = [get_string('competency', 'mod_syllabus'), get_string('level', 'mod_syllabus')];
+    foreach (syllabus_get_framework_tree($frameworkid) as $competency) {
+        $label = html_writer::span(format_string($competency->name), $competency->isleaf ? '' : 'font-weight-bold')
+            . ' ' . html_writer::span(s($competency->idnumber), 'small text-muted');
+        // Un domaine se vise par ses sous-compétences ; un lien direct déjà posé reste modifiable.
+        if (!$competency->isleaf && empty($linked[$competency->id])) {
+            $table->data[] = [html_writer::div($label, '', ['style' => 'padding-left:' . (1.5 * $competency->depth) . 'rem']), ''];
+            continue;
+        }
+        $select = html_writer::select(
+            syllabus_competency_levels(true),
+            'levels[' . $competency->id . ']',
+            (int) ($linked[$competency->id]->level ?? 0),
+            false,
+            ['class' => 'custom-select',
+            'aria-label' => format_string($competency->name)]
+        );
+        $table->data[] = [html_writer::div($label, '', ['style' => 'padding-left:' . (1.5 * $competency->depth) . 'rem']),
+            $select];
+    }
+    return $html . html_writer::table($table) . $submit . html_writer::end_tag('form');
+}
+
+// Cursus : périodes, livret, progression d'une compétence.
+
+/**
+ * Trie des modules dans l'ordre du cursus : année d'étude (non précisée en dernier), période
+ * (ordre naturel : S2 avant S10, vide en dernier), code, nom.
+ *
+ * @param array $modules Lignes portant studyyear, semester, code, name.
+ * @return array Les mêmes, triées (clés conservées).
+ */
+function syllabus_sort_by_period(array $modules): array {
+    uasort($modules, function ($a, $b) {
+        $ya = (int) $a->studyyear ?: PHP_INT_MAX;
+        $yb = (int) $b->studyyear ?: PHP_INT_MAX;
+        if ($ya !== $yb) {
+            return $ya <=> $yb;
+        }
+        $sa = trim((string) $a->semester);
+        $sb = trim((string) $b->semester);
+        if ($sa === '' xor $sb === '') {
+            return $sa === '' ? 1 : -1;
+        }
+        return strnatcasecmp($sa, $sb) ?: strnatcasecmp((string) $a->code, (string) $b->code)
+            ?: strnatcasecmp((string) $a->name, (string) $b->name);
+    });
+    return $modules;
+}
+
+/**
+ * Clé et libellé de la période d'un module : année d'étude et période (semestre...).
+ *
+ * @param stdClass $module
+ * @return array [clé, libellé]
+ */
+function syllabus_period_of(stdClass $module): array {
+    $year = (int) $module->studyyear;
+    $semester = trim((string) $module->semester);
+    $parts = [];
+    if ($year) {
+        $parts[] = syllabus_studyyear_label($year);
+    }
+    if ($semester !== '') {
+        $parts[] = $semester;
+    }
+    return [$year . '|' . core_text::strtolower($semester),
+        $parts ? implode(' · ', $parts) : get_string('periodnone', 'mod_syllabus')];
+}
+
+/**
+ * Choix d'édition proposés pour des modules : tout le cursus, chaque année d'étude, chaque
+ * période (semestre) présente.
+ *
+ * @param array $modules Lignes de syllabus_list_instances().
+ * @return array Options groupées pour html_writer::select() : [[groupe => [valeur => libellé]]]
+ */
+function syllabus_period_selections(array $modules): array {
+    $years = [];
+    $semesters = [];
+    foreach (syllabus_sort_by_period($modules) as $module) {
+        if ((int) $module->studyyear) {
+            $years['y' . (int) $module->studyyear] = syllabus_studyyear_label($module->studyyear);
+        }
+        $semester = trim((string) $module->semester);
+        if ($semester !== '') {
+            $semesters['s' . $semester] = s($semester);
+        }
+    }
+    $options = [[get_string('wholecursus', 'mod_syllabus') => ['all' => get_string('wholecursus', 'mod_syllabus')]]];
+    if ($years) {
+        $options[] = [get_string('studyyear', 'mod_syllabus') => $years];
+    }
+    if ($semesters) {
+        $options[] = [get_string('semester', 'mod_syllabus') => $semesters];
+    }
+    return $options;
+}
+
+/**
+ * Modules d'un choix d'édition : « all », « y<année> » ou « s<période> », dans l'ordre du cursus.
+ *
+ * @param array $modules
+ * @param string $selection
+ * @return array
+ */
+function syllabus_filter_by_selection(array $modules, string $selection): array {
+    if (str_starts_with($selection, 'y')) {
+        $year = (int) substr($selection, 1);
+        $modules = array_filter($modules, fn($m) => (int) $m->studyyear === $year);
+    } else if (str_starts_with($selection, 's')) {
+        $semester = core_text::strtolower(substr($selection, 1));
+        $modules = array_filter($modules, fn($m) => core_text::strtolower(trim((string) $m->semester)) === $semester);
+    }
+    return syllabus_sort_by_period($modules);
+}
+
+/**
+ * Libellé d'un choix d'édition.
+ *
+ * @param string $selection
+ * @return string
+ */
+function syllabus_selection_label(string $selection): string {
+    if (str_starts_with($selection, 'y')) {
+        return get_string('studyyear', 'mod_syllabus') . ' ' . syllabus_studyyear_label((int) substr($selection, 1));
+    }
+    if (str_starts_with($selection, 's')) {
+        return get_string('semester', 'mod_syllabus') . ' ' . substr($selection, 1);
+    }
+    return get_string('wholecursus', 'mod_syllabus');
+}
+
+/**
+ * Liens d'une compétence (et, au besoin, de ses sous-compétences) avec les cours donnés.
+ *
+ * @param int $compid
+ * @param bool $withsub Avec les sous-compétences.
+ * @param int[] $courseids
+ * @return array Lignes {id, courseid, syllabusid, compid, level}
+ */
+function syllabus_competency_links(int $compid, bool $withsub, array $courseids): array {
+    global $DB;
+    if (!$courseids) {
+        return [];
+    }
+    $compids = $withsub ? syllabus_comp_subtree($compid) : [$compid];
+    [$compsql, $params] = $DB->get_in_or_equal($compids, SQL_PARAMS_NAMED, 'cmp');
+    [$coursesql, $courseparams] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED, 'crs');
+    return $DB->get_records_sql(
+        "SELECT id, courseid, syllabusid, compid, level
+           FROM {syllabus_complink}
+          WHERE compid $compsql AND courseid $coursesql",
+        $params + $courseparams
+    );
+}
+
+/**
+ * Constats sur la progression d'une compétence le long du cursus : période où chaque niveau est
+ * atteint pour la première fois, et anomalies (non visée, jamais maîtrisée, abordée d'emblée
+ * au-delà de l'introduction, introduite de nouveau après avoir été maîtrisée).
+ *
+ * @param array $steps Périodes dans l'ordre du cursus : stdClass {label, levels (niveaux visés dans la période)}
+ * @return stdClass {first => [niveau => libellé de période], warnings => [codes]}
+ */
+function syllabus_progression_summary(array $steps): stdClass {
+    $result = (object) ['first' => [], 'warnings' => []];
+    $steps = array_values(array_filter($steps, fn($step) => !empty($step->levels)));
+    if (!$steps) {
+        $result->warnings[] = 'notcovered';
+        return $result;
+    }
+    $mastered = false;
+    $regressed = false;
+    foreach ($steps as $index => $step) {
+        $levels = array_map('intval', $step->levels);
+        foreach ($levels as $level) {
+            $result->first[$level] = $result->first[$level] ?? $step->label;
+        }
+        if ($index === 0 && min($levels) > SYLLABUS_LEVEL_INTRODUCED) {
+            $result->warnings[] = 'noprogression';
+        }
+        if ($mastered && in_array(SYLLABUS_LEVEL_INTRODUCED, $levels, true)) {
+            $regressed = true;
+        }
+        $mastered = $mastered || in_array(SYLLABUS_LEVEL_MASTERED, $levels, true);
+    }
+    if (!$mastered) {
+        $result->warnings[] = 'nevermastered';
+    }
+    if ($regressed) {
+        $result->warnings[] = 'introducedlate';
+    }
+    ksort($result->first);
+    return $result;
+}
+
+/**
+ * Ligne d'export CSV sans formule : une cellule texte qui commence par = + - @ (ou une tabulation,
+ * un retour chariot) reçoit une apostrophe, pour qu'un tableur ne l'exécute pas à l'ouverture.
+ * Les versions récentes de Moodle le font aussi ; pas les plus anciennes que le module accepte.
+ *
+ * @param array $row
+ * @return array
+ */
+function syllabus_csv_safe(array $row): array {
+    foreach ($row as $key => $value) {
+        if (is_string($value) && !is_numeric($value) && preg_match('/^\s*[=+\-@\t\r]/', $value)) {
+            $row[$key] = "'" . $value;
+        }
+    }
+    return $row;
+}
+
+/**
+ * Suppression confirmée côté serveur : sans « confirm » et clé de session, la page de
+ * confirmation est affichée et le script s'arrête ; sinon la suppression peut avoir lieu. Une
+ * confirmation en JavaScript seule laisserait supprimer d'un clic sans JavaScript.
+ *
+ * @param moodle_url $actionurl Adresse de l'action (sans confirm ni sesskey).
+ * @param moodle_url $cancelurl Retour en cas d'annulation.
+ * @param string $message Question posée.
+ * @return void
+ */
+function syllabus_require_confirmation(moodle_url $actionurl, moodle_url $cancelurl, string $message): void {
+    global $OUTPUT;
+
+    if (optional_param('confirm', 0, PARAM_BOOL) && confirm_sesskey()) {
+        return;
+    }
+    echo $OUTPUT->header();
+    echo $OUTPUT->confirm(
+        $message,
+        new single_button(
+            new moodle_url($actionurl, ['confirm' => 1, 'sesskey' => sesskey()]),
+            get_string('delete'),
+            'post',
+            single_button::BUTTON_DANGER
+        ),
+        $cancelurl
+    );
+    echo $OUTPUT->footer();
+    exit;
+}
+
+// Fiche gérée par un autre module (component, itemid) : la fiche d'un EP du catalogue.
+
+/**
+ * Appelle une fonction du module qui gère la fiche (component_callback, fonction
+ * <component>_syllabus_<nom>(int $itemid, stdClass $syllabus)) ; la valeur par défaut pour une
+ * fiche de module d'enseignement.
+ *
+ * @param stdClass $syllabus
+ * @param string $name
+ * @param mixed $default
+ * @return mixed
+ */
+function syllabus_owner_callback(stdClass $syllabus, string $name, $default = null) {
+    if (empty($syllabus->component)) {
+        return $default;
+    }
+    return component_callback($syllabus->component, 'syllabus_' . $name, [(int) $syllabus->itemid, $syllabus], $default);
+}
+
+/**
+ * Public des avis fixé par le module gestionnaire (les inscrits d'un EP), ou null pour les
+ * inscrits du cours. Lu une fois par requête et par fiche.
+ *
+ * @param stdClass $syllabus
+ * @return int[]|null userid => userid
+ */
+function syllabus_owner_eligible(stdClass $syllabus): ?array {
+    static $cache = [];
+    if (empty($syllabus->component)) {
+        return null;
+    }
+    $key = $syllabus->component . ':' . (int) $syllabus->itemid;
+    if (!array_key_exists($key, $cache) || (defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
+        $users = syllabus_owner_callback($syllabus, 'eligible_users');
+        $cache[$key] = is_array($users) ? array_combine(array_map('intval', $users), array_map('intval', $users)) : null;
+    }
+    return $cache[$key];
+}
+
+/**
+ * Adresse de l'élément qui gère la fiche (l'EP au catalogue), ou null.
+ *
+ * @param stdClass $syllabus
+ * @return moodle_url|null
+ */
+function syllabus_owner_url(stdClass $syllabus): ?moodle_url {
+    $url = syllabus_owner_callback($syllabus, 'owner_url');
+    return $url instanceof moodle_url ? $url : null;
+}
+
+/**
+ * Déclenche un événement sur une version de la fiche (soumission, décision).
+ *
+ * @param string $class version_submitted ou version_reviewed
+ * @param stdClass $syllabus
+ * @param stdClass $version
+ * @param int $userid
+ * @param array $other
+ * @return void
+ */
+function syllabus_trigger_version_event(
+    string $class,
+    stdClass $syllabus,
+    stdClass $version,
+    int $userid,
+    array $other = []
+): void {
+    $cm = get_coursemodule_from_instance('syllabus', $syllabus->id, $syllabus->course, false, IGNORE_MISSING);
+    if (!$cm) {
+        return;
+    }
+    $classname = '\\mod_syllabus\\event\\' . $class;
+    $classname::create([
+        'objectid' => $version->id,
+        'context' => context_module::instance($cm->id),
+        'userid' => $userid,
+        'other' => $other + ['syllabusid' => (int) $syllabus->id, 'component' => (string) ($syllabus->component ?? ''),
+            'itemid' => (int) ($syllabus->itemid ?? 0)],
+    ])->trigger();
+}
+
+/**
+ * Une version ne se publie qu'avec la date de la commission qui l'a validée : c'est le cas des
+ * fiches d'EP académiques (module gestionnaire), nouvel EP comme modification.
+ *
+ * @param stdClass $syllabus
+ * @return bool
+ */
+function syllabus_commission_required(stdClass $syllabus): bool {
+    return (bool) syllabus_owner_callback($syllabus, 'commission_required', false);
+}
+
+/**
+ * Livret PDF des fiches soumises à la relecture (versions de travail, pas les versions publiées),
+ * à remettre à la commission de validation.
+ *
+ * @param int[] $syllabusids Fiches (instances mod_syllabus) ; celles sans version soumise sont omises.
+ * @param string $title Titre du livret.
+ * @param string[] $lines Lignes sous le titre.
+ * @return \mod_syllabus\pdf\booklet_pdf
+ */
+function syllabus_pending_booklet(array $syllabusids, string $title, array $lines): \mod_syllabus\pdf\booklet_pdf {
+    global $DB;
+
+    core_php_time_limit::raise();
+    raise_memory_limit(MEMORY_EXTRA);
+    [$modules] = $syllabusids ? syllabus_list_instances(['syllabusids' => $syllabusids]) : [[]];
+    $modules = syllabus_sort_by_period($modules);
+    $ids = array_map(fn($m) => (int) $m->id, $modules);
+    $teachers = syllabus_get_teachers_bulk($ids);
+    $submitted = [];
+    if ($ids) {
+        [$insql, $params] = $DB->get_in_or_equal($ids, SQL_PARAMS_NAMED);
+        foreach (
+            $DB->get_records_select(
+                'syllabus_version',
+                "syllabusid $insql AND status = :submitted",
+                $params + ['submitted' => SYLLABUS_STATUS_SUBMITTED],
+                'version ASC'
+            ) as $version
+        ) {
+            $submitted[(int) $version->syllabusid] = $version;
+        }
+    }
+    foreach ($modules as $module) {
+        $module->published = $submitted[(int) $module->id] ?? null;
+        $module->teachers = $teachers[(int) $module->id] ?? [];
+    }
+    return new \mod_syllabus\pdf\booklet_pdf($title, $lines, array_filter($modules, fn($m) => $m->published));
+}
+
+/**
+ * Envoie au navigateur le livret des fiches à valider (voir syllabus_pending_booklet()).
+ *
+ * @param int[] $syllabusids
+ * @param string $title
+ * @param string[] $lines
+ * @param string $filename
+ * @return void
+ */
+function syllabus_send_pending_booklet(array $syllabusids, string $title, array $lines, string $filename): void {
+    syllabus_pending_booklet($syllabusids, $title, $lines)->Output(clean_filename($filename), 'D');
+}

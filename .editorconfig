@@ -1,0 +1,33 @@
+# Conventions d'édition du dépôt (https://editorconfig.org). Alignées sur le standard de codage
+# Moodle appliqué par phpcs.xml : indentation de quatre espaces, fins de ligne LF, UTF-8.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.md]
+# Deux espaces en fin de ligne forcent un retour à la ligne en Markdown.
+trim_trailing_whitespace = false
+
+[*.{tex,sty}]
+indent_size = 2
+
+[Makefile]
+indent_style = tab
+
+[mod/stage/thirdparty/**]
+# Bibliothèque tierce redistribuée telle quelle.
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+indent_style = unset
+indent_size = unset

@@ -79,9 +79,7 @@ if ($studentid) {
 }
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($epsynthesis->name));
-echo html_writer::link(new moodle_url('/mod/epsynthesis/entries.php', ['id' => $cm->id]),
-    get_string('validation', 'mod_ep'));
+echo epsynthesis_render_navlinks($cm, 'dashboard', epsynthesis_count_todo($activelinks, $USER->id));
 
 if ($epsynthesis->intro) {
     echo $OUTPUT->box(format_module_intro('epsynthesis', $epsynthesis, $cm->id), 'generalbox mod_introbox');
@@ -99,46 +97,37 @@ epsynthesis_sync_active_links($activelinks);
 
 $listurl = new moodle_url($baseurl, ['search' => $search, 'tsort' => $tsort, 'tdir' => $tdir]);
 
-$searchformurl = new moodle_url($baseurl);
-echo html_writer::start_tag('form', ['method' => 'get', 'action' => $searchformurl, 'class' => 'form-inline ep-filters mb-3']);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
-echo html_writer::empty_tag('input', [
-    'type' => 'text', 'name' => 'search', 'value' => s($search),
-    'placeholder' => get_string('searchstudent', 'mod_ep'), 'class' => 'form-control mr-2',
-]);
-echo html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string('search'), 'class' => 'btn btn-secondary mr-2']);
-echo html_writer::link($searchformurl, get_string('resetfilters', 'mod_ep'), ['class' => 'btn btn-link']);
-echo html_writer::end_tag('form');
+echo $OUTPUT->render(new \mod_ep\output\list_filters($listurl, ['search', 'tsort', 'tdir', 'page'], $search));
 
 $rows = epsynthesis_get_pilotage_rows($activelinks);
 
 if ($search !== '') {
     $needle = core_text::strtolower($search);
-    $rows = array_filter($rows, function($row) use ($needle) {
+    $rows = array_filter($rows, function ($row) use ($needle) {
         return core_text::strpos(core_text::strtolower(fullname($row->user)), $needle) !== false;
     });
 }
 
 $sortmap = [
-    'course' => function($row) {
+    'course' => function ($row) {
         return core_text::strtolower($row->coursename);
     },
-    'student' => function($row) {
+    'student' => function ($row) {
         return core_text::strtolower(fullname($row->user));
     },
-    'retained' => function($row) {
+    'retained' => function ($row) {
         return $row->progress->totalretained;
     },
-    'years' => function($row) {
+    'years' => function ($row) {
         return $row->progress->yearstotal > 0 ? ($row->progress->yearsdone / $row->progress->yearstotal) : -1;
     },
-    'pending' => function($row) {
+    'pending' => function ($row) {
         return $row->pendingcount;
     },
 ];
 $sortkey = array_key_exists($tsort, $sortmap) ? $tsort : 'student';
 $sortfn = $sortmap[$sortkey];
-usort($rows, function($a, $b) use ($sortfn) {
+usort($rows, function ($a, $b) use ($sortfn) {
     return $sortfn($a) <=> $sortfn($b);
 });
 if (strtoupper($tdir) === 'DESC') {
@@ -190,7 +179,7 @@ if (empty($rows)) {
             ]),
         ];
     }
-    echo html_writer::table($table);
+    echo html_writer::div(html_writer::table($table), 'table-responsive');
     echo $pagingbarhtml;
 }
 

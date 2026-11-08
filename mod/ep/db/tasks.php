@@ -38,4 +38,15 @@ $tasks = [
         'month' => '*',
         'dayofweek' => '*',
     ],
+    [
+        // Le lundi matin : relance des validateurs qui ont des demandes en attente depuis plus
+        // d'une semaine (voir ep_send_pending_reminders()).
+        'classname' => 'mod_ep\task\send_pending_reminders',
+        'blocking' => 0,
+        'minute' => '40',
+        'hour' => '6',
+        'day' => '*',
+        'month' => '*',
+        'dayofweek' => '1',
+    ],
 ];

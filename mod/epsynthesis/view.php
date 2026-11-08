@@ -30,9 +30,17 @@ $id = required_param('id', PARAM_INT);
 
 $cm = get_coursemodule_from_id('epsynthesis', $id, 0, false, MUST_EXIST);
 $course = get_course($cm->course);
+$epsynthesis = $DB->get_record('epsynthesis', ['id' => $cm->instance], '*', MUST_EXIST);
 
 require_login($course, true, $cm);
 $context = context_module::instance($cm->id);
 require_capability('mod/epsynthesis:view', $context);
+
+// La page d'atterrissage est la liste de validation ; la consultation est tracée ici, une fois.
+$event = \mod_epsynthesis\event\course_module_viewed::create(['objectid' => $epsynthesis->id, 'context' => $context]);
+$event->add_record_snapshot('course', $course);
+$event->add_record_snapshot('epsynthesis', $epsynthesis);
+$event->trigger();
+(new completion_info($course))->set_module_viewed($cm);
 
 redirect(new moodle_url('/mod/epsynthesis/entries.php', ['id' => $cm->id]));
